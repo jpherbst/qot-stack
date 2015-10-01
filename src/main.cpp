@@ -1,6 +1,6 @@
 /*
- * @file Timeline.cpp
- * @brief Library to manage Quality of Time POSIX clocks
+ * @file qotdaemon.c
+ * @brief System daemon to manage timelies for the Linux QoT stackl
  * @author Andrew Symington
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -25,31 +25,59 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* This file header */
-#include "Timeline.hpp"
 
-extern "C"
-{
-	#include <stdio.h>
-	#include <sys/ioctl.h>
-}
+// Basic printing
+#include <iostream>
+#include <fstream>
+#include <string>
 
+// Boost includes
+#include <boost/program_options.hpp>
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+
+// Timeline management
+#include "Notifier.hpp"
+
+// Convenience
 using namespace qot;
 
-Timeline::Timeline(boost::asio::io_service *io, const std::string &file)
-	: asio(io)
+// Main entry point of application
+int main(int argc, char **argv)
 {
-	/*
-	fd = open(file.c_str(), O_RDWR);
-	if (fd < 0)
+	// Parse command line options
+	boost::program_options::options_description desc("Allowed options");
+	desc.add_options()
+		("help,h",  	"produce help message")
+		("conf,c", 		boost::program_options::value<std::string>()
+			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
+		("dir,d", 		boost::program_options::value<std::string>()
+			->default_value("/dev/timeline"), "devfs directory for timelines") 
+	;
+	boost::program_options::variables_map vm;
+	boost::program_options::store(
+		boost::program_options::parse_command_line(argc, argv, desc), vm);
+	boost::program_options::notify(vm);    
+
+	// Print some help with arguments
+	if (vm.count("help") > 0)
 	{
-		fprintf(stderr, "opening %s: %s\n", device, strerror(errno));
-		return -1;
+		std::cout << desc << "\n";
+		return 0;
 	}
-	*/
-}
 
-Timeline::~Timeline()
-{
+	// Create an IO service
+	boost::asio::io_service io;
 
+	// Create a Timeline, passin
+	Notifier notifier(&io, vm["dir"].as<std::string>());
+
+	// Create some dummy work to prevent exiting
+	boost::asio::io_service::work work(io);
+
+	// Runt the io service
+	io.run();
+
+	// Everything OK
+	return 0;
 }

@@ -1,6 +1,6 @@
-/*
- * @file qotdaemon.c
- * @brief System daemon to manage timelies for the Linux QoT stackl
+/**
+ * @file Timeline.hpp
+ * @brief Library to manage Quality of Time POSIX clocks
  * @author Andrew Symington
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -24,58 +24,25 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef TIMELINE_HPP
+#define TIMELINE_HPP
 
-
-// Basic printing
-#include <iostream>
-#include <fstream>
-#include <string>
-
-// Boost includes
-#include <boost/program_options.hpp>
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
 
-// Timeline management
-#include "Notifier.hpp"
-
-// Convenience
-using namespace qot;
-
-// Main entry point of application
-int main(int argc, char **argv)
+namespace qot
 {
-	// Parse command line options
-	boost::program_options::options_description desc("Allowed options");
-	desc.add_options()
-		("help,h",  	"produce help message")
-		("dir,d", 		boost::program_options::value<std::string>()
-			->default_value("/dev/timeline"), "devfs directory for timelines") 
-	;
-	boost::program_options::variables_map vm;
-	boost::program_options::store(
-		boost::program_options::parse_command_line(argc, argv, desc), vm);
-	boost::program_options::notify(vm);    
-
-	// Print some help with arguments
-	if (vm.count("help") > 0)
+	class Timeline
 	{
-		std::cout << desc << "\n";
-		return 0;
-	}
 
-	// Create an IO service
-	boost::asio::io_service io;
+	// Constructor and destructor
+	public: Timeline(boost::asio::io_service *io, const std::string &dir);
+	public: ~Timeline();
 
-	// Create a Timeline, passin
-	Notifier notifier(&io, vm["dir"].as<std::string>());
+	// Private variables
+	private: boost::asio::io_service *asio;
+	private: int fd;
 
-	// Create some dummy work to prevent exiting
-	boost::asio::io_service::work work(io);
-
-	// Runt the io service
-	io.run();
-
-	// Everything OK
-	return 0;
+	};
 }
+
+#endif

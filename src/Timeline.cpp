@@ -1,5 +1,5 @@
-/**
- * @file Timeline.hpp
+/*
+ * @file Timeline.cpp
  * @brief Library to manage Quality of Time POSIX clocks
  * @author Andrew Symington
  * 
@@ -24,24 +24,53 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef TIMELINE_HPP
-#define TIMELINE_HPP
 
-#include <boost/asio.hpp>
+/* This file header */
+#include "Timeline.hpp"
 
-namespace qot
+extern "C"
 {
-	class Timeline
-	{
-
-	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &dir);
-	public: ~Timeline();
-
-	// Private variables
-	private: boost::asio::io_service *asio;
-	
-	};
+	#include <stdio.h>
+	#include <sys/ioctl.h>
 }
 
-#endif
+/* Trivial logging */
+#include <boost/log/trivial.hpp>
+
+using namespace qot;
+
+Timeline::Timeline(boost::asio::io_service *io, const std::string &file)
+	: asio(io)
+{
+	// Try and open the file
+	fd = open(file.c_str(), O_RDWR);
+	if (fd < 0)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Could not open the timeline " << file;
+		return;
+	}	
+
+/*
+	// Get the clock id
+	clockid = ((~(clockid_t) (fd) << 3) | CLOCKFD)
+	if (CLOCK_INVALID == clkid)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Could not get the clock id";
+		return;
+	}
+
+	// Get the timeline properties (name, resolution, accuracy)
+	if (ioctl(fd, TIMELINE_PROPERTIES, &properties))
+	{
+		BOOST_LOG_TRIVIAL(error) << "Could not query the timeline properties";
+		return;
+	}
+*/
+
+}
+
+Timeline::~Timeline()
+{
+	if (fd > 0)
+		close(fd);
+}
