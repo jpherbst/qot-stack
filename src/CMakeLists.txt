@@ -37,8 +37,8 @@ ENDIF(CROSS_COMPILE)
 
 # We'll be using C++11 functionality in this project
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-SET(DDS_ROOT "../thirdparty/OpenDDS")
-SET(ACE_ROOT "../thirdparty/OpenDDS/ACE_wrappers")
+SET(DDS_ROOT "/home/asymingt/Workspace/thirdparty/linuxptp/thirdparty/OpenDDS")
+SET(ACE_ROOT "/home/asymingt/Workspace/thirdparty/linuxptp/thirdparty/OpenDDS/ACE_wrappers")
 
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.55 REQUIRED COMPONENTS thread system program_options log)
@@ -82,7 +82,7 @@ ENDIF(CROSS_COMPILE)
 
 # IDL MESSAGE COMPILATION
 
-COMPILE_IDL_FILES(${CMAKE_CURRENT_SOURCE_DIR}/messages/TestDataType.idl)
+COMPILE_IDL_FILES(${CMAKE_CURRENT_SOURCE_DIR}/messages/Timeline.idl)
 
 # DEFAULT APPS
 
