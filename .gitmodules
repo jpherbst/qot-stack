@@ -1,3 +1,4 @@
 [submodule "thirdparty/OpenDDS"]
 	path = thirdparty/OpenDDS
 	url = https://github.com/objectcomputing/OpenDDS.git
+	branch = DDS-3.7
