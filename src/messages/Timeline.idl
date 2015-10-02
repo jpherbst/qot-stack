@@ -1,6 +1,0 @@
-struct Timeline
-{
-    string uuid;
-    double resolution;
-    double accuracy;
-};

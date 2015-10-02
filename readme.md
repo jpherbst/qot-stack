@@ -1,17 +1,31 @@
-1. You'll need to initialize the OpenDDS submodule in thirdparty
-2. You'll need to ```sudo apt-get install build-essential cmake```
-3. Build instructions
+## INSTALLATION INSTRUCTIONS ##
+
+1. Install opensplice 
+
+Configure your system with a workaround for Ubuntu 15.04:
+
 ```
-mkdir build
-pushd build
-cmake ../src
-make -j4
-popd
-4. Running instructions
+$> sudo mkdir -p /usr/lib/bfd-plugins
+$> sudo ln -s /usr/lib/gcc/x86_64-linux-gnu/4.9.2/liblto_plugin.so /usr/lib/bfd-plugins/
+$> sudo apt-get install gawk flex bison perl
 ```
-pushd build
-./qotdaemon -h
+
+Compile opensplice to /opt/opensplice
+
 ```
+$> pushd thirdparty/opensplice
+$> git clone https://github.com/osrf/opensplice.git
+$> cd opensplice/build
+$> cmake .. -DCMAKE_INSTALL_PREFIX=/opt/opensplice
+$> export CMAKE_PREFIX_PATH=/opt/opensplice:$CMAKE_PREFIX_PATH
+$> sudo make install
+$> popd
+```
+
+Build the daemon
+
+
+## NOTES ##
 
 There are three 
 

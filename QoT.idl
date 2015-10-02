@@ -1,6 +1,6 @@
 /*
- * @file Coordination.cpp
- * @brief Library to coordinate 
+ * @file QoT.idl
+ * @brief Messages for communicating QoT devices 
  * @author Andrew Symington
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -25,33 +25,13 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* This file header */
-#include "Coordination.hpp"
-
-/* Trivial logging */
-#include <boost/log/trivial.hpp>
-
-
-/* IDL messages */
-#include "gen/QoT_DCPS.hpp"
-
-using namespace qot;
-
-Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
-	: asio(io)
+module QoT
 {
-  dds::domain::DomainParticipant dp(0);
-  dds::topic::Topic<QoT::Timeline> topic(dp, "TQoT");
-  dds::pub::Publisher pub(dp);
-  dds::pub::DataWriter<QoT::Timeline> dw(pub, topic);
-  QoT::Timeline timeline(0,1.0,2.0);
-  for (unsigned int i = 0; i < 10; ++i)
-  {
-    dw.write(timeline);
-  }
-}
-
-Coordination::~Coordination()
-{
-
-}
+	struct Timeline
+	{
+		short uuid;
+		double resolution;
+		double accuracy;
+	};
+#pragma keylist Timeline uuid
+};
