@@ -2,3 +2,8 @@
 	path = thirdparty/opensplice
 	url = https://github.com/PrismTech/opensplice.git
 	branch = OSPL_V6_4_OSS_RELEASE
+
+[submodule "thirdparty/dds-tutorial-cpp-ex"]
+	path = thirdparty/dds-tutorial-cpp-ex
+	url = https://github.com/PrismTech/dds-tutorial-cpp-ex.git
+	branch = master

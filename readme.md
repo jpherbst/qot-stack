@@ -15,7 +15,7 @@ $> sudo mkdir -p /usr/lib/bfd-plugins
 $> sudo ln -s /usr/lib/gcc/x86_64-linux-gnu/4.9.2/liblto_plugin.so /usr/lib/bfd-plugins/
 ```
 
-Check out the qotdaemon code to /opt/opensplice
+Check out the qotdaemon code
 
 ```
 $> git clone https://bitbucket.org/asymingt/qotdaemon.git
