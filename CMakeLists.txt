@@ -36,10 +36,10 @@ IF(CROSS_COMPILE)
 ENDIF(CROSS_COMPILE)
 
 # We'll be using C++11 functionality in this project
-# SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # Hint for finding opensplice
-SET(ENV{OSPL_HOME} "/opt/opensplice")
+SET(ENV{OSPL_HOME} "/home/asymingt/Workspace/thirdparty/linuxptp/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
 
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.55 REQUIRED COMPONENTS thread system program_options log)

@@ -32,6 +32,9 @@
 #include <string>
 
 // Boost includes
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
 #include <boost/program_options.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -49,6 +52,7 @@ int main(int argc, char **argv)
 	boost::program_options::options_description desc("Allowed options");
 	desc.add_options()
 		("help,h",  	"produce help message")
+		("verbose,v",  	"print verbose debug messages")
 		("conf,c", 		boost::program_options::value<std::string>()
 			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
 		("dir,d", 		boost::program_options::value<std::string>()
@@ -58,6 +62,22 @@ int main(int argc, char **argv)
 	boost::program_options::store(
 		boost::program_options::parse_command_line(argc, argv, desc), vm);
 	boost::program_options::notify(vm);    
+
+	// Set logging level
+	if (vm.count("verbose") > 0)
+    {
+    	boost::log::core::get()->set_filter
+	    (
+	        boost::log::trivial::severity >= boost::log::trivial::info
+	    );
+	}
+	else
+	{
+    	boost::log::core::get()->set_filter
+	    (
+	        boost::log::trivial::severity >= boost::log::trivial::warning
+	    );
+	}
 
 	// Print some help with arguments
 	if (vm.count("help") > 0)
@@ -71,10 +91,7 @@ int main(int argc, char **argv)
 
 	// Create a Timeline, passin
 	Notifier notifier(&io, vm["dir"].as<std::string>());
-
-	// Create some dummy work to prevent exiting
-	boost::asio::io_service::work work(io);
-
+	
 	// Runt the io service
 	io.run();
 

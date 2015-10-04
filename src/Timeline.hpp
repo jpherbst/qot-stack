@@ -29,6 +29,9 @@
 
 #include <boost/asio.hpp>
 
+/* Networkcoordination c*/
+#include "Coordination.hpp"
+
 namespace qot
 {
 	class Timeline
@@ -39,6 +42,7 @@ namespace qot
 	public: ~Timeline();
 
 	// Private variables
+	private: Coordination coordinator;
 	private: boost::asio::io_service *asio;
 	private: int fd;
 

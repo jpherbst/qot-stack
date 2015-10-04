@@ -31,7 +31,6 @@
 /* Trivial logging */
 #include <boost/log/trivial.hpp>
 
-
 /* IDL messages */
 #include "gen/QoT_DCPS.hpp"
 
@@ -41,7 +40,7 @@ Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
 	: asio(io)
 {
   dds::domain::DomainParticipant dp(0);
-  dds::topic::Topic<QoT::Timeline> topic(dp, "TQoT");
+  dds::topic::Topic<QoT::Timeline> topic(dp, dir);
   dds::pub::Publisher pub(dp);
   dds::pub::DataWriter<QoT::Timeline> dw(pub, topic);
   QoT::Timeline timeline(0,1.0,2.0);

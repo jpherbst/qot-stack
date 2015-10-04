@@ -28,7 +28,7 @@ MACRO (OpenSplice_IDLGEN idlfilename)
     DEFINE_OpenSplice_SOURCES(${ARGV})
     ADD_CUSTOM_COMMAND (
         OUTPUT ${outsources}
-        COMMAND PATH=$ENV{OSPL_HOME}/bin OSPL_TMPL_PATH=$ENV{OSPL_HOME}/etc/opensplice/idlpp ${OpenSplice_IDLGEN_BINARY}
+        COMMAND PATH=$ENV{OSPL_HOME}/bin OSPL_TMPL_PATH=$ENV{OSPL_HOME}/etc/idlpp ${OpenSplice_IDLGEN_BINARY}
         ARGS  -l isocpp -d gen ${it}
         DEPENDS ${it}
     )

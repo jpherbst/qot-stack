@@ -40,7 +40,7 @@ extern "C"
 using namespace qot;
 
 Timeline::Timeline(boost::asio::io_service *io, const std::string &file)
-	: asio(io)
+	: asio(io), coordinator(io, "test")
 {
 	// Try and open the file
 	fd = open(file.c_str(), O_RDWR);
@@ -49,24 +49,6 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &file)
 		BOOST_LOG_TRIVIAL(error) << "Could not open the timeline " << file;
 		return;
 	}	
-
-/*
-	// Get the clock id
-	clockid = ((~(clockid_t) (fd) << 3) | CLOCKFD)
-	if (CLOCK_INVALID == clkid)
-	{
-		BOOST_LOG_TRIVIAL(error) << "Could not get the clock id";
-		return;
-	}
-
-	// Get the timeline properties (name, resolution, accuracy)
-	if (ioctl(fd, TIMELINE_PROPERTIES, &properties))
-	{
-		BOOST_LOG_TRIVIAL(error) << "Could not query the timeline properties";
-		return;
-	}
-*/
-
 }
 
 Timeline::~Timeline()

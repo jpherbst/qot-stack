@@ -19,14 +19,14 @@ FIND_PATH(OpenSplice_INCLUDE_DIR
     NAMES
         make_files.py
     PATHS
-        $ENV{OSPL_HOME}/include/opensplice/dcps/C++/isocpp
+        $ENV{OSPL_HOME}/include/dcps/C++/isocpp
 )
 
 SET(OpenSplice_INCLUDE_DIRS 
     ${OpenSplice_INCLUDE_DIR} 
-    $ENV{OSPL_HOME}/include/opensplice 
-    $ENV{OSPL_HOME}/include/opensplice/sys
-    $ENV{OSPL_HOME}/include/opensplice/dcps/C++/SACPP
+    $ENV{OSPL_HOME}/include
+    $ENV{OSPL_HOME}/include/sys
+    $ENV{OSPL_HOME}/include/dcps/C++/SACPP
 )
 
 # Find libraries

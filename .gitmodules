@@ -1,3 +1,4 @@
 [submodule "thirdparty/opensplice"]
 	path = thirdparty/opensplice
-	url = https://github.com/osrf/opensplice.git
+	url = https://github.com/PrismTech/opensplice.git
+	branch = OSPL_V6_4_OSS_RELEASE

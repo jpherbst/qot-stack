@@ -36,6 +36,8 @@ using namespace qot;
 Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
 	: asio(io)
 {
+	BOOST_LOG_TRIVIAL(info) << "Starting the notifier at directory " << dir;
+
 	/* First, add all existing timelines in the system */
   	DIR * d = opendir(dir.c_str());
     if (!d)
@@ -52,7 +54,11 @@ Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
 	            break;
 
 	        // Check to see if this is a character device, and add it
-	        if (entry->d_type & DT_CHR)
+	        if (entry->d_type & DT_DIR)
+	        {
+	        	// DO NOTHING
+	        }
+	        else
 	        {
 				// Append the directory to the name 
 				std::ostringstream oss("");
