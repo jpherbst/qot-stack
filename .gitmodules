@@ -1,0 +1,6 @@
+[submodule "thirdparty/dds-tutorial-cpp-ex"]
+	path = thirdparty/dds-tutorial-cpp-ex
+	url = https://github.com/PrismTech/dds-tutorial-cpp-ex.git
+[submodule "thirdparty/opensplice"]
+	path = thirdparty/opensplice
+	url = https://github.com/PrismTech/opensplice.git
