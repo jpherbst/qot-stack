@@ -162,7 +162,6 @@ TARGET_LINK_LIBRARIES(ptp ${MATH_LIBRARIES})
 SET(idls msg/QoT.idl)
 FOREACH(idl ${idls})
 	OpenSplice_IDLGEN (${idl})
-	message("${outsources}")
 	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
 ENDFOREACH(idl)
 
