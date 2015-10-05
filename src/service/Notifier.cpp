@@ -76,19 +76,12 @@ Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
     if (closedir(d))
     	BOOST_LOG_TRIVIAL(error) << "Could not close the directory " << dir;
 
-	/* Create INOTIFY instance and check for error */
-	fd = inotify_init();
-	if (fd < 0)
-		BOOST_LOG_TRIVIAL(error) << "Could not open the directory " << dir;
-	else
-		thread = boost::thread(boost::bind(&Notifier::watch, this, dir.c_str()));
+	BOOST_LOG_TRIVIAL(info) << "Watching directory " << dir;
+	thread = boost::thread(boost::bind(&Notifier::watch, this, dir.c_str()));
 }
 
 Notifier::~Notifier()
 {
-	// Close the INOTIFY instance
-	close(fd);
-
 	// Join the listen thread
 	thread.join();
 }
@@ -115,6 +108,16 @@ void Notifier::del(const std::string &path)
 
 void Notifier::watch(const char* dir)
 {
+	char buffer[EVENT_BUF_LEN];
+
+	/* Create INOTIFY instance and check for error */
+	int fd = inotify_init();
+	if (fd < 0)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Could not open the directory " << dir;
+		return;
+	}
+
 	// Monitor the /clk directory for creation and deletion 
 	int wd = inotify_add_watch(fd, dir, IN_CREATE | IN_DELETE);
 
@@ -127,13 +130,17 @@ void Notifier::watch(const char* dir)
 		// Wait for incoming data 
 		int ret = poll(&pfds, 1, EVENT_TIMEOUT);
 		if (ret < 0)
+		{
+			BOOST_LOG_TRIVIAL(warning) << "Warning: poll error ";
 			break;
-		else if (pfds.revents & POLLIN)
+		}
+		//else if (pfds.revents & POLLIN)
 		{
 			// Read to determine the event change happens on watched directory
 			int length = read(fd, buffer, EVENT_BUF_LEN); 
 			if (length < 0)
 			{
+				BOOST_LOG_TRIVIAL(warning) << "Warning: read error ";
 				close(fd);
 				return;
 			}  
@@ -176,4 +183,8 @@ void Notifier::watch(const char* dir)
 
 	// Remove the watch directory from the watch list.
 	inotify_rm_watch(fd, wd);
+
+	// Close the INOTIFY instance
+	close(fd);
+
 }

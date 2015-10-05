@@ -27,8 +27,11 @@
 #ifndef COORDINATION_HPP
 #define COORDINATION_HPP
 
-// Boost includes
+/* Boost includes */
 #include <boost/asio.hpp>
+
+/* IDL messages */
+#include "msg/QoT_DCPS.hpp"
 
 namespace qot
 {
@@ -41,6 +44,13 @@ namespace qot
 	
 	// Private variables
 	private: boost::asio::io_service *asio;
+
+	// DDS private variables
+	private: dds::domain::DomainParticipant dp;
+	private: dds::topic::Topic<QoT::Timeline> topic;
+	private: dds::pub::Publisher pub;
+	private: dds::pub::DataWriter<QoT::Timeline> dw;
+	private: QoT::Timeline timeline;
 
 	};
 }

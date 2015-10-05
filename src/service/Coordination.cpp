@@ -1,6 +1,6 @@
-/**
- * @file Notifier.hpp
- * @brief Library to manage Quality of Time POSIX clocks
+/*
+ * @file Coordination.cpp
+ * @brief Library to coordinate 
  * @author Andrew Symington
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -24,60 +24,26 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef NOTIFIER_HPP
-#define NOTIFIER_HPP
 
-// System includes
-#include <string>
-#include <map>
+/* This file header */
+#include "Coordination.hpp"
 
-/* System dependencies */
-extern "C"
+/* Trivial logging */
+#include <boost/log/trivial.hpp>
+
+using namespace qot;
+
+Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
+	: asio(io), dp(0), topic(dp, dir), pub(dp), dw(pub, topic)
 {
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <errno.h>
-	#include <poll.h>
-	#include <dirent.h>
-	#include <sys/types.h>
-	#include <sys/inotify.h>
+  /* Instantiate the timeline */
+  
+
+  /* Publish info about the timeline */
+  dw.write(timeline);
 }
 
-// Boost includes
-#include <boost/asio.hpp>
-#include <boost/thread.hpp> 
-
-// Project includes
-#include "Timeline.hpp"
-
-/* Convenience declarations */
-#define EVENT_SIZE  	(sizeof(struct inotify_event))
-#define EVENT_BUF_LEN   (1024*(EVENT_SIZE + 16))
-#define EVENT_MAXLEN 	(512)
-#define	EVENT_TIMEOUT	(1000)
-
-namespace qot
+Coordination::~Coordination()
 {
-	class Notifier
-	{
 
-	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &dir);
-	public: ~Notifier();
-
-	// Private methods
-	private: void add(const std::string &path);
-	private: void del(const std::string &path);
-	private: void watch(const char* dir);
-
-	// Private variables
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
-	private: std::map<std::string,Timeline> timelines;
-	private: int fd;
-	private: char buffer[EVENT_BUF_LEN];
-
-	};
 }
-
-#endif

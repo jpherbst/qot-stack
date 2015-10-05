@@ -29,7 +29,7 @@ module QoT
 {
 	struct Timeline
 	{
-		short uuid;
+		string uuid;
 		double resolution;
 		double accuracy;
 	};

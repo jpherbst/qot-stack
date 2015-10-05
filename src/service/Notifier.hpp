@@ -1,6 +1,6 @@
-/*
- * @file Coordination.cpp
- * @brief Library to coordinate 
+/**
+ * @file Notifier.hpp
+ * @brief Library to manage Quality of Time POSIX clocks
  * @author Andrew Symington
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -24,33 +24,57 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef NOTIFIER_HPP
+#define NOTIFIER_HPP
 
-/* This file header */
-#include "Coordination.hpp"
+// System includes
+#include <string>
+#include <map>
 
-/* Trivial logging */
-#include <boost/log/trivial.hpp>
-
-/* IDL messages */
-#include "gen/QoT_DCPS.hpp"
-
-using namespace qot;
-
-Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
-	: asio(io)
+/* System dependencies */
+extern "C"
 {
-  dds::domain::DomainParticipant dp(0);
-  dds::topic::Topic<QoT::Timeline> topic(dp, dir);
-  dds::pub::Publisher pub(dp);
-  dds::pub::DataWriter<QoT::Timeline> dw(pub, topic);
-  QoT::Timeline timeline(0,1.0,2.0);
-  for (unsigned int i = 0; i < 10; ++i)
-  {
-    dw.write(timeline);
-  }
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <errno.h>
+	#include <poll.h>
+	#include <dirent.h>
+	#include <sys/types.h>
+	#include <sys/inotify.h>
 }
 
-Coordination::~Coordination()
-{
+// Boost includes
+#include <boost/asio.hpp>
+#include <boost/thread.hpp> 
 
+// Project includes
+#include "Timeline.hpp"
+
+/* Convenience declarations */
+#define EVENT_SIZE  	(sizeof(struct inotify_event))
+#define EVENT_BUF_LEN   (1024*(EVENT_SIZE + 16))
+#define EVENT_MAXLEN 	(512)
+#define	EVENT_TIMEOUT	(1000)
+
+namespace qot
+{
+	class Notifier
+	{
+
+	// Constructor and destructor
+	public: Notifier(boost::asio::io_service *io, const std::string &dir);
+	public: ~Notifier();
+
+	// Private methods
+	private: void add(const std::string &path);
+	private: void del(const std::string &path);
+	private: void watch(const char* dir);
+
+	// Private variables
+	private: boost::asio::io_service *asio;
+	private: boost::thread thread;
+	private: std::map<std::string,Timeline> timelines;
+	};
 }
+
+#endif

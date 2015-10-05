@@ -1,236 +1,88 @@
+# @file CMakeLists.txt
+# @brief Base build script for the qot-stack project
+# @author Andrew Symington
+# 
+# Copyright (c) Regents of the University of California, 2015. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without modification, 
+# are permitted provided that the following conditions are met:
+# 	1. Redistributions of source code must retain the above copyright notice, 
+#     this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright notice, 
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+# ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 # Minimum version of CMake required to build this file
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-PROJECT(misc)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
 
-# Find scripts
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+# Name and version of this project
+PROJECT(qot-stack VERSION 0.1.0.0)
 
-# Include the OpenSplice macros (IDL message compilation)
-INCLUDE(MacroOpenSplice)
+# Basic options
+OPTION(CROSS_COMPILE "Cross-compile for arm-linux-gnueabihf" OFF)
 
-# Parameters
-SET(CROSS_COMPILE 0)
+# Set to debug by default
+SET(CMAKE_BUILD_TYPE Debug)
 
-# Extra parameters required for BBB
-IF(CROSS_COMPILE)
+# Configure cross compilation
+IF (CROSS_COMPILE)
 
-	# Cross-compile properties
+	# User-definable root filesystem location
+	SET(CROSS_COMPILE_ROOTFS "/export/rootfs" CACHE STRING "Path to ROOTFS")
+	
+	# System, architecture and version
 	SET(CMAKE_SYSTEM_NAME Linux)
 	SET(CMAKE_SYSTEM_PROCESSOR arm) 
 	SET(CMAKE_SYSTEM_VERSION 1)
 
-	# Specify the cross compiler (need to work out )
+	# Specify the cross compiler
 	SET(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
 	SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
-	SET(CMAKE_FIND_ROOT_PATH /export/rootfs)
+
+	# Where is the target environment 
+	SET(CMAKE_FIND_ROOT_PATH ${CROSS_COMPILE_ROOTFS})
 
 	# Search for programs in the build host directories
 	SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+
+	# Search for libraries and headers in the target directories
 	SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 	SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-
-	# Hints for finding boost in the rootfs
-	SET(BOOST_INCLUDEDIR "/export/rootfs/usr/include")
-	SET(BOOST_LIBRARYDIR "/export/rootfs/usr/lib/arm-linux-gnueabihf")
-
-ENDIF(CROSS_COMPILE)
-
-# We'll be using C++11 functionality in this project
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
-# Hint for finding opensplice
-SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
-
-# Preprocessor directive required to link boost trivial logging
-FIND_PACKAGE(Boost 1.55 REQUIRED COMPONENTS thread system program_options log)
-FIND_PACKAGE(Threads REQUIRED)
-FIND_PACKAGE(Math REQUIRED)
-FIND_PACKAGE(OpenSplice REQUIRED)
-
-# This is required for boost logging
-ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-
-# Location of header files for the entire project
-INCLUDE_DIRECTORIES(
-	${Boost_INCLUDE_DIR} 
-	${OpenSplice_INCLUDE_DIRS}
-	${CMAKE_CURRENT_SOURCE_DIR} 
-	${CMAKE_CURRENT_BINARY_DIR} 
-)
-
-# Location of boost libraries
-LINK_DIRECTORIES(
-	${Boost_LIBRARY_DIRS} 
-)
-
-# Extra parameters required for BBB
-IF(CROSS_COMPILE)
 	
+	# Hints for finding boost
+	SET(BOOST_ROOT "${CROSS_COMPILE_ROOTFS}")
+	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
+	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf")
+
+	# Where to find header files
 	INCLUDE_DIRECTORIES(
-		"/export/rootfs/usr/include/arm-linux-gnueabihf" 
-		"/export/rootfs/usr/include"
+		"${CROSS_COMPILE_ROOTFS}/usr/include/arm-linux-gnueabihf" 
+		"${CROSS_COMPILE_ROOTFS}/usr/include"
 	)
 	
+	# Where to find libraries
 	LINK_DIRECTORIES(
-		"/export/rootfs/usr/lib/arm-linux-gnueabihf" 
-		"/export/rootfs/lib/arm-linux-gnueabihf"
+		"${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf" 
+		"${CROSS_COMPILE_ROOTFS}/lib/arm-linux-gnueabihf"
 	)
 
-ENDIF(CROSS_COMPILE)
+ENDIF (CROSS_COMPILE)
 
-# DEFAULT APPS
+# Include the code
+ADD_SUBDIRECTORY(src)
 
-ADD_EXECUTABLE(pmc 
-	src/linuxptp/msg.c 
-	src/linuxptp/pmc.c 
-	src/linuxptp/pmc_common.c 
-	src/linuxptp/print.c 
-	src/linuxptp/raw.c 
-	src/linuxptp/sk.c 
-	src/linuxptp/tlv.c 
-	src/linuxptp/transport.c 
-	src/linuxptp/udp.c 
-	src/linuxptp/udp6.c 
-	src/linuxptp/uds.c 
-	src/linuxptp/util.c 
-	src/linuxptp/version.c
-)
-TARGET_LINK_LIBRARIES(pmc ${MATH_LIBRARIES})
 
-ADD_EXECUTABLE(phc2sys 
-	src/linuxptp/clockadj.c 
-	src/linuxptp/msg.c 
-	src/linuxptp/phc.c 
-	src/linuxptp/phc2sys.c 
-	src/linuxptp/pi.c 
-	src/linuxptp/pmc_common.c 
-	src/linuxptp/print.c 
-	src/linuxptp/servo.c
-	src/linuxptp/raw.c 
-	src/linuxptp/sk.c 
-	src/linuxptp/stats.c 
-	src/linuxptp/sysoff.c 
-	src/linuxptp/tlv.c 
-	src/linuxptp/transport.c 
-	src/linuxptp/udp.c 
-	src/linuxptp/udp6.c 
-	src/linuxptp/uds.c 
-	src/linuxptp/util.c
-	src/linuxptp/version.c
-)
-TARGET_LINK_LIBRARIES(phc2sys ${MATH_LIBRARIES})
 
-ADD_EXECUTABLE(hwstamp_ctl 
-	src/linuxptp/hwstamp_ctl.c 
-	src/linuxptp/version.c
-)
-TARGET_LINK_LIBRARIES(hwstamp_ctl ${MATH_LIBRARIES})
 
-ADD_EXECUTABLE(ptp4l 
-	src/linuxptp/bmc.c 
-	src/linuxptp/bmc.h 
-	src/linuxptp/clock.c 
-	src/linuxptp/clock.h 
-	src/linuxptp/clockadj.c
-	src/linuxptp/clockadj.h 
-	src/linuxptp/config.c
-	src/linuxptp/config.h 
-	src/linuxptp/fault.c
-	src/linuxptp/fault.h 
-	src/linuxptp/fsm.c
-	src/linuxptp/fsm.h 
-	src/linuxptp/mave.c
-	src/linuxptp/mave.h
-	src/linuxptp/msg.c
-	src/linuxptp/msg.h 
-	src/linuxptp/phc.c
-	src/linuxptp/phc.h 
-	src/linuxptp/pi.c 
-	src/linuxptp/port.c 
-	src/linuxptp/print.c 
-	src/linuxptp/ptp4l.c 
-	src/linuxptp/raw.c 
-	src/linuxptp/servo.c 
-	src/linuxptp/sk.c 
-	src/linuxptp/stats.c 
-	src/linuxptp/tlv.c 
-	src/linuxptp/tmtab.c
-	src/linuxptp/transport.c 
-	src/linuxptp/udp.c 
-	src/linuxptp/udp6.c 
-	src/linuxptp/uds.c 
-	src/linuxptp/util.c 
-	src/linuxptp/version.c
-)
-TARGET_LINK_LIBRARIES(ptp4l ${MATH_LIBRARIES})
 
-ADD_LIBRARY(ptp SHARED
-	src/linuxptp/bmc.c 
-	src/linuxptp/bmc.h 
-	src/linuxptp/clock.c 
-	src/linuxptp/clock.h 
-	src/linuxptp/clockadj.c
-	src/linuxptp/clockadj.h 
-	src/linuxptp/config.c
-	src/linuxptp/config.h 
-	src/linuxptp/fault.c
-	src/linuxptp/fault.h 
-	src/linuxptp/fsm.c
-	src/linuxptp/fsm.h 
-	src/linuxptp/mave.c
-	src/linuxptp/mave.h
-	src/linuxptp/msg.c
-	src/linuxptp/msg.h 
-	src/linuxptp/phc.c
-	src/linuxptp/phc.h 
-	src/linuxptp/pi.c 
-	src/linuxptp/port.c 
-	src/linuxptp/print.c 
-	src/linuxptp/raw.c 
-	src/linuxptp/servo.c 
-	src/linuxptp/sk.c 
-	src/linuxptp/stats.c 
-	src/linuxptp/tlv.c 
-	src/linuxptp/tmtab.c
-	src/linuxptp/transport.c 
-	src/linuxptp/udp.c 
-	src/linuxptp/udp6.c 
-	src/linuxptp/uds.c 
-	src/linuxptp/util.c 
-	src/linuxptp/version.c
-)
-TARGET_LINK_LIBRARIES(ptp ${MATH_LIBRARIES})
-
-########################### OUR APPLICATION ##############################
-
-# IDL MESSAGE COMPILATION
-
-set (idls QoT.idl)
-foreach(idl ${idls})
-	OpenSplice_IDLGEN (${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.cpp" VARS_1 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.h" VARS_2 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.cpp" VARS_3 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.h" VARS_4 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.cpp" VARS_5 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.h" VARS_6 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.cpp" VARS_7 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.h" VARS_8 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/ccpp_\\1.h" VARS_9 ${idl})
-	set(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${VARS_1} ${VARS_2} ${VARS_3} ${VARS_4} ${VARS_5} ${VARS_6} ${VARS_7} ${VARS_8} ${VARS_9})
-endforeach(idl)
-
-ADD_LIBRARY(datamodel SHARED ${OpenSplice_DATAMODEL})
-
-ADD_EXECUTABLE(qotdaemon 
-	src/Coordination.cpp
-	src/Coordination.cpp
-	src/Synchronization.cpp
-	src/Synchronization.hpp
-	src/Timeline.cpp
-	src/Timeline.hpp
-	src/Notifier.cpp
-	src/Notifier.hpp
-	src/main.cpp
-)
-TARGET_LINK_LIBRARIES(qotdaemon datamodel ${Boost_LIBRARIES} ${OpenSplice_LIBRARIES})
