@@ -1,8 +1,9 @@
-[submodule "thirdparty/dds-tutorial-cpp-ex"]
-	path = thirdparty/dds-tutorial-cpp-ex
-	url = https://github.com/PrismTech/dds-tutorial-cpp-ex.git
-	ignore = all
 [submodule "thirdparty/opensplice"]
 	path = thirdparty/opensplice
-	url = https://github.com/PrismTech/opensplice.git
+	url = https://github.com/asymingt/opensplice.git
 	ignore = all
+[submodule "thirdparty/Kronux"]
+	path = thirdparty/Kronux
+	url = https://github.com/asymingt/Kronux.git
+	ignore = all
+
