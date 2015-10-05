@@ -39,7 +39,7 @@ ENDIF(CROSS_COMPILE)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # Hint for finding opensplice
-SET(ENV{OSPL_HOME} "/home/asymingt/Workspace/thirdparty/linuxptp/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
+SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
 
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.55 REQUIRED COMPONENTS thread system program_options log)
@@ -77,22 +77,6 @@ IF(CROSS_COMPILE)
 	)
 
 ENDIF(CROSS_COMPILE)
-
-# IDL MESSAGE COMPILATION
-set (idls QoT.idl)
-foreach(idl ${idls})
-	OpenSplice_IDLGEN (${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.cpp" VARS_1 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.h" VARS_2 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.cpp" VARS_3 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.h" VARS_4 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.cpp" VARS_5 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.h" VARS_6 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.cpp" VARS_7 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.h" VARS_8 ${idl})
-	string (REGEX REPLACE "\(.*\).idl" "./gen/ccpp_\\1.h" VARS_9 ${idl})
-	set(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${VARS_1} ${VARS_2} ${VARS_3} ${VARS_4} ${VARS_5} ${VARS_6} ${VARS_7} ${VARS_8} ${VARS_9})
-endforeach(idl)
 
 # DEFAULT APPS
 
@@ -180,8 +164,6 @@ ADD_EXECUTABLE(ptp4l
 )
 TARGET_LINK_LIBRARIES(ptp4l ${MATH_LIBRARIES})
 
-# Our apps
-
 ADD_LIBRARY(ptp SHARED
 	src/linuxptp/bmc.c 
 	src/linuxptp/bmc.h 
@@ -218,6 +200,25 @@ ADD_LIBRARY(ptp SHARED
 	src/linuxptp/version.c
 )
 TARGET_LINK_LIBRARIES(ptp ${MATH_LIBRARIES})
+
+########################### OUR APPLICATION ##############################
+
+# IDL MESSAGE COMPILATION
+
+set (idls QoT.idl)
+foreach(idl ${idls})
+	OpenSplice_IDLGEN (${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.cpp" VARS_1 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1.h" VARS_2 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.cpp" VARS_3 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps.h" VARS_4 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.cpp" VARS_5 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1Dcps_impl.h" VARS_6 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.cpp" VARS_7 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/\\1SplDcps.h" VARS_8 ${idl})
+	string (REGEX REPLACE "\(.*\).idl" "./gen/ccpp_\\1.h" VARS_9 ${idl})
+	set(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${VARS_1} ${VARS_2} ${VARS_3} ${VARS_4} ${VARS_5} ${VARS_6} ${VARS_7} ${VARS_8} ${VARS_9})
+endforeach(idl)
 
 ADD_LIBRARY(datamodel SHARED ${OpenSplice_DATAMODEL})
 

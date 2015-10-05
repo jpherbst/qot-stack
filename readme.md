@@ -34,6 +34,11 @@ Configure and build the OpenSplice DDS library.
 ```
 $> pushd thirdparty/opensplice
 $> ./configure
+```
+Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```env-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build...
+
+```
+$> . envs-x86_64.linux-dev.sh
 $> make
 $> make install
 $> popd
