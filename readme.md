@@ -31,10 +31,17 @@ $> git submodule update
 
 This will take a while, as it checks out several large third party repos.
 
-Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
+Switch to the OpenSplice directory and pull the third party repo for the C++ bindings
 
 ```
 $> pushd thirdparty/opensplice
+$> git submodule init
+$> git submodule update
+```
+
+Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
+
+```
 $> ./configure
 ```
 
