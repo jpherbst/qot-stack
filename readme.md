@@ -37,7 +37,7 @@ Configure and build the OpenSplice DDS library.
 $> pushd thirdparty/opensplice
 $> ./configure
 ```
-Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```env-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build...
+Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```env-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. It's probably wise to not move them, as the qot-service expects them to be there.
 
 ```
 $> . env-x86_64.linux-dev.sh
