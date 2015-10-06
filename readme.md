@@ -15,11 +15,11 @@ $> sudo mkdir -p /usr/lib/bfd-plugins
 $> sudo ln -s /usr/lib/gcc/x86_64-linux-gnu/4.9.2/liblto_plugin.so /usr/lib/bfd-plugins/
 ```
 
-Check out the qotdaemon code
+Check out the qot-stack code
 
 ```
-$> git clone https://bitbucket.org/asymingt/qotdaemon.git
-$> cd qotdaemon
+$> git clone https://bitbucket.org/asymingt/qot-stack.git
+$> cd qot-stack
 ```
 
 Fetch third party code
@@ -28,6 +28,8 @@ Fetch third party code
 $> git submodule init
 $> git submodule update
 ```
+
+This will take a while, as it checks out several large third party repos.
 
 Configure and build the OpenSplice DDS library.
 
@@ -38,7 +40,7 @@ $> ./configure
 Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```env-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build...
 
 ```
-$> . envs-x86_64.linux-dev.sh
+$> . env-x86_64.linux-dev.sh
 $> make
 $> make install
 $> popd
@@ -76,12 +78,14 @@ $> make
 There are three 
 
 1. PTP-compliant NIC 			Performs filtered H/W timestamping
+
    a. With CLK
    b. With SFD
    c. With CLK and SFD	
    d. Without CLK and SFD
 
 2. Regular NIC 					Does not perform H/W timestamping
+
    a. With CLK
    b. With SFD
    c. With CLK and SFD			
@@ -97,4 +101,4 @@ this reason our PTP client must support all options.
 
 In the first instance all our QoT stack will adapt is the location of
 the master, and the node synchronization frequency. In future we will
-support switching between NICs, sync alorithms and adaptive clocking. 
+support switching between NICs, sync alorithms and adaptive clocking.
