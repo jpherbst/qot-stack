@@ -11,6 +11,7 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <asm/uaccess.h>
+#include <linux/slab.h>
 
 // Expose qot module to userspace through ioctl
 #include "qot_ioctl.h"
@@ -25,51 +26,88 @@ MODULE_DESCRIPTION("QoT timelines maintenance");
 MODULE_VERSION("0.3.0");
 
 // hashtable for maintaining timelines
-DEFINE_HASHTABLE(qot_timelines_hash, ID_LENGTH);
-
-// Maximum number of clock ids and bindind ids supported
-#define ID_LENGTH 16
+DEFINE_HASHTABLE(qot_timelines_hash, MAX_UUIDLEN);
 
 // Required for ioctl
 static dev_t dev;
 static struct cdev c_dev;
 static struct class *cl;
 
-// binding id for the applications
-uint16_t bid = 0;
+static inline void add_sorted_acc_list(struct qot_binding *binding_list, struct list_head *head)
+{
+	struct qot_binding *bind_obj;
+	// traverse through the entire list against this timeline for proper insertion
+	// sorted w.r.t accuracy
+	list_for_each_entry(bind_obj, head, acc_sort_list)
+	{
+		if (bind_obj->accuracy > binding_list->accuracy)
+		{
+			list_add_tail(&binding_list->acc_sort_list, &bind_obj->acc_sort_list);
+			return;
+		}
+	}
 
-// head for resolution sorting using list
-struct list_head head;
-
-// collection of clocks / bindings
-struct qot_clock_bindings {
-	qot_timeline_data clk[1 << (ID_LENGTH))];
-};
-
-// pointers in an array to a clock binding data
-struct qot_clock_bindings *bindings = NULL;
-
-static inline void add_sorted_hash_member(qot_clock *new, qot_timeline_data *new_data){
-	struct qot_timeline_data *obj;
-        hlist_for_each_entry(obj, &qot_timelines_hash[new->timeline], accuracy_sort_hash){
-            // manage pointers for accuracy
-            if(new->accuracy < obj->info->accuracy && obj->info != NULL){
-                hlist_add_before(&new_data->accuracy_sort_hash, &obj->accuracy_sort_hash);
-                return;
-            }
-        }
+	list_add_tail(&binding_list->acc_sort_list, head); // if its the last element in the list
 }
 
-static inline void add_sorted_list_member(qot_clock *new, qot_timeline_data *new_data){
-	struct qot_timeline_data *obj;
-		hlist_for_each_entry(obj, &qot_timelines_hash[new->timeline], accuracy_sort_hash){
-            // manage pointers for resolution
-            if(new->resolution < obj->info->resolution && obj->info != NULL){
-                    INIT_LIST_HEAD(&new_data->resolution_sort_list);
-                    list_add_tail(&new_data->resolution_sort_list, &obj->resolution_sort_list);
-                    return;
-            }
-        }
+static inline void add_sorted_res_list(struct qot_binding *binding_list, struct list_head *head)
+{
+	struct qot_binding *bind_obj;
+	// traverse through the entire list against this timeline for proper insertion
+	// sorted w.r.t accuracy
+	list_for_each_entry(bind_obj, head, res_sort_list)
+	{
+		if (bind_obj->resolution > binding_list->resolution)
+		{
+			list_add_tail(&binding_list->res_sort_list, &bind_obj->res_sort_list);
+			return;
+		}
+	}
+	list_add_tail(&binding_list->res_sort_list, head); // if its the last element in the list
+}
+
+static inline void add_new_timeline(char uuid[], struct qot_binding *binding_list)
+{
+	struct qot_timeline *hash_timeline;
+	hash_timeline = qot_timeline_register(uuid);
+	if(IS_ERR(hash_timeline))
+	{
+		hash_timeline = NULL;
+		return;
+	}
+	// add a posix clock for the new timeline as the first element of hash table
+	hash_add(qot_timelines_hash, &hash_timeline->collision_hash, (unsigned long)uuid);			
+	INIT_LIST_HEAD(&hash_timeline->head_acc); // initialize head for sorted accuracy list
+	INIT_LIST_HEAD(&hash_timeline->head_res); // initialize head for sorted accuracy list
+
+	// add the binding to the timeline
+	list_add(&binding_list->acc_sort_list, &hash_timeline->head_acc);
+	list_add(&binding_list->res_sort_list, &hash_timeline->head_res);
+}
+
+static inline struct qot_binding * add_new_binding(qot_clock *clk)
+{
+	struct qot_binding *binding_list;
+
+	binding_list = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
+	if (binding_list == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	strncpy(binding_list->uuid, clk->timeline, MAX_UUIDLEN);
+	binding_list->accuracy = clk->accuracy;
+	binding_list->resolution = clk->resolution;
+	INIT_LIST_HEAD(&binding_list->acc_sort_list);
+	INIT_LIST_HEAD(&binding_list->res_sort_list);
+
+	// add binding pointer to the new clock binding
+	binding_map[next_binding] = binding_list;
+
+	return binding_list;
+}
+
+static inline struct hlist_head *hash_element(char key[])
+{
+	return &qot_timelines_hash[hash_min((unsigned long)key, HASH_BITS(qot_timelines_hash))];
 }
 
 // What to do when the ioctl is started
@@ -87,11 +125,12 @@ static int qot_ioctl_close(struct inode *i, struct file *f)
 // What to do when a user queries the ioctl
 static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg)
 {
-	int err;
-	uint16_t bind_id;
-	struct qot_timeline_data *timeline_data;
-	struct qot_timeline_data *current;
-	struct qot_timeline_data *hash_head;
+	int bind_id;
+	struct qot_binding *current_list;
+	struct qot_binding *binding_list;
+
+	struct hlist_head *hash_head;
+	struct qot_timeline *obj;
 	qot_clock tmp_clk;
 
 	switch (cmd)
@@ -103,148 +142,156 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// Memcpy the current clock parameters into a local structure
 		if (copy_from_user(&tmp_clk, (qot_clock*)arg, sizeof(qot_clock)))
 			return -EACCES;
-		tmp_clk.binding_id = bid;
+		tmp_clk.binding_id = next_binding;
 
-		// check if the timeline is already in the hashtable
-		if(!hlist_empty(&qot_timelines_hash[tmp_clk.timeline])){
+		// make a clock binding object
+		binding_list = add_new_binding(&tmp_clk);	
 
-			// initialize the clock object
-			timeline_data = qot_clock_register(&tmp_clk, 0);
-			if(IS_ERR(timeline_data)){
-				err = PTR_ERR(timeline_data);
-				timeline_data = NULL;
-				return err;
+		// get the hash key using uuid for the new object insertion
+		hash_head = hash_element(tmp_clk.timeline);
+
+		// check if the hash table is empty for the given key
+		if(!hlist_empty(hash_head))
+		{
+
+			hlist_for_each_entry(obj, hash_head, collision_hash){
+			
+			// check if given timeline already exists inside the hashtable
+			if(!strcmp(obj->uuid, tmp_clk.timeline))
+			{
+				// traverse through the entire list against this timeline for proper insertion
+				// sorted w.r.t accuracy and resolution
+				add_sorted_acc_list(binding_list, &obj->head_acc);
+				add_sorted_res_list(binding_list, &obj->head_res);
+				break;
+
 			}
-
-			// insert new clock into the list by sorting according to accuracy and resolution
-			add_sorted_hash_member(&tmp_clk, timeline_data);
-			add_sorted_list_member(&tmp_clk, timeline_data);
-
-		} else {
-			// expose timeline to userspace if it's a new timeline
-			hash_head = qot_clock_register(NULL, 1);
-			if(IS_ERR(hash_head)){
-				err = PTR_ERR(hash_head);
-				hash_head = NULL;
-				return err;
+			else
+			{
+				// create a new timeline
+				// expose timeline to userspace
+				add_new_timeline(tmp_clk.timeline, binding_list);
 			}
-			// add a head as the first element of hash table
-			hash_add(qot_timelines_hash, &hash_head->accuracy_sort_hash, tmp_clk.timeline);
-
-			// add the new data to the hashtable, after the hash head
-			timeline_data = qot_clock_register(&tmp_clk, 0);
-			if(IS_ERR(timeline_data)){
-				err = PTR_ERR(timeline_data);
-				timeline_data = NULL;
-				return err;
-			}
-			hlist_add_behind(&timeline_data->accuracy_sort_hash, &hash_head->accuracy_sort_hash);
-
-			// list manages resolution sorting
-			INIT_LIST_HEAD(&timeline_data->resolution_sort_list);
-			list_add(&timeline_data->resolution_sort_list, head);
 		}
 
-		// add binding pointer to the new clock
-        &(bindings->clk[bid]) = timeline_data;
+		} else { // hashtable is emmpty
+			// expose new timeline to userspace
+			add_new_timeline(tmp_clk.timeline, binding_list);
+		}	
 
 		break;
 
 	case QOT_RETURN_BINDING:
 
-		if (copy_to_user((uint16_t*)arg, &bid, sizeof(uint16_t)))
-				return -EACCES;
-		bid = bid + 1;
+		if (copy_to_user((int*)arg, &next_binding, sizeof(int)))
+			return -EACCES;
+		next_binding = next_binding + 1;
 
 		break;
 
 	case QOT_RELEASE_CLOCK:
 
-		if (copy_from_user(&bind_id, (uint16_t*)arg, sizeof(uint16_t)))
+		if (copy_from_user(&bind_id, (int*)arg, sizeof(int)))
 			return -EACCES;
 
 		// current data pointed to by the bind id
-		current = &(bindings->clk[bind_id]);
+		current_list = binding_map[bind_id];
 
-		// sanity check for binding id
-		if(bind_id != current->info->binding_id)
-			return -1;
+		// delete list pointers and free up the binding
+		list_del(&current_list->acc_sort_list);
+		list_del(&current_list->res_sort_list);
+		kfree(current_list);
 
-		// delete accuracy pointers of hashtable entry
-	    hlist_node *node = &current->accuracy_sort_hash;
-		hlist_del_init(node);
+		// get the hash key using uuid of the deleted binding
+		hash_head = hash_element(current_list->uuid);
 
-		// delete resolution pointers of hashtable entry
-		list_del(&current->resolution_sort_list);
-		kfree(current);
-
-		// bucket to which the list element belongs
-		struct hlist_head *bkt = &qot_timelines_hash[current->info->timeline];
-
-		// check if it was the last element in the hash list
-		// if yes, free up the hash head and unregister timeline
-		if(!bkt->first->next){
-			struct qot_timeline_data *obj;
-			obj = hlist_entry(bkt->first, struct qot_timeline_data, accuracy_sort_hash)		
-			hash_del(obj->accuracy_sort_hash);		// free up hash head
-			list_del(obj->resolution_sort_list);	// free up hash head's list
-			qot_clock_unregister(obj);				// unregister the timeline				
+		// find the head for the deleted binding in the hash table
+		hlist_for_each_entry(obj, hash_head, collision_hash)
+		{
+			// if the last binding for that timeline is deleted, delete the timeline and unregister posix clock
+			if(!strcmp(obj->uuid, current_list->uuid) && list_empty(&obj->head_acc) && list_empty(&obj->head_res))
+			{
+				hash_del(&obj->collision_hash);	// delete corresponding hash element
+				qot_timeline_unregister(obj); 		// unregister corresponding timeline
+				break;
+			}
 		}
-		
+
 		break;
 
     // updates the accuracy of a given clock
-  	case QOT_SET_ACCURACY:
+	case QOT_SET_ACCURACY:
 
- 		if (copy_from_user(&tmp_clk, (qot_clock*)arg, sizeof(qot_clock)))
+		if (copy_from_user(&tmp_clk, (qot_clock*)arg, sizeof(qot_clock)))
 			return -EACCES;
 
 		bind_id = tmp_clk.binding_id;
+
 		// current data pointed to by the bind id
-        current = &(bindings->clk[bind_id]);
+		current_list = binding_map[bind_id];
 
-        // sanity check for binding id
-		if(bind_id != current->info->binding_id)
-			return -1;
+		// update accuracy in the binding
+		current_list->accuracy = tmp_clk.accuracy;
 
-		current->info->accuracy = tmp_clk.accuracy;
-		
-		// sort the hash list according to new accuracy
-		hlist_del_init(&current->accuracy_sort_hash); // it reinitializes the pointers
-		add_sorted_hash_member(current->info, current);
+		// reinitialize the binding
+		list_del_init(&current_list->acc_sort_list);
 
-      	break;
+		// get the hash key using uuid of updated binding
+		hash_head = hash_element(current_list->uuid);
+
+		// find the head for the updated binding in the hash table
+		hlist_for_each_entry(obj, hash_head, collision_hash)
+		{
+			if (!strcmp(obj->uuid, current_list->uuid))
+			{
+				// sort the bindings according to new accuracy
+				add_sorted_acc_list(current_list, &obj->head_acc);
+				break;
+			}
+		}
+
+		break;
 
     // updates the resolution of a given clock
 	case QOT_SET_RESOLUTION:
 
-        if (copy_from_user(&tmp_clk, (qot_clock*)arg, sizeof(qot_clock)))
+		if (copy_from_user(&tmp_clk, (qot_clock*)arg, sizeof(qot_clock)))
 			return -EACCES;
 
 		bind_id = tmp_clk.binding_id;
-		// current data pointed to by the bind id
-        current = &(bindings->clk[bind_id]);
-
-        // sanity check for binding id
-		if(bind_id != current->info->binding_id)
-			return -1;
-
-        current->info->resolution = resolution;
                 
-        // sort the list according to new resolution
-        list_del(&current->resolution_sort_list);
-        hlist_del_init(&current->resolution_sort_list); // to reinitialize the pointers
-        add_sorted_list_member(current->info, current);
+        // current data pointed to by the bind id
+		current_list = binding_map[bind_id];
 
-        break;
+        // update accuracy in the binding
+		current_list->resolution = tmp_clk.resolution;
 
-	case QOT_WAIT:
-	   	break;
+        // reinitialize the binding
+		list_del_init(&current_list->res_sort_list); 
 
-  	case QOT_SET_SCHED:
+        // get the hash key using uuid of updated binding
+		hash_head = hash_element(current_list->uuid);
+
+        // find the head for the updated binding in the hash table
+		hlist_for_each_entry(obj, hash_head, collision_hash)
+		{
+			if (!strcmp(obj->uuid, current_list->uuid))
+			{
+				// sort the bindings according to new resolution
+				add_sorted_res_list(current_list, &obj->head_res);
+				break;
+			}
+		}
+
 		break;
 
-   	case QOT_GET_SCHED:
+	case QOT_WAIT:
+		break;
+
+	case QOT_SET_SCHED:
+		break;
+
+	case QOT_GET_SCHED:
 		break;
 
 	// Not a valid request
@@ -315,15 +362,10 @@ MODULE_DEVICE_TABLE(of, qot_dt_ids);
 static int qot_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match;
-	struct pinctrl *pinctrl;
-	int i = 0;
 
   	// Try and find a device that matches "compatible: qot"
 	match = of_match_device(qot_dt_ids, &pdev->dev);
 	//pr_err("of_match_device failed\n");
-
-	// Initialise the clock and timeline list head
-	INIT_LIST_HEAD(&head);
 
   	// Init the ioctl
 	qot_ioctl_init("qot");
@@ -338,13 +380,13 @@ static int qot_remove(struct platform_device *pdev)
 	qot_ioctl_exit();
 
   	// Kill the platform data
-	if (qot_pdata)
-	{
+	//if (qot_pdata)
+	//{
 	//TODO: free all clock data
     	// Free the platform data
-		devm_kfree(&pdev->dev, qot_pdata);
-		pdev->dev.platform_data = NULL;
-	}
+	//	devm_kfree(&pdev->dev, qot_pdata);
+	//	pdev->dev.platform_data = NULL;
+	//}
 
   	// Free the driver data
 	platform_set_drvdata(pdev, NULL);

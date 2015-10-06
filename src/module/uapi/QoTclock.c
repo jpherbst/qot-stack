@@ -3,25 +3,25 @@
 #include <sys/ioctl.h>
 
 int fd;
-const char *filename = "/dev/timeline";	// name tbd with scheduler
+const char *filename = "/dev/qot";	// name tbd with scheduler
 
 // ----------------- Functions ---------------------
-uint16_t qot_init_clock(uint16_t timeline, struct timespec accuracy, struct timespec resolution)
+int qot_init_clock(char timeline[], uint64_t accuracy, uint64_t resolution)
 {
+	int binding_id;
 	//open ioctl handle with the scheduler
 	fd = open(filename, O_RDWR);
 	
 	qot_clock clk;
-	clk.timeline = timeline;
+	strncpy(clk.timeline, timeline, MAX_UUIDLEN);
 	clk.accuracy = accuracy;
 	clk.resolution = resolution;
 	
 	// add this clock to the qot clock list through scheduler
 	if (ioctl(fd, QOT_INIT_CLOCK, &clk) == 0)
 	{
-		uint16_t binding_id;
 		if(ioctl(fd, QOT_RETURN_BINDING, &binding_id) == 0)
-			printf("Clock created with clock id %i and binding id %i\n", timeline, binding_id);
+			printf("Clock created with binding id %i\n", binding_id);
 		else
 			return -1;
 	}
@@ -29,7 +29,7 @@ uint16_t qot_init_clock(uint16_t timeline, struct timespec accuracy, struct time
 	return binding_id;
 }
 
-void qot_release_clock(uint16_t bindingId)
+void qot_release_clock(int bindingId)
 {
 	// delete this clock from the qot clock list
 	if (ioctl(fd, QOT_RELEASE_CLOCK, &bindingId) == 0)
@@ -40,7 +40,7 @@ void qot_release_clock(uint16_t bindingId)
 	close(fd);
 }
 
-void qot_set_accuracy(uint16_t bindingId, struct timespec accuracy)
+void qot_set_accuracy(int bindingId, uint64_t accuracy)
 {
 	qot_clock clk;
 	clk.accuracy = accuracy;
@@ -53,7 +53,7 @@ void qot_set_accuracy(uint16_t bindingId, struct timespec accuracy)
 	}
 }
 
-void qot_set_resolution(uint16_t bindingId, struct timespec resolution)
+void qot_set_resolution(int bindingId, uint64_t resolution)
 {
 	qot_clock clk;
 	clk.resolution = resolution;
@@ -65,34 +65,41 @@ void qot_set_resolution(uint16_t bindingId, struct timespec resolution)
 	}
 }
 
-void qot_wait_until(qot_clock clk, struct timespec eventtime)
+/* Not needed because it's better to declare a new binding instead of switching the timeline
+void qot_set_timeline(qot_clock clk, uint16_t timeline)
+{
+	
+}
+*/
+
+void qot_wait_until(int bindingId, uint64_t eventtime)
 {
 	qot_sched sched;
-	sched.clk_timeline = clk.timeline;
+	sched.binding_id = bindingId;
 	sched.event_time = eventtime;
 	
 	if (ioctl(fd, QOT_WAIT, &sched) != -1)
 	{
-		printf("Wait till %lu sec, %lu nsec \n", sched.event_time.tv_sec, sched.event_time.tv_nsec);
+		printf("Wait till %llu nsec \n", sched.event_time);
 	}
 }
 
-void qot_wait_until_cycles(qot_clock clk, uint64_t cycles)
+void qot_wait_until_cycles(int bindingId, uint64_t cycles)
 {
 	qot_sched sched;
-	sched.clk_timeline = clk.timeline;
+	sched.binding_id = bindingId;
 	sched.event_cycles = cycles;
 	
 	if (ioctl(fd, QOT_WAIT_CYCLES, &sched) != -1)
 	{
-		printf("Wait till %lu cycles\n", sched.event_cycles);
+		printf("Wait till %llu cycles\n", sched.event_cycles);
 	}
 }
 
-void qot_schedule_event(qot_clock clk, struct timespec eventtime, struct timespec high, struct timespec low, uint16_t repetitions)
+void qot_schedule_event(int bindingId, uint64_t eventtime, uint64_t high, uint64_t low, uint16_t repetitions)
 {
 	qot_sched sched;
-	sched.clk_timeline = clk.timeline;
+	sched.binding_id = bindingId;
 	sched.event_time = eventtime;
 	sched.high = high;
 	sched.low = low;
@@ -100,11 +107,12 @@ void qot_schedule_event(qot_clock clk, struct timespec eventtime, struct timespe
 	
 	if (ioctl(fd, QOT_SET_SCHED, &sched) != -1)
 	{
-		printf("Schedule set at %lu sec, %lu nsec \n", sched.event_time.tv_sec, sched.event_time.tv_nsec);
+		printf("Schedule set at %llu nsec \n", sched.event_time);
 	}
 }
 
-struct timespec qot_get_next_event(qot_clock clk)
+/*
+struct timespec qot_get_next_event(int bindingId)
 {
 	qot_sched sched;
 	
@@ -114,5 +122,6 @@ struct timespec qot_get_next_event(qot_clock clk)
 		printf("Next schedule at %lu sec, %lu nsec \n", sched.event_time.tv_sec, sched.event_time.tv_nsec);
 	}
 }
+*/
 
 

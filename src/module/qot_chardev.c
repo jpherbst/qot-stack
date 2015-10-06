@@ -9,17 +9,6 @@ static struct class *qot_clock_class;
 
 static DEFINE_IDA(qot_clocks_map);
 
-static struct posix_clock_operations qot_clock_ops = {
-	.owner			= THIS_MODULE,
-	.clock_adjtime	= qot_clock_adjtime,
-	.clock_gettime	= qot_clock_gettime,
-	.clock_getres	= qot_clock_getres,
-	.clock_settime	= qot_clock_settime,
-	.ioctl			= qot_clock_ioctl,
-	.open			= qot_clock_open,
-	.release		= qot_clock_close,
-};
-
 /* ioctl implementation */
 
 int qot_clock_open(struct posix_clock *pc, fmode_t fmode)
@@ -34,42 +23,32 @@ int qot_clock_close(struct posix_clock *pc, fmode_t fmode)
 
 long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 {
-	struct qot_clock clk;
-	struct qot_timeline_data *qotclk = container_of(pc, struct qot_timeline_data, clock);
-	struct qot_timeline_data *firstclk;
+	struct qot_timeline *qotclk = container_of(pc, struct qot_timeline, clock);
+	struct qot_binding *first;
 	int err = 0;
 
-	switch (cmd) {
+	switch (cmd)
+	{
 
 	case QOT_GET_TIMELINE_ID:
-		
-		uint16_t timeline_id;
 
-		firstclk = hlist_entry(qotclk->accuracy_sort_hash->next, struct qot_timeline_data, accuracy_sort_hash);
-		timeline_id = firstclk->info->timeline;
-		if (copy_to_user((uint16_t*)arg, &timeline_id, sizeof(uint16_t)))
+		if (copy_to_user((char*)arg, &qotclk->uuid, sizeof(char)))
 			err = -EFAULT;
 
 		break;
 
 	case QOT_GET_ACCURACY:
 
-		struct timespec accuracy;
-
-		firstclk = hlist_entry(qotclk->accuracy_sort_hash->next, struct qot_timeline_data, accuracy_sort_hash);
-		accuracy = firstclk->info->accuracy;
-		if (copy_to_user((struct timespec*)arg, &accuracy, sizeof(struct timespec)))
+		first = list_entry((&qotclk->head_acc)->next, struct qot_binding, acc_sort_list);
+		if (copy_to_user((uint64_t*)arg, &first->accuracy, sizeof(uint64_t)))
 			err = -EFAULT;
 		
 		break;
 
 	case QOT_GET_RESOLUTION:
 
-		struct timespec resolution;
-
-		firstclk = list_entry(qotclk->resolution_sort_list->next, struct qot_timeline_data, resolution_sort_list);
-		resolution = firstclk->info->resolution;
-		if (copy_to_user((struct timespec*)arg, &resolution, sizeof(struct timespec)))
+		first = list_entry((&qotclk->head_res)->next, struct qot_binding, res_sort_list);
+				if (copy_to_user((uint64_t*)arg, &first->resolution, sizeof(uint64_t)))
 			err = -EFAULT;
 
 		break;
@@ -87,6 +66,8 @@ long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg
 
 static int qot_clock_getres(struct posix_clock *pc, struct timespec *tp)
 {
+	tp->tv_sec = 0;
+	tp->tv_nsec = 1;
 	return 0;
 }
 
@@ -105,30 +86,36 @@ static int qot_clock_adjtime(struct posix_clock *pc, struct timex *tx)
 	return 0;
 }
 
+static struct posix_clock_operations qot_clock_ops = {
+	.owner                  = THIS_MODULE,
+	.clock_adjtime  		= qot_clock_adjtime,
+	.clock_gettime  		= qot_clock_gettime,
+	.clock_getres   		= qot_clock_getres,
+	.clock_settime  		= qot_clock_settime,
+	.ioctl                  = qot_clock_ioctl,
+	.open                   = qot_clock_open,
+	.release                = qot_clock_close,
+};
+
 static void delete_qot_clock(struct posix_clock *pc)
 {
-	struct qot_timeline_data *qotclk = container_of(pc, struct qot_timeline_data, clock);
+	struct qot_timeline *qotclk = container_of(pc, struct qot_timeline, clock);
 	ida_simple_remove(&qot_clocks_map, qotclk->index);
 	kfree(qotclk);
 }
 
 /* public interface */
 
-struct qot_timeline_data *qot_clock_register(struct qot_clock *info, int config)
+struct qot_timeline *qot_timeline_register(char uuid[])
 {
-	struct qot_timeline_data *qotclk;
+	struct qot_timeline *qotclk;
 	int err = 0, index, major = MAJOR(qot_clock_devt);
 
 	/* Initialize a clock structure. */
 	err = -ENOMEM;
-	qotclk = kzalloc(sizeof(struct qot_timeline_data), GFP_KERNEL);
+	qotclk = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 	if (qotclk == NULL)
 		goto no_memory;
-
-	qotclk->info = info;
-
-	if(!config)
-		goto return_data;
 
 	index = ida_simple_get(&qot_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
 	if (index < 0) {
@@ -138,6 +125,7 @@ struct qot_timeline_data *qot_clock_register(struct qot_clock *info, int config)
 
 	qotclk->clock.ops = qot_clock_ops;
 	qotclk->clock.release = delete_qot_clock;	
+	strncpy(qotclk->uuid, uuid, MAX_UUIDLEN);
 	qotclk->devid = MKDEV(major, index);
 	qotclk->index = index;
 
@@ -156,7 +144,6 @@ struct qot_timeline_data *qot_clock_register(struct qot_clock *info, int config)
 		goto no_slot;
 	}
 
-return_data:
 	return qotclk;
 
 no_slot:
@@ -164,9 +151,9 @@ no_slot:
 no_memory:
 	return ERR_PTR(err);
 }
-EXPORT_SYMBOL(qot_clock_register);
+EXPORT_SYMBOL(qot_timeline_register);
 
-int qot_clock_unregister(struct qot_timeline_data *qotclk)
+int qot_timeline_unregister(struct qot_timeline *qotclk)
 {
 	qotclk->defunct = 1;
 
@@ -176,13 +163,13 @@ int qot_clock_unregister(struct qot_timeline_data *qotclk)
 	posix_clock_unregister(&qotclk->clock);
 	return 0;
 }
-EXPORT_SYMBOL(qot_clock_unregister);
+EXPORT_SYMBOL(qot_timeline_unregister);
 
-int qot_clock_index(struct qot_timeline_data *qotclk)
+int qot_timeline_index(struct qot_timeline *qotclk)
 {
 	return qotclk->index;
 }
-EXPORT_SYMBOL(qot_clock_index);
+EXPORT_SYMBOL(qot_timeline_index);
 
 /* module operations */
 

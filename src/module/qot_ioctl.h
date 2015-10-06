@@ -15,41 +15,71 @@
 #include <linux/types.h>
 #include <linux/hash.h>
 
-struct qot_binding
+#define MAX_UUIDLEN 	16
+#define MAX_BINDINGS 	(1 << (MAX_UUIDLEN))
+
+/** clock source structure **/
+typedef struct qot_clock_t
 {
-	uint32_t res;						// Desired resolution
-	uint32_t acc;						// Desired accuracy
-    struct list_head res_sort_list;		// Next resolution
-    struct list_head acc_sort_list;		// Next accuracy
-};
+	char   timeline[MAX_UUIDLEN];		// UUID of reference timeline shared among all collaborating entities
+	uint64_t accuracy;	       			// range of acceptable deviation from the reference timeline in nanosecond
+	uint64_t resolution;	    		// required clock resolution
+	int binding_id;		        		// id returned once the clock is iniatialized
+} qot_clock;
+
+/** scheduling parameters for an event **/
+typedef struct qot_sched_t
+{
+	char   timeline[MAX_UUIDLEN];   	// schedule against this clock
+	uint64_t event_time;       			// time for which event is scheduled
+	uint64_t event_cycles;     			// wait cycles
+	uint64_t high;		       			// time for high pulse
+	uint64_t low;		       			// time for low pulse
+	uint16_t limit;            			// number of event repetitions
+} qot_sched;
 
 struct qot_timeline
 {
     struct posix_clock clock;
-    char   uuid[32];
-    struct hlist_node collision_hash;	// pointer to next sorted clock in the list w.r.t accuracy
-    struct qot_binding *head_acc;
-    struct qot_binding *head_res;
+    struct device *dev;
+	int references;						// number of references to the timeline
+    dev_t devid;
+    int index;                      	// index into clocks.map
+    int defunct;                    	// tells readers to go away when clock is being removed
+    char   uuid[MAX_UUIDLEN];			// unique id for a timeline
+    struct hlist_node collision_hash;	// pointer to next timeline for the same hash key
+    struct list_head head_acc;			// head pointing to maximum accuracy structure
+    struct list_head head_res;			// head pointing to maximum resolution structure
 };
 
+struct qot_binding
+{
+	char   uuid[MAX_UUIDLEN]; 
+	uint64_t resolution;				// Desired resolution
+	uint64_t accuracy;					// Desired accuracy
+    struct list_head res_sort_list;		// Next resolution
+    struct list_head acc_sort_list;		// Next accuracy
+};
 
-struct qot_binding *binding_map[];
+// pointers in an array to a clock binding data
+struct qot_binding *binding_map[MAX_BINDINGS];
+
+// binding id for the applications
 int next_binding = 0;
-
 
 /** function calls to create / destory QoT clock device **/
 
-extern struct qot_timeline_data *qot_clock_register(struct qot_clock *info);
-extern int qot_clock_unregister(struct qot_timeline_data *qotclk);
-extern int qot_clock_index(struct qot_timeline_data *qotclk);
+extern struct qot_timeline *qot_timeline_register(char uuid[]);
+extern int qot_timeline_unregister(struct qot_timeline *qotclk);
+extern int qot_timeline_index(struct qot_timeline *qotclk);
 
 /** unique code for ioctl **/
 #define MAGIC_CODE 0xAB
 
 /** read / write clock and schedule parameters **/
 #define QOT_INIT_CLOCK  		_IOW(MAGIC_CODE, 0, qot_clock*)
-#define QOT_RETURN_BINDING  	_IOR(MAGIC_CODE, 1, uint16_t*)
-#define QOT_RELEASE_CLOCK       _IOW(MAGIC_CODE, 2, uint16_t*)
+#define QOT_RETURN_BINDING  	_IOR(MAGIC_CODE, 1, int*)
+#define QOT_RELEASE_CLOCK       _IOW(MAGIC_CODE, 2, int*)
 #define QOT_SET_ACCURACY 	    _IOW(MAGIC_CODE, 3, qot_clock*)
 #define QOT_SET_RESOLUTION 	    _IOW(MAGIC_CODE, 4, qot_clock*)
 #define QOT_SET_SCHED 	        _IOW(MAGIC_CODE, 5, qot_sched*)
@@ -58,8 +88,8 @@ extern int qot_clock_index(struct qot_timeline_data *qotclk);
 #define QOT_WAIT_CYCLES			_IOW(MAGIC_CODE, 8, qot_sched*)
 
 /** read clock metadata from virtual qot clocks **/
-#define QOT_GET_TIMELINE_ID		_IOR(MAGIC_CODE, 9, uint16_t*)
-#define QOT_GET_ACCURACY		_IOR(MAGIC_CODE, A, timespec*)
-#define QOT_GET_RESOLUTION		_IOR(MAGIC_CODE, B, timespec*)
+#define QOT_GET_TIMELINE_ID		_IOR(MAGIC_CODE, 9, char*)
+#define QOT_GET_ACCURACY		_IOR(MAGIC_CODE, 0xA, uint64_t*)
+#define QOT_GET_RESOLUTION		_IOR(MAGIC_CODE, 0xB, uint64_t*)
 	
 #endif

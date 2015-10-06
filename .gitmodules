@@ -10,4 +10,6 @@
 	path = thirdparty/Kronux
 	url = https://github.com/asymingt/Kronux.git
 	ignore = all
-
+[submodule "thirdparty/bb-kernel"]
+	path = thirdparty/bb-kernel
+	url = https://github.com/asymingt/bb-kernel.git
