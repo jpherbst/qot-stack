@@ -1,3 +1,16 @@
+#include <linux/idr.h>
+#include <linux/device.h>
+#include <linux/err.h>
+#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/posix-clock.h>
+#include <linux/errno.h>
+#include <linux/list.h>
+#include <linux/hashtable.h>
+#include <linux/types.h>
+#include <linux/hash.h>
+
 // Basic kernel module includes
 #include <asm/siginfo.h>
 #include <linux/rcupdate.h>
@@ -15,6 +28,43 @@
 
 // Expose qot module to userspace through ioctl
 #include "qot_ioctl.h"
+
+
+
+struct qot_timeline
+{
+    struct posix_clock clock;
+    struct device *dev;
+	int references;						// number of references to the timeline
+    dev_t devid;
+    int index;                      	// index into clocks.map
+    int defunct;                    	// tells readers to go away when clock is being removed
+    char   uuid[MAX_UUIDLEN];			// unique id for a timeline
+    struct hlist_node collision_hash;	// pointer to next timeline for the same hash key
+    struct list_head head_acc;			// head pointing to maximum accuracy structure
+    struct list_head head_res;			// head pointing to maximum resolution structure
+};
+
+struct qot_binding
+{
+	char   uuid[MAX_UUIDLEN]; 
+	uint64_t resolution;				// Desired resolution
+	uint64_t accuracy;					// Desired accuracy
+    struct list_head res_sort_list;		// Next resolution
+    struct list_head acc_sort_list;		// Next accuracy
+};
+
+// pointers in an array to a clock binding data
+struct qot_binding *binding_map[MAX_BINDINGS];
+
+// binding id for the applications
+int next_binding = 0;
+
+/** function calls to create / destroy QoT clock device **/
+
+extern struct qot_timeline *qot_timeline_register(char uuid[]);
+extern int qot_timeline_unregister(struct qot_timeline *qotclk);
+extern int qot_timeline_index(struct qot_timeline *qotclk);
 
 // Module information
 #define MODULE_NAME "qot"
