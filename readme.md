@@ -5,7 +5,7 @@
 Prapare your system
 
 ```
-$> sudo apt-get install gawk flex bison perl
+$> sudo apt-get install gawk flex bison perl doxygen
 ```
 
 Configure your system with a workaround for GCC 4.9.2 and Ubuntu 15.04:
@@ -31,16 +31,17 @@ $> git submodule update
 
 This will take a while, as it checks out several large third party repos.
 
-Configure and build the OpenSplice DDS library.
+Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
 
 ```
 $> pushd thirdparty/opensplice
 $> ./configure
 ```
-Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```env-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. It's probably wise to not move them, as the qot-service expects them to be there.
+
+Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```envs-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. It's probably wise to not move them, as the qot-service expects them to be there.
 
 ```
-$> . env-x86_64.linux-dev.sh
+$> . envs-x86_64.linux-dev.sh
 $> make
 $> make install
 $> popd
