@@ -2,10 +2,10 @@
 
 # Build instructions #
 
-Prapare your system
+## Install system dependencies, checkout code and initialize submodules ##
 
 ```
-$> sudo apt-get install gawk flex bison perl doxygen
+$> sudo apt-get install gawk flex bison perl doxygen u-boot-tools 
 ```
 
 Configure your system with a workaround for GCC 4.9.2 and Ubuntu 15.04:
@@ -30,6 +30,42 @@ $> git submodule update
 ```
 
 This will take a while, as it checks out several large third party repos.
+
+## Build the kernel ##
+
+First, build a vanilla kernel...
+
+```
+$> pushd thirdparty/bb-kernel
+$> git checkout 4.1.3-bone15 -b v4.1.3
+$> ./build_kernel.sh
+
+```
+
+This will take a long time, as it will compile an entire Linux-based system.
+
+Now, replace the KERNEL directory with a symbolic link to the Kronux kernel.
+
+```
+$> mv KERNEL KERNEL-DEFAULT
+$> ln -s ../Kronux KERNEL
+```
+
+Then, copy the kernel defconfig for the BeagleBoneBlack and rebuild
+
+```
+$> pushd ../Kronux
+$> cp arch/arm/configs/roseline_defconfig .config
+$> popd
+```
+
+Finally, rebuild the kernel
+
+```
+$> ./tools/rebuild_kernel.sh
+```
+
+## Build the service ##
 
 Switch to the OpenSplice directory and pull the third party repo for the C++ bindings
 
@@ -80,6 +116,7 @@ $> cd build
 $> cmake ..
 $> make
 ```
+
 
 ## NOTES ##
 
