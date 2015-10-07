@@ -31,7 +31,8 @@
 #include <linux/ioctl.h>
 
 // Maximum length of the identifier
-#define MAX_UUIDLEN 32
+#define MAX_UUIDLEN 		32
+#define QOT_TIMELINE_DIR	"/dev/timeline/"
 
 /** clock source structure **/
 typedef struct qot_message_t {

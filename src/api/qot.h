@@ -29,6 +29,7 @@
 #define QOT_H
 
 #include <stdint.h>
+#include <time.h>
 
 /**
  * @brief Error codes for functions
@@ -39,9 +40,24 @@ typedef enum
 	NO_SCHEDULER_CHDEV = -1,	 /**< No scheduler character device */
 	INVALID_BINDING_ID = -2,	 /**< Invalid binding ID specified */
 	INVALID_UUID       = -3,	 /**< Invalid timeline UUID specified */
-	IOCTL_ERROR        = -4		 /**< IOCTL returned error */
+	INVALID_CLOCK      = -4,	 /**< IOCTL returned error */
+	IOCTL_ERROR        = -5		 /**< IOCTL returned error */
 } 
 qot_error;
+
+/**
+ * @brief Start the QoT engine
+ * @return Success flag -- negative:error code, positive:success
+ *
+ **/
+int32_t qot_init(void);
+
+/**
+ * @brief Stop the QoT engine
+ * @return Success flag -- negative:error code, positive:success
+ *
+ **/
+int32_t qot_free(void);
 
 /**
  * @brief Bind to a timeline
@@ -53,6 +69,15 @@ qot_error;
  *
  **/
 int32_t qot_bind(const char *timeline, uint64_t accuracy, uint64_t resolution);
+
+/**
+ * @brief Get a clock id for a given timeline
+ * @param bid Binding ID
+ * @param bid Pointer to Clock ID
+ * @return Success flag -- negative:error code, positive:success
+ *
+ **/
+int32_t qot_getclkid(int32_t bid, clockid_t *cid);
 
 /**
  * @brief Unbind from a timeline

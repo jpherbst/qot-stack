@@ -4,9 +4,6 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Include the OpenSplice macros (IDL message compilation)
 INCLUDE(MacroOpenSplice)
 
-# We'll be using C++11 functionality in this project
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
 # Hint for finding opensplice
 SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
 

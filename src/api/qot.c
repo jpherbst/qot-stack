@@ -39,7 +39,6 @@
 // File desciptor
 static int32_t fd = NO_SCHEDULER_CHDEV;
 
-// Try and open
 int32_t qot_init(void)
 {
 	if (fd < 0)
@@ -47,7 +46,6 @@ int32_t qot_init(void)
 	return fd;
 }
 
-// Try and open
 int32_t qot_free(void)
 {
 	if (fd < 0)
@@ -65,7 +63,7 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 	if (qot_init() < 0) 
 		return NO_SCHEDULER_CHDEV;
 
-	//
+	// Check to make sure the UUID is valid
 	if (strlen(uuid) > MAX_UUIDLEN)
 		return INVALID_UUID;
 
@@ -80,6 +78,19 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 	if (ioctl(fd, QOT_BIND, &msg) == 0)
 		return msg.bid;
 	return IOCTL_ERROR;
+}
+
+int32_t qot_getclkid(int32_t bid, clockid_t *cid)
+{	
+    char device[256];
+    strcpy(device, QOT_TIMELINE_DIR);
+    strcat(device, "temp");	
+	int pd = open(device, O_RDWR);
+	if (pd < 0)
+		return INVALID_CLOCK;
+	*cid = ((~(clockid_t) (pd) << 3) | 3);
+	close(pd);
+	return SUCCESS;
 }
 
 int32_t qot_unbind(int32_t bid)
