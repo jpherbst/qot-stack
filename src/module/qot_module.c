@@ -1,38 +1,49 @@
-#include <linux/idr.h>
-#include <linux/device.h>
-#include <linux/err.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/posix-clock.h>
-#include <linux/errno.h>
-#include <linux/list.h>
-#include <linux/hashtable.h>
-#include <linux/types.h>
-#include <linux/hash.h>
+/*
+ * @file qot_module.h
+ * @brief Kernel module for managing the creation and destruction of QoT timelines
+ * @author Fatima Anwar 
+ * 
+ * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, 
+ * are permitted provided that the following conditions are met:
+ * 	1. Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-// Basic kernel module includes
-#include <asm/siginfo.h>
-#include <linux/rcupdate.h>
-#include <linux/sched.h>
-#include <linux/clk.h>
-#include <linux/string.h>
-#include <linux/platform_device.h>
-#include <linux/of.h>
-#include <linux/of_device.h>
+// Kernel includes
+#include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/errno.h>
 #include <asm/uaccess.h>
-#include <linux/slab.h>
 
-// Expose qot module to userspace through ioctl
+// Required functionality
 #include "qot_ioctl.h"
+#include "qot_clock.h"
 
+// Maximum number of timeline bindings
+#define MAX_BINDINGS 65536
 
-
-struct qot_timeline
-{
+// Stores a timeline
+typedef struct qot_timeline_t {
     struct posix_clock clock;
     struct device *dev;
 	int references;						// number of references to the timeline
@@ -43,39 +54,25 @@ struct qot_timeline
     struct hlist_node collision_hash;	// pointer to next timeline for the same hash key
     struct list_head head_acc;			// head pointing to maximum accuracy structure
     struct list_head head_res;			// head pointing to maximum resolution structure
-};
+} qot_timeline;
 
-struct qot_binding
-{
+// Stores a binding to a timeline
+typedef struct qot_binding_t {
 	char   uuid[MAX_UUIDLEN]; 
 	uint64_t resolution;				// Desired resolution
 	uint64_t accuracy;					// Desired accuracy
     struct list_head res_sort_list;		// Next resolution
     struct list_head acc_sort_list;		// Next accuracy
-};
+} qot_binding;
 
-// pointers in an array to a clock binding data
-struct qot_binding *binding_map[MAX_BINDINGS];
+// An array of binding pointers
+static struct qot_binding *bindings[MAX_BINDINGS+1];
 
-// binding id for the applications
-int next_binding = 0;
+// The next available binding ID, as well as the total number alloacted
+static int binding_point = 0;
+static int binding_total = 0;
 
-/** function calls to create / destroy QoT clock device **/
-
-extern struct qot_timeline *qot_timeline_register(char uuid[]);
-extern int qot_timeline_unregister(struct qot_timeline *qotclk);
-extern int qot_timeline_index(struct qot_timeline *qotclk);
-
-// Module information
-#define MODULE_NAME "qot"
-#define FIRST_MINOR 0
-#define MINOR_CNT 1
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Fatima Anwar");
-MODULE_DESCRIPTION("QoT timelines maintenance");
-MODULE_VERSION("0.3.0");
-
-// hashtable for maintaining timelines
+// A hash table designed to quickly find timeline based on UUID
 DEFINE_HASHTABLE(qot_timelines_hash, MAX_UUIDLEN);
 
 // Required for ioctl
@@ -85,9 +82,7 @@ static struct class *cl;
 
 static inline void add_sorted_acc_list(struct qot_binding *binding_list, struct list_head *head)
 {
-	struct qot_binding *bind_obj;
-	// traverse through the entire list against this timeline for proper insertion
-	// sorted w.r.t accuracy
+	qot_binding *bind_obj;
 	list_for_each_entry(bind_obj, head, acc_sort_list)
 	{
 		if (bind_obj->accuracy > binding_list->accuracy)
@@ -96,15 +91,12 @@ static inline void add_sorted_acc_list(struct qot_binding *binding_list, struct 
 			return;
 		}
 	}
-
-	list_add_tail(&binding_list->acc_sort_list, head); // if its the last element in the list
+	list_add_tail(&binding_list->acc_sort_list, head);
 }
 
 static inline void add_sorted_res_list(struct qot_binding *binding_list, struct list_head *head)
 {
 	struct qot_binding *bind_obj;
-	// traverse through the entire list against this timeline for proper insertion
-	// sorted w.r.t accuracy
 	list_for_each_entry(bind_obj, head, res_sort_list)
 	{
 		if (bind_obj->resolution > binding_list->resolution)
@@ -113,7 +105,7 @@ static inline void add_sorted_res_list(struct qot_binding *binding_list, struct 
 			return;
 		}
 	}
-	list_add_tail(&binding_list->res_sort_list, head); // if its the last element in the list
+	list_add_tail(&binding_list->res_sort_list, head);
 }
 
 static inline void add_new_timeline(char uuid[], struct qot_binding *binding_list)
@@ -135,7 +127,7 @@ static inline void add_new_timeline(char uuid[], struct qot_binding *binding_lis
 	list_add(&binding_list->res_sort_list, &hash_timeline->head_res);
 }
 
-static inline struct qot_binding * add_new_binding(qot_clock *clk)
+static inline struct qot_binding *add_new_binding(qot_clock *clk)
 {
 	struct qot_binding *binding_list;
 
@@ -175,16 +167,143 @@ static int qot_ioctl_close(struct inode *i, struct file *f)
 // What to do when a user queries the ioctl
 static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg)
 {
-	int bind_id;
-	struct qot_binding *current_list;
-	struct qot_binding *binding_list;
+	struct qot_binding *list_bind;
+	struct hlist_head  *hash_head;
+	qot_timeline *obj;
+	qot_message msg;
 
-	struct hlist_head *hash_head;
-	struct qot_timeline *obj;
-	qot_clock tmp_clk;
+	int found;
 
 	switch (cmd)
 	{
+
+	// Bind to a timeline
+	case QOT_BIND:
+
+		// Get the parameters passed into the ioctl
+		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+			return -EACCES;
+
+		// Try and create the new binding
+		msg.bid = add_new_binding(&msg);	
+		if (msg.bid < 0)
+			return -EACCES;
+
+		// Get the hash key using uuid for the new object insertion
+		hash_head = hash_element(msg.uuid);
+
+		// Check if the hash table is empty for the given key
+		if (hlist_empty(hash_head))
+			add_new_timeline(msg.uuid, list_bind);
+		else
+		{
+			// Mark as not found
+			found = 0;
+
+			// Iterate over each key entry (in case of collisions)
+			hlist_for_each_entry(obj, hash_head, collision_hash)
+			{
+				// Compare UUIDs
+				if (strcmp(obj->uuid, msg.uuid)==0)
+				{
+					add_sorted_acc_list(list_bind, &obj->head_acc);
+					add_sorted_res_list(list_bind, &obj->head_res);
+					found = 1;
+				}
+			}
+
+			// The key didn't exist
+			if (!found)
+				add_new_timeline(msg.uuid, list_bind);
+		}
+
+		// Send back the data structure with the new binding id
+		if (copy_to_user((qot_message*)arg, &msg, sizeof(qot_message)))
+			return -EACCES;
+
+		break;
+
+	// Get the current timeline accuracy
+	case QOT_GET_ACCURACY:
+
+		// Get the 
+		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+			return -EACCES;
+
+
+	// Get the current timeline resolution
+	case QOT_GET_RESOLUTION:
+
+ 	// Updates the accuracy of a given clock
+	case QOT_SET_ACCURACY:
+
+		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+			return -EACCES;
+
+		// Santiy checks
+		if (msg.bid > MAX_BINDINGS || bindings[msg.bid] === NULL)
+			return -EACCES;
+
+		// Current data pointed to by the bind id
+		list_bind = bindings[msg.bind];
+
+		// update accuracy in the binding
+		bindings[msg.bind]->accuracy = msg.accuracy;
+
+		// reinitialize the binding
+		list_del_init(&list_bind->acc_sort_list);
+
+		// get the hash key using uuid of updated binding
+		hash_head = hash_element(list_bind->uuid);
+
+		// find the head for the updated binding in the hash table
+		hlist_for_each_entry(obj, hash_head, collision_hash)
+		{
+			if (!strcmp(obj->uuid, list_bind->uuid))
+			{
+				add_sorted_acc_list(list_bind, &obj->head_acc);
+				break;
+			}
+		}
+
+		break;
+
+    // Updates the resolution of a given clock
+	case QOT_SET_RESOLUTION:
+
+		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+			return -EACCES;
+
+		bind_id = tmp_clk.binding_id;
+                
+        // current data pointed to by the bind id
+		current_list = binding_map[bind_id];
+
+        // update accuracy in the binding
+		current_list->resolution = tmp_clk.resolution;
+
+        // reinitialize the binding
+		list_del_init(&current_list->res_sort_list); 
+
+        // get the hash key using uuid of updated binding
+		hash_head = hash_element(current_list->uuid);
+
+        // find the head for the updated binding in the hash table
+		hlist_for_each_entry(obj, hash_head, collision_hash)
+		{
+			if (!strcmp(obj->uuid, current_list->uuid))
+			{
+				// sort the bindings according to new resolution
+				add_sorted_res_list(current_list, &obj->head_res);
+				break;
+			}
+		}
+
+		break;
+	// Unbind from a timeline
+	case QOT_UNBIND:
+
+
 
 	// create a new clock and register a timeline corresponding to it
 	case QOT_INIT_CLOCK:
@@ -403,7 +522,7 @@ static void qot_ioctl_exit(void)
 
 static const struct of_device_id qot_dt_ids[] = {
 	{ .compatible = "qot", },
-  { /* sentinel */ }
+	{ /* sentinel */ }
 };
 
 MODULE_DEVICE_TABLE(of, qot_dt_ids);
@@ -415,7 +534,6 @@ static int qot_probe(struct platform_device *pdev)
 
   	// Try and find a device that matches "compatible: qot"
 	match = of_match_device(qot_dt_ids, &pdev->dev);
-	//pr_err("of_match_device failed\n");
 
   	// Init the ioctl
 	qot_ioctl_init("qot");
@@ -428,6 +546,9 @@ static int qot_remove(struct platform_device *pdev)
 {
   	// Kill the ioctl
 	qot_ioctl_exit();
+
+	// Free all
+	for (int i = 0; i < )
 
   	// Kill the platform data
 	//if (qot_pdata)
@@ -456,3 +577,8 @@ static struct platform_driver qot_driver = {
 };
 
 module_platform_driver(qot_driver);
+
+MODULE_LICENSE("BSD New");
+MODULE_AUTHOR("Fatima Anwar");
+MODULE_DESCRIPTION("QoT timelines maintenance");
+MODULE_VERSION("0.3.0");
