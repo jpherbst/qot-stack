@@ -29,42 +29,43 @@
 #include "qot.h"
 
 // Standard includes
+#include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 
 // We include the ioctl header here, so that user apps don't need to know about it
 #include "../module/qot_ioctl.h"
 
-// File desciptor
-static int32_t fd = NO_SCHEDULER_CHDEV;
+// Maintain a map of binding ids to clock ids
+static clockid_t bid2cid[QOT_MAX_BINDINGS+1];
 
-int32_t qot_init(void)
+// Private: open the ioctl 
+static int32_t qot_open(void)
 {
-	if (fd < 0)
-		fd = open("/dev/qot", O_RDWR);
-	return fd;
+	return open("/dev/qot", O_RDWR);
 }
 
-int32_t qot_free(void)
+// Private: close the ioctl
+static int32_t qot_close(int32_t fd)
 {
 	if (fd < 0)
 		return NO_SCHEDULER_CHDEV;
 	close(fd);
-
-	fd = NO_SCHEDULER_CHDEV;
-	
 	return SUCCESS;
 }
 
+// Bind to a timeline with a given resolution and accuracy
 int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 {
-	// Check for scheduler presence, and inititalize if necessary
-	if (qot_init() < 0) 
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
 		return NO_SCHEDULER_CHDEV;
 
 	// Check to make sure the UUID is valid
-	if (strlen(uuid) > MAX_UUIDLEN)
+	if (strlen(uuid) > QOT_MAX_UUIDLEN)
 		return INVALID_UUID;
 
 	// Package up a request	
@@ -72,61 +73,146 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 	msg.bid = 0;
 	msg.acc = accuracy;
 	msg.res = resolution;
-	strncpy(msg.uuid, uuid, MAX_UUIDLEN);
-	
+	strncpy(msg.uuid, uuid, QOT_MAX_UUIDLEN);
+
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
 	// Add this clock to the qot clock list through scheduler
-	if (ioctl(fd, QOT_BIND, &msg) == 0)
-		return msg.bid;
-	return IOCTL_ERROR;
+	if (ioctl(fd, QOT_BIND, &msg) == SUCCESS)
+	{
+		// Special case: problematic binding id
+		if (msg.bid < 0)
+			return INVALID_BINDING_ID;
+
+		// Open up a character device
+	    char device[256];
+		strcpy(device, QOT_TIMELINE_DIR);
+		strcat(device, uuid);	
+		int pd = open(device, O_RDWR);
+		if (pd < 0)
+			return INVALID_CLOCK;
+		bid2cid[msg.bid] = ((~(clockid_t) (pd) << 3) | 3);
+		close(pd);
+
+		// Return the binding ID
+		ret = msg.bid;
+	}
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Could not communicate with scheduler
+	return ret;
 }
 
-int32_t qot_getclkid(int32_t bid, clockid_t *cid)
-{	
-    char device[256];
-    strcpy(device, QOT_TIMELINE_DIR);
-    strcat(device, "temp");	
-	int pd = open(device, O_RDWR);
-	if (pd < 0)
-		return INVALID_CLOCK;
-	*cid = ((~(clockid_t) (pd) << 3) | 3);
-	close(pd);
-	return SUCCESS;
-}
-
+// Unbind from a timeline
 int32_t qot_unbind(int32_t bid)
 {
-	// Check for scheduler presence, and inititalize if necessary
-	if (qot_init() < 0) 
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
 		return NO_SCHEDULER_CHDEV;
 
-	// delete this clock from the qot clock list
-	if (ioctl(fd, QOT_UNBIND, &bid) == 0)
-		return SUCCESS;
-	return IOCTL_ERROR;
+	// Package up a rewuest
+	qot_message msg;
+	msg.bid = bid;
+
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
+	// Delete this clock from the qot clock list
+	if (ioctl(fd, QOT_UNBIND, &msg) == SUCCESS)
+		ret = SUCCESS;
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
 }
 
 int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy)
 {
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
+		return NO_SCHEDULER_CHDEV;
+
 	// Package up a rewuest
 	qot_message msg;
 	msg.acc = accuracy;
 	msg.bid = bid;
 	
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
 	// update this clock
-	if (ioctl(fd, QOT_SET_ACCURACY, &msg) == 0)
-		return SUCCESS;
-	return IOCTL_ERROR;
+	if (ioctl(fd, QOT_SET_ACCURACY, &msg) == SUCCESS)
+		ret = SUCCESS;
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
 }
 
 int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 {
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
+		return NO_SCHEDULER_CHDEV;
+
 	// Package up a rewuest
 	qot_message msg;
 	msg.res = resolution;
 	msg.bid = bid;
 	
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
 	// update this clock
-	if (ioctl(fd, QOT_SET_RESOLUTION, &msg) == 0)
-		return SUCCESS;
-	return IOCTL_ERROR;
+	if (ioctl(fd, QOT_SET_RESOLUTION, &msg) == SUCCESS)
+		ret = SUCCESS;
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
+}
+
+int32_t qot_gettime(int32_t bid, struct timespec *ts)
+{
+	if (bid2cid[bid])
+		return clock_gettime(bid2cid[bid], ts);
+	return INVALID_BINDING_ID;
+}
+
+int32_t qot_wait_until(int32_t bid, struct timespec *ts)
+{
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
+		return NO_SCHEDULER_CHDEV;
+
+	// Package up a rewuest
+	qot_message msg;
+	msg.bid = bid;
+	memcpy(&msg.event, ts, sizeof(struct timespec));
+	
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
+	// update this clock
+	if (ioctl(fd, QOT_WAIT_UNTIL, &msg) == SUCCESS)
+		ret = SUCCESS;
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
 }

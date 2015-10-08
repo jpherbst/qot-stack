@@ -46,43 +46,19 @@ typedef enum
 qot_error;
 
 /**
- * @brief Start the QoT engine
- * @return Success flag -- negative:error code, positive:success
- *
- **/
-int32_t qot_init(void);
-
-/**
- * @brief Stop the QoT engine
- * @return Success flag -- negative:error code, positive:success
- *
- **/
-int32_t qot_free(void);
-
-/**
  * @brief Bind to a timeline
  * @param timeline A unique identifier for the timeline, eg. "sample_timeline"
  * @param accuracy The desired accuracy in nanoseconds
  * @param resolution The desired resolution in nanoseconds
- * @return A strictly non-negative ID for the binding. A negative number
- *         indicates an error
+ * @return A non-negative binding id for the binding. Negative: error
  *
  **/
 int32_t qot_bind(const char *timeline, uint64_t accuracy, uint64_t resolution);
 
 /**
- * @brief Get a clock id for a given timeline
- * @param bid Binding ID
- * @param bid Pointer to Clock ID
- * @return Success flag -- negative:error code, positive:success
- *
- **/
-int32_t qot_getclkid(int32_t bid, clockid_t *cid);
-
-/**
  * @brief Unbind from a timeline
  * @param bid A binding ID. Invalid IDs will be quietly ignored.
- * @return Success value -- negative:error code, positive:success
+ * @return Positive: success Negative: error
  **/
 int32_t qot_unbind(int32_t bid);
 
@@ -90,6 +66,7 @@ int32_t qot_unbind(int32_t bid);
  * @brief Update a binding accuracy
  * @param bid A binding ID. Invalid IDs will be quietly ignored.
  * @param accuracy The new accuracy
+ * @return Positive: success Negative: error
  **/
 int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy);
 
@@ -97,8 +74,24 @@ int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy);
  * @brief Update a binding resolution
  * @param bid A binding ID. Invalid IDs will be quietly ignored.
  * @param accuracy The new resolution
+ * @return Positive: success Negative: error
  **/
 int32_t qot_set_resolution(int32_t bid, uint64_t resolution);
 
+/**
+ * @brief Get the current global timeline
+ * @param bid A binding ID
+ * @param ts Pointer to timespec struct 
+ * @return Positive: success Negative: error
+ **/
+int32_t qot_gettime(int32_t bid, struct timespec *ts);
+
+/**
+ * @brief Wait until a specific time
+ * @param bid A binding ID
+ * @param ts Pointer to timespec struct representing event
+ * @return Positive: success Negative: error
+ **/
+int32_t qot_wait_until(int32_t bid, struct timespec *ts);
 
 #endif
