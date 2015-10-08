@@ -88,15 +88,6 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution);
 int32_t qot_get_achieved(int32_t bid, uint64_t *accuracy, uint64_t *resolution);
 
 /**
- * @brief Get the target accuracy and resolution for the timeline given by the binding id
- * @param bid The binding id
- * @param accuracy Current accuracy
- * @param resolution Current resoltion
- * @return Positive: success Negative: error
- **/
-int32_t qot_get_target(int32_t bid, uint64_t *accuracy, uint64_t *resolution);
-
-/**
  * @brief Get the current global timeline
  * @param bid The binding id
  * @param ts Pointer to timespec struct 

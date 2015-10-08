@@ -89,7 +89,7 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 			return INVALID_BINDING_ID;
 
 		// Construct the file handle tot he poix clock /dev/timeline/timelineX
-	    sprintf(device, "%s/timeline%u", QOT_TIMELINE_DIR, msg.tid);
+	    sprintf(device, "%s%u", QOT_TIMELINE_PREFIX, msg.tid);
 		
 		// Open the clock
 		int pd = open(device, O_RDWR);
@@ -215,43 +215,6 @@ int32_t qot_get_achieved(int32_t bid, uint64_t *accuracy, uint64_t *resolution)
 
 	// update this clock
 	if (ioctl(fd, QOT_GET_ACHIEVED, &msg) == SUCCESS)
-	{
-		// Only copy accuray if the poitner is valid
-		if (accuracy)
-			*accuracy = msg.acc;
-		
-		// Only copy resolution if the poitner is valid
-		if (resolution)
-			*resolution = msg.res;
-		
-		ret = SUCCESS;
-	}
-
-	// Close communication with the scheduler
-	qot_close(fd);
-
-	// Return success code
-	return ret;
-}
-
-int32_t qot_get_target(int32_t bid, uint64_t *accuracy, uint64_t *resolution)
-{
-	// Open a channel to the scheduler
-	int32_t fd = qot_open();
-	if (fd < 0)
-		return NO_SCHEDULER_CHDEV;
-	if (!accuracy && !resolution)
-		return SUCCESS;
-
-	// Package up a rewuest
-	qot_message msg;
-	msg.bid = bid;
-	
-	// Default return code
-	int32_t ret = IOCTL_ERROR;
-
-	// update this clock
-	if (ioctl(fd, QOT_GET_TARGET, &msg) == SUCCESS)
 	{
 		// Only copy accuray if the poitner is valid
 		if (accuracy)

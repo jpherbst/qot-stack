@@ -33,7 +33,7 @@
 // Maximum length of the identifier
 #define QOT_MAX_BINDINGS    65536
 #define QOT_MAX_UUIDLEN 	32
-#define QOT_TIMELINE_DIR	"/dev/timeline"
+#define QOT_TIMELINE_PREFIX	"/dev/timeline/timeline"
 
 /** clock source structure **/
 typedef struct qot_message_t {
