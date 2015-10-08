@@ -57,8 +57,10 @@ static int32_t qot_close(int32_t fd)
 }
 
 // Bind to a timeline with a given resolution and accuracy
-int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
+int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resolution)
 {
+    char device[256];
+
 	// Open a channel to the scheduler
 	int32_t fd = qot_open();
 	if (fd < 0)
@@ -71,6 +73,7 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 	// Package up a request	
 	qot_message msg;
 	msg.bid = 0;
+	msg.tid = 0;
 	msg.acc = accuracy;
 	msg.res = resolution;
 	strncpy(msg.uuid, uuid, QOT_MAX_UUIDLEN);
@@ -85,14 +88,18 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 		if (msg.bid < 0)
 			return INVALID_BINDING_ID;
 
-		// Open up a character device
-	    char device[256];
-		strcpy(device, QOT_TIMELINE_DIR);
-		strcat(device, uuid);	
+		// Construct the file handle tot he poix clock /dev/timeline/timelineX
+	    sprintf(device, "%s/timeline%u", QOT_TIMELINE_DIR, msg.tid);
+		
+		// Open the clock
 		int pd = open(device, O_RDWR);
 		if (pd < 0)
 			return INVALID_CLOCK;
+
+		// Obtain the clock ID from the POSIX clock
 		bid2cid[msg.bid] = ((~(clockid_t) (pd) << 3) | 3);
+
+		// Close the POSIX clock
 		close(pd);
 
 		// Return the binding ID
@@ -107,7 +114,7 @@ int32_t qot_bind(const char *uuid, uint64_t accuracy, uint64_t resolution)
 }
 
 // Unbind from a timeline
-int32_t qot_unbind(int32_t bid)
+int32_t qot_unbind_timeline(int32_t bid)
 {
 	// Open a channel to the scheduler
 	int32_t fd = qot_open();
@@ -123,7 +130,13 @@ int32_t qot_unbind(int32_t bid)
 
 	// Delete this clock from the qot clock list
 	if (ioctl(fd, QOT_UNBIND, &msg) == SUCCESS)
+	{
+		// Invalidate the binding
+		bid2cid[bid] = -1;
+
+		// Success
 		ret = SUCCESS;
+	}
 
 	// Close communication with the scheduler
 	qot_close(fd);
@@ -184,11 +197,97 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 	return ret;
 }
 
-int32_t qot_gettime(int32_t bid, struct timespec *ts)
+int32_t qot_get_achieved(int32_t bid, uint64_t *accuracy, uint64_t *resolution)
 {
-	if (bid2cid[bid])
-		return clock_gettime(bid2cid[bid], ts);
-	return INVALID_BINDING_ID;
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
+		return NO_SCHEDULER_CHDEV;
+	if (!accuracy && !resolution)
+		return SUCCESS;
+
+	// Package up a rewuest
+	qot_message msg;
+	msg.bid = bid;
+	
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
+	// update this clock
+	if (ioctl(fd, QOT_GET_ACHIEVED, &msg) == SUCCESS)
+	{
+		// Only copy accuray if the poitner is valid
+		if (accuracy)
+			*accuracy = msg.acc;
+		
+		// Only copy resolution if the poitner is valid
+		if (resolution)
+			*resolution = msg.res;
+		
+		ret = SUCCESS;
+	}
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
+}
+
+int32_t qot_get_target(int32_t bid, uint64_t *accuracy, uint64_t *resolution)
+{
+	// Open a channel to the scheduler
+	int32_t fd = qot_open();
+	if (fd < 0)
+		return NO_SCHEDULER_CHDEV;
+	if (!accuracy && !resolution)
+		return SUCCESS;
+
+	// Package up a rewuest
+	qot_message msg;
+	msg.bid = bid;
+	
+	// Default return code
+	int32_t ret = IOCTL_ERROR;
+
+	// update this clock
+	if (ioctl(fd, QOT_GET_TARGET, &msg) == SUCCESS)
+	{
+		// Only copy accuray if the poitner is valid
+		if (accuracy)
+			*accuracy = msg.acc;
+		
+		// Only copy resolution if the poitner is valid
+		if (resolution)
+			*resolution = msg.res;
+		
+		ret = SUCCESS;
+	}
+
+	// Close communication with the scheduler
+	qot_close(fd);
+
+	// Return success code
+	return ret;
+}
+
+int32_t qot_gettime(int32_t bid, struct timespec *ts, uint64_t *accuracy, uint64_t *resolution)
+{
+	// Basic checks
+	if (bid < QOT_MAX_BINDINGS)
+		return INVALID_BINDING_ID;
+	if (bid2cid[bid] < 0)
+		return INVALID_CLOCK;
+
+	// Get the time 
+	int32_t ret = clock_gettime(bid2cid[bid], ts);
+
+	// Get the stats
+	if (accuracy || resolution)
+		return qot_get_achieved(bid, accuracy, resolution);
+
+	// Return success
+	return ret;
 }
 
 int32_t qot_wait_until(int32_t bid, struct timespec *ts)

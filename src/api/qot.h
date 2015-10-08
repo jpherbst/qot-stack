@@ -47,48 +47,68 @@ qot_error;
 
 /**
  * @brief Bind to a timeline
- * @param timeline A unique identifier for the timeline, eg. "sample_timeline"
+ * @param uuid A unique identifier for the timeline, eg. "sample_timeline"
  * @param accuracy The desired accuracy in nanoseconds
  * @param resolution The desired resolution in nanoseconds
  * @return A non-negative binding id for the binding. Negative: error
  *
  **/
-int32_t qot_bind(const char *timeline, uint64_t accuracy, uint64_t resolution);
+int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resolution);
 
 /**
  * @brief Unbind from a timeline
- * @param bid A binding ID. Invalid IDs will be quietly ignored.
+ * @param bid The binding id
  * @return Positive: success Negative: error
  **/
-int32_t qot_unbind(int32_t bid);
+int32_t qot_unbind_timeline(int32_t bid);
 
 /**
- * @brief Update a binding accuracy
- * @param bid A binding ID. Invalid IDs will be quietly ignored.
+ * @brief Update the requested binding accuracy
+ * @param bid The binding id
  * @param accuracy The new accuracy
  * @return Positive: success Negative: error
  **/
 int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy);
 
 /**
- * @brief Update a binding resolution
- * @param bid A binding ID. Invalid IDs will be quietly ignored.
+ * @brief Update the requested binding resolution
+ * @param bid The binding id
  * @param accuracy The new resolution
  * @return Positive: success Negative: error
  **/
 int32_t qot_set_resolution(int32_t bid, uint64_t resolution);
 
 /**
- * @brief Get the current global timeline
- * @param bid A binding ID
- * @param ts Pointer to timespec struct 
+ * @brief Get the current accuracy and resolution achieved on the timeline
+ * @param bid The binding id
+ * @param accuracy Current accuracy
+ * @param resolution Current resoltion
  * @return Positive: success Negative: error
  **/
-int32_t qot_gettime(int32_t bid, struct timespec *ts);
+int32_t qot_get_achieved(int32_t bid, uint64_t *accuracy, uint64_t *resolution);
+
+/**
+ * @brief Get the target accuracy and resolution for the timeline given by the binding id
+ * @param bid The binding id
+ * @param accuracy Current accuracy
+ * @param resolution Current resoltion
+ * @return Positive: success Negative: error
+ **/
+int32_t qot_get_target(int32_t bid, uint64_t *accuracy, uint64_t *resolution);
+
+/**
+ * @brief Get the current global timeline
+ * @param bid The binding id
+ * @param ts Pointer to timespec struct 
+ * @param accuracy Attained accuracy
+ * @param resolution Attained resoltion
+ * @return Positive: success Negative: error
+ **/
+int32_t qot_gettime(int32_t bid, struct timespec *ts, uint64_t *accuracy, uint64_t *resolution);
 
 /**
  * @brief Wait until a specific time
- * @param bid A binding ID
+ * @param bid The binding id
  * @param ts Pointer to timespec struct representing event
  * @return Positive: success Negative: error
  **/

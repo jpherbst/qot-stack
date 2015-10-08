@@ -33,14 +33,15 @@
 // Maximum length of the identifier
 #define QOT_MAX_BINDINGS    65536
 #define QOT_MAX_UUIDLEN 	32
-#define QOT_TIMELINE_DIR	"/dev/timeline/"
+#define QOT_TIMELINE_DIR	"/dev/timeline"
 
 /** clock source structure **/
 typedef struct qot_message_t {
 	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
 	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
 	uint64_t res;	    				// Required clock resolution
-	int bid;				   			// ID returned once the clock is iniatialized
+	int bid;				   			// Binding id
+	int tid;				   			// Timeline id
 	struct timespec event;				// Timestamp
 } qot_message;
 
@@ -49,8 +50,8 @@ typedef struct qot_message_t {
 
 /** read / write clock and schedule parameters **/
 #define QOT_BIND  			    _IOWR(MAGIC_CODE, 1, qot_message*)
-#define QOT_GET_ACCURACY		_IOWR(MAGIC_CODE, 2, qot_message*)
-#define QOT_GET_RESOLUTION		_IOWR(MAGIC_CODE, 3, qot_message*)
+#define QOT_GET_ACHIEVED		_IOWR(MAGIC_CODE, 2, qot_message*)
+#define QOT_GET_TARGET	     	_IOWR(MAGIC_CODE, 3, qot_message*)
 #define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 4, qot_message*)
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 5, qot_message*)
 #define QOT_UNBIND 				 _IOW(MAGIC_CODE, 6, qot_message*)
