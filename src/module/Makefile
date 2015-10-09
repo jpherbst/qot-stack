@@ -1,8 +1,8 @@
 obj-m += qot.o
 qot-objs := qot_module.o
-qot-objs := qot_clock.o
+KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 all:
-	make -C ../../thirdparty/Kronux M=$(PWD) ARCH=arm modules
+	make -C $(KERNELDIR) M=$(PWD) modules
 
 clean:
-	make -C ../../thirdparty/Kronux M=$(PWD) ARCH=arm clean
+	make -C $(KERNELDIR) M=$(PWD) clean

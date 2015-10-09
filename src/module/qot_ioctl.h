@@ -31,9 +31,10 @@
 #include <linux/ioctl.h>
 
 // Maximum length of the identifier
-#define QOT_MAX_BINDINGS    65536
-#define QOT_MAX_UUIDLEN 	32
+#define QOT_MAX_BINDINGS    (65536)
+#define QOT_MAX_UUIDLEN 	(32)
 #define QOT_TIMELINE_PREFIX	"/dev/timeline/timeline"
+#define QOT_HASHTABLE_BITS	(16)
 
 /** clock source structure **/
 typedef struct qot_message_t {
@@ -49,12 +50,12 @@ typedef struct qot_message_t {
 #define MAGIC_CODE 0xAB
 
 /** read / write clock and schedule parameters **/
-#define QOT_BIND  			    _IOWR(MAGIC_CODE, 1, qot_message*)
+#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, qot_message*)
 #define QOT_GET_ACHIEVED		_IOWR(MAGIC_CODE, 2, qot_message*)
 #define QOT_GET_TARGET	     	_IOWR(MAGIC_CODE, 3, qot_message*)
 #define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 4, qot_message*)
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 5, qot_message*)
-#define QOT_UNBIND 				 _IOW(MAGIC_CODE, 6, qot_message*)
+#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 6, qot_message*)
 #define QOT_WAIT_UNTIL 			 _IOW(MAGIC_CODE, 7, qot_message*)
 
 #endif

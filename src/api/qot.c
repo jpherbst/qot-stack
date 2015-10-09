@@ -82,7 +82,7 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 	int32_t ret = IOCTL_ERROR;
 
 	// Add this clock to the qot clock list through scheduler
-	if (ioctl(fd, QOT_BIND, &msg) == SUCCESS)
+	if (ioctl(fd, QOT_BIND_TIMELINE, &msg) == SUCCESS)
 	{
 		// Special case: problematic binding id
 		if (msg.bid < 0)
@@ -129,7 +129,7 @@ int32_t qot_unbind_timeline(int32_t bid)
 	int32_t ret = IOCTL_ERROR;
 
 	// Delete this clock from the qot clock list
-	if (ioctl(fd, QOT_UNBIND, &msg) == SUCCESS)
+	if (ioctl(fd, QOT_UNBIND_TIMELINE, &msg) == SUCCESS)
 	{
 		// Invalidate the binding
 		bid2cid[bid] = -1;
