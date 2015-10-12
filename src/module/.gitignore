@@ -1,0 +1,12 @@
+/.tmp_versions/
+/.qot.ko.cmd
+/.qot.mod.o.cmd
+/.qot.o.cmd
+/.qot_module.o.cmd
+/Module.symvers
+/modules.order
+/qot.ko
+/qot.mod.c
+/qot.mod.o
+/qot.o
+/qot_module.o
