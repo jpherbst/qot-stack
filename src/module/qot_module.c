@@ -131,6 +131,8 @@ static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned l
 
 static int qot_clock_getres(struct posix_clock *pc, struct timespec *tp)
 {
+	tp->tv_sec = 0;
+	tp->tv_nsec = 1;
 	return 0;
 }
 
@@ -507,6 +509,11 @@ void qot_cleanup(void)
     class_destroy(cl);
     cdev_del(&c_dev);
     unregister_chrdev_region(dev, MINOR_CNT);
+
+    // Destroy 
+    class_destroy(qot_clock_class);
+	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
+	ida_destroy(&qot_clocks_map);
 }
 
 // Module definitions

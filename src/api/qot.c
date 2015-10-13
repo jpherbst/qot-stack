@@ -33,13 +33,19 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/ioctl.h>
 
 // We include the ioctl header here, so that user apps don't need to know about it
 #include "../module/qot_ioctl.h"
 
+// Useful declarations
+#define CLOCKFD 				3
+#define FD_TO_CLOCKID(fd)       ((~(clockid_t) (fd) << 3) | CLOCKFD)
+#define CLOCK_INVALID 			-1
+
 // Maintain a map of binding ids to clock ids
-static clockid_t bid2cid[QOT_MAX_BINDINGS+1];
+static int bid2fd[QOT_MAX_BINDINGS+1];
 
 // Private: open the ioctl 
 static int32_t qot_open(void)
@@ -88,19 +94,13 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 		if (msg.bid < 0)
 			return INVALID_BINDING_ID;
 
-		// Construct the file handle tot he poix clock /dev/timeline/timelineX
+		// Construct the file handle tot he poix clock /dev/timelineX
 	    sprintf(device, "%s%u", QOT_TIMELINE_PREFIX, msg.tid);
 		
 		// Open the clock
-		int pd = open(device, O_RDWR);
-		if (pd < 0)
-			return INVALID_CLOCK;
-
-		// Obtain the clock ID from the POSIX clock
-		bid2cid[msg.bid] = ((~(clockid_t) (pd) << 3) | 3);
-
-		// Close the POSIX clock
-		close(pd);
+		bid2fd[msg.bid] = open(device, O_RDWR);
+		if (bid2fd[msg.bid] < 0)
+			return INVALID_FD;
 
 		// Return the binding ID
 		ret = msg.bid;
@@ -131,8 +131,11 @@ int32_t qot_unbind_timeline(int32_t bid)
 	// Delete this clock from the qot clock list
 	if (ioctl(fd, QOT_UNBIND_TIMELINE, &msg) == SUCCESS)
 	{
+		// Close virtual clock
+		close(bid2fd[bid]);
+	
 		// Invalidate the binding
-		bid2cid[bid] = -1;
+		bid2fd[bid] = INVALID_FD;
 
 		// Success
 		ret = SUCCESS;
@@ -202,14 +205,15 @@ int32_t qot_gettime(int32_t bid, struct timespec *ts)
 	// Basic checks
 	if (bid < 0 || bid > QOT_MAX_BINDINGS)
 		return INVALID_BINDING_ID;
-	if (bid2cid[bid] < 0)
+	if (bid2fd[bid] < 0)
+		return INVALID_FD;
+
+	// Obtain the clock ID from the POSIX clock
+	if (CLOCK_INVALID == FD_TO_CLOCKID(bid2fd[bid]))
 		return INVALID_CLOCK;
 
-	// Get the time 
-	int32_t ret = clock_gettime(bid2cid[bid], ts);
-
 	// Return success
-	return ret;
+	return clock_gettime(FD_TO_CLOCKID(bid2fd[bid]), ts);
 }
 
 int32_t qot_wait_until(int32_t bid, struct timespec *ts)

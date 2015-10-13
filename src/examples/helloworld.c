@@ -11,19 +11,19 @@ int main(int argc, char *argv[])
 {
 	// Bind to a timeline
 	int32_t ret;
-	int32_t bid = qot_bind_timeline("MY_UNIQUE_TIMELINE_UUID", 1e6, 1e3);
+	int32_t bid = qot_bind_timeline("TEST_TIMELINE_UUID", 1e6, 1e3);
 	if (bid < 0)
 	{
 		printf("Could not bind to timeline: %d\n",bid);
 		return 1;
 	}
 
+	// This will store the time
+	struct timespec ts;
+	
 	// Iterate 100 times
 	for (int i = 0; i < 10; i++)
 	{
-		// This will store the time
-		struct timespec ts;
-
 		// Get the time 
 		ret = qot_gettime(bid, &ts);
 		if (ret)
@@ -31,9 +31,6 @@ int main(int argc, char *argv[])
 			printf("Could not get the time: %d\n",ret);
 			return 2;
 		}
-
-		// Increment by one second
-		ts.tv_sec += 1;
 
 		// Print the global time
 		printf("Global time: %lld.%u\n\n", 

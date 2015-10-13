@@ -39,9 +39,10 @@ typedef enum
 	SUCCESS            =  0,
 	NO_SCHEDULER_CHDEV = -1,	 /**< No scheduler character device */
 	INVALID_BINDING_ID = -2,	 /**< Invalid binding ID specified */
-	INVALID_UUID       = -3,	 /**< Invalid timeline UUID specified */
-	INVALID_CLOCK      = -4,	 /**< IOCTL returned error */
-	IOCTL_ERROR        = -5		 /**< IOCTL returned error */
+	INVALID_FD  	   = -3,	 /**< Invalid binding ID specified */
+	INVALID_UUID       = -4,	 /**< Invalid timeline UUID specified */
+	INVALID_CLOCK      = -5,	 /**< IOCTL returned error */
+	IOCTL_ERROR        = -6		 /**< IOCTL returned error */
 } 
 qot_error;
 
