@@ -1,1 +1,2 @@
-KERNEL=="qot", MODE="0444"
+KERNEL=="qot", MODE="0666"
+KERNEL=="timeline*", MODE="0666"

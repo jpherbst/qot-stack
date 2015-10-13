@@ -37,12 +37,17 @@
 #define QOT_TIMELINE_PREFIX	"/dev/timeline"
 
 // QoT message type 
-struct qot_message {
-	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
+struct qot_metric {
 	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
 	uint64_t res;	    				// Required clock resolution
-	int bid;				   			// Binding id
-	int tid;				   			// Timeline id
+};
+
+// QoT message type 
+struct qot_message {
+	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
+	struct qot_metric request;			// Request metrics			
+	int bid;				   			// Binding id 
+	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
 	struct timespec event;				// Timestamp
 };
 
@@ -55,5 +60,10 @@ struct qot_message {
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 3, struct qot_message*)
 #define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
 #define QOT_WAIT_UNTIL 			 _IOW(MAGIC_CODE, 5, struct qot_message*)
+
+// Interaction with a timeline
+#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
+#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 7, struct qot_metric*)
+#define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 8, char*)
 
 #endif

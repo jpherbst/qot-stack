@@ -74,8 +74,8 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 	struct qot_message msg;
 	msg.bid = 0;
 	msg.tid = 0;
-	msg.acc = accuracy;
-	msg.res = resolution;
+	msg.request.acc = accuracy;
+	msg.request.res = resolution;
 	strncpy(msg.uuid, uuid, QOT_MAX_UUIDLEN);
 
 	// Default return code
@@ -154,7 +154,7 @@ int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy)
 
 	// Package up a rewuest
 	struct qot_message msg;
-	msg.acc = accuracy;
+	msg.request.acc = accuracy;
 	msg.bid = bid;
 	
 	// Default return code
@@ -180,7 +180,7 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 
 	// Package up a rewuest
 	struct qot_message msg;
-	msg.res = resolution;
+	msg.request.res = resolution;
 	msg.bid = bid;
 	
 	// Default return code
@@ -200,7 +200,7 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 int32_t qot_gettime(int32_t bid, struct timespec *ts)
 {
 	// Basic checks
-	if (bid < QOT_MAX_BINDINGS)
+	if (bid < 0 || bid > QOT_MAX_BINDINGS)
 		return INVALID_BINDING_ID;
 	if (bid2cid[bid] < 0)
 		return INVALID_CLOCK;
