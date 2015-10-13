@@ -31,6 +31,15 @@ $> git submodule update
 
 This will take a while, as it checks out several large third party repos.
 
+Now, install and reload our udev rules.
+
+```
+$> sudo cp src/module/80-qot.rules /etc/udev/rules.d/
+$> sudo service udev restart
+```
+
+These rules force the ```/dev/qot``` and ```/dev/timelineX``` to RW permission for all users.
+
 ## Build the kernel ##
 
 First, build a vanilla kernel...
