@@ -10,3 +10,5 @@
 /qot.mod.o
 /qot.o
 /qot_module.o
+/.qot_clock.o.cmd
+/qot_clock.o

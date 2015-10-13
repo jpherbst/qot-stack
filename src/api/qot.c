@@ -71,7 +71,7 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 		return INVALID_UUID;
 
 	// Package up a request	
-	qot_message msg;
+	struct qot_message msg;
 	msg.bid = 0;
 	msg.tid = 0;
 	msg.acc = accuracy;
@@ -122,7 +122,7 @@ int32_t qot_unbind_timeline(int32_t bid)
 		return NO_SCHEDULER_CHDEV;
 
 	// Package up a rewuest
-	qot_message msg;
+	struct qot_message msg;
 	msg.bid = bid;
 
 	// Default return code
@@ -153,7 +153,7 @@ int32_t qot_set_accuracy(int32_t bid, uint64_t accuracy)
 		return NO_SCHEDULER_CHDEV;
 
 	// Package up a rewuest
-	qot_message msg;
+	struct qot_message msg;
 	msg.acc = accuracy;
 	msg.bid = bid;
 	
@@ -179,7 +179,7 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 		return NO_SCHEDULER_CHDEV;
 
 	// Package up a rewuest
-	qot_message msg;
+	struct qot_message msg;
 	msg.res = resolution;
 	msg.bid = bid;
 	
@@ -197,44 +197,7 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution)
 	return ret;
 }
 
-int32_t qot_get_achieved(int32_t bid, uint64_t *accuracy, uint64_t *resolution)
-{
-	// Open a channel to the scheduler
-	int32_t fd = qot_open();
-	if (fd < 0)
-		return NO_SCHEDULER_CHDEV;
-	if (!accuracy && !resolution)
-		return SUCCESS;
-
-	// Package up a rewuest
-	qot_message msg;
-	msg.bid = bid;
-	
-	// Default return code
-	int32_t ret = IOCTL_ERROR;
-
-	// update this clock
-	if (ioctl(fd, QOT_GET_ACHIEVED, &msg) == SUCCESS)
-	{
-		// Only copy accuray if the poitner is valid
-		if (accuracy)
-			*accuracy = msg.acc;
-		
-		// Only copy resolution if the poitner is valid
-		if (resolution)
-			*resolution = msg.res;
-		
-		ret = SUCCESS;
-	}
-
-	// Close communication with the scheduler
-	qot_close(fd);
-
-	// Return success code
-	return ret;
-}
-
-int32_t qot_gettime(int32_t bid, struct timespec *ts, uint64_t *accuracy, uint64_t *resolution)
+int32_t qot_gettime(int32_t bid, struct timespec *ts)
 {
 	// Basic checks
 	if (bid < QOT_MAX_BINDINGS)
@@ -244,10 +207,6 @@ int32_t qot_gettime(int32_t bid, struct timespec *ts, uint64_t *accuracy, uint64
 
 	// Get the time 
 	int32_t ret = clock_gettime(bid2cid[bid], ts);
-
-	// Get the stats
-	if (accuracy || resolution)
-		return qot_get_achieved(bid, accuracy, resolution);
 
 	// Return success
 	return ret;
@@ -261,7 +220,7 @@ int32_t qot_wait_until(int32_t bid, struct timespec *ts)
 		return NO_SCHEDULER_CHDEV;
 
 	// Package up a rewuest
-	qot_message msg;
+	struct qot_message msg;
 	msg.bid = bid;
 	memcpy(&msg.event, ts, sizeof(struct timespec));
 	

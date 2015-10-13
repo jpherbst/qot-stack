@@ -33,28 +33,27 @@
 // Maximum length of the identifier
 #define QOT_MAX_BINDINGS    (65536)
 #define QOT_MAX_UUIDLEN 	(32)
-#define QOT_TIMELINE_PREFIX	"/dev/timeline/timeline"
 #define QOT_HASHTABLE_BITS	(16)
+#define QOT_TIMELINE_PREFIX	"/dev/timeline"
 
 // QoT message type 
-typedef struct qot_message_t {
+struct qot_message {
 	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
 	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
 	uint64_t res;	    				// Required clock resolution
 	int bid;				   			// Binding id
 	int tid;				   			// Timeline id
 	struct timespec event;				// Timestamp
-} qot_message;
+};
 
 // Magic code specific to our ioctl code
 #define MAGIC_CODE 0xEF
 
-// Manipulation of timelines
-#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, qot_message*)
-#define QOT_GET_ACHIEVED		_IOWR(MAGIC_CODE, 2, qot_message*)
-#define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 3, qot_message*)
-#define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 4, qot_message*)
-#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 5, qot_message*)
-#define QOT_WAIT_UNTIL 			 _IOW(MAGIC_CODE, 6, qot_message*)
+// Interaction with scheduler
+#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, struct qot_message*)
+#define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 2, struct qot_message*)
+#define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 3, struct qot_message*)
+#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
+#define QOT_WAIT_UNTIL 			 _IOW(MAGIC_CODE, 5, struct qot_message*)
 
 #endif

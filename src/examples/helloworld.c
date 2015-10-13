@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 	int32_t bid = qot_bind_timeline("MY_UNIQUE_ID", 1e6, 1e3);
 	if (bid < 0)
 	{
-		printf("Could not bind to timeline\n");
+		printf("Could not bind to timeline: %d\n",bid);
 		return 1;
 	}
 
@@ -23,10 +23,9 @@ int main(int argc, char *argv[])
 	{
 		// This will store the time
 		struct timespec ts;
-		uint64_t res, acc;
 
 		// Get the time 
-		ret = qot_gettime(bid, &ts, &acc, &res);
+		ret = qot_gettime(bid, &ts);
 		if (ret < 0)
 		{
 			printf("Could not get the time\n");
@@ -37,9 +36,8 @@ int main(int argc, char *argv[])
 		ts.tv_sec += 1;
 
 		// Print the global time
-		printf("Global time: %lld.%u\n (acc: %llu, res: %llu)\n", 
-			(long long) ts.tv_sec, (unsigned int) ts.tv_nsec, 
-			(unsigned long long) acc, (unsigned long long)res);
+		printf("Global time: %lld.%u\n\n", 
+			(long long) ts.tv_sec, (unsigned int) ts.tv_nsec);
 
 		// Sleep 
 		qot_wait_until(bid, &ts);

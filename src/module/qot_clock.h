@@ -1,6 +1,6 @@
 /*
  * @file qot_clock.h
- * @brief Code to create a disciplinable POSIX clock for a given timeline
+ * @brief POSIX clock API for the QoT framework, based largely on Linux PTP clocks
  * @author Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -28,12 +28,28 @@
 #ifndef QOT_CLOCK_H
 #define QOT_CLOCK_H
 
+// Required includes
+#include <linux/device.h>
 #include <linux/posix-clock.h>
 
-extern struct qot_timeline_data *qot_clock_register(struct qot_clock *info);
+// Fundamental clock type
+struct qot_clock {
+    struct posix_clock posix;			// the posix clock 
+    struct device *dev;					// parent device
+    dev_t devid;						// device id
+    int index;                      	// index into clocks.map
+};
 
-extern int qot_clock_unregister(struct qot_timeline_data *qotclk);
+// Register clock and return success/failure
+int qot_timeline_register(struct qot_clock* clock);
 
-extern int qot_clock_index(struct qot_timeline_data *qotclk);
+// Unregister clock and return success/failure
+int qot_timeline_unregister(struct qot_clock* clock);
+
+// Initialize
+int qot_timeline_init(void);
+
+// Exit
+void qot_timeline_exit(void);
 
 #endif

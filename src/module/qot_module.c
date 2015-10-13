@@ -1,3 +1,30 @@
+/*
+ * @file qot_module.h
+ * @brief Linux 4.1.x kernel module for creation anmd destruction of QoT timelines
+ * @author Fatima Anwar 
+ * 
+ * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, 
+ * are permitted provided that the following conditions are met:
+ * 	1. Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <linux/version.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
@@ -10,22 +37,22 @@
 #include <linux/dcache.h>
 #include <asm/uaccess.h>
 
-// Expose  module to userspace (ioctl) and other modules (export)
+// This module functionality
 #include "qot_ioctl.h"
-#include "qot_clock.h"
+//#include "qot_clock.h"
 
 // Module information
 #define MODULE_NAME "qot"
 #define FIRST_MINOR 0
-#define MINOR_CNT 1
+#define MINOR_CNT   1
 
 // Stores information about a timeline
 struct qot_timeline {
-	struct posix_clock clock;			// posix clock
     char uuid[QOT_MAX_UUIDLEN];			// unique id for a timeline
     struct hlist_node collision_hash;	// pointer to next timeline for the same hash key
     struct list_head head_acc;			// head pointing to maximum accuracy structure
     struct list_head head_res;			// head pointing to maximum resolution structure
+	//struct qot_clock clock;				// QoT clock
 };
 
 // Stores information about an application binding to a timeline
@@ -36,6 +63,9 @@ struct qot_binding {
     struct list_head acc_list;			// Next accuracy
     struct qot_timeline* timeline;		// Parent timeline
 };
+
+// We'll use the ioctl device as the PTP device
+static struct device *dev_ret;
 
 // An array of bindings (one for each application request)
 static struct qot_binding *bindings[QOT_MAX_BINDINGS+1];
@@ -86,6 +116,38 @@ static inline void qot_add_res(struct qot_binding *binding_list, struct list_hea
 	list_add_tail(&binding_list->res_list, head);
 }
 
+static inline void qot_remove_binding(struct qot_binding *binding)
+{
+	// You cant interact will a null item
+	if (!binding)
+		return;
+
+	// Remove the entries from the sort tables (ordering will be updated)
+	list_del(&binding->res_list);
+	list_del(&binding->acc_list);
+
+	// If we have removed the last binding from a timeline, then the lists
+	// associated with the timeline should both be empty
+	if (	list_empty(&binding->timeline->head_acc) 
+		&&  list_empty(&binding->timeline->head_res))
+	{
+		// Remove element from the hashmap
+		hash_del(&binding->timeline->collision_hash);
+
+		// Unregister the QoT clock
+		//qot_clock_unregister(&binding->timeline->clock);
+
+		// Free the timeline entry memory
+		kfree(binding->timeline);
+	}
+
+	// Free the memory used by this binding
+	kfree(binding);
+
+	// Set explicitly to NULL
+	binding = NULL;
+}
+
 // IOCTL FUNCTIONALITY /////////////////////////////////////////////////////////
 
 // Required for ioctl
@@ -102,13 +164,9 @@ static int qot_ioctl_close(struct inode *i, struct file *f)
     return 0;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35))
-static int qot_ioctl_access(struct inode *i, struct file *f, unsigned int cmd, unsigned long arg)
-#else
 static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg)
-#endif
 {
-	qot_message msg;			// ioctl message
+	struct qot_message msg;		// ioctl message
 	struct qot_timeline *obj;	// timeline object
 	unsigned int key;			// hash key
 
@@ -118,7 +176,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	case QOT_BIND_TIMELINE:
 	
 		// Get the parameters passed into the ioctl
-		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
 		// Allocate memory for the new binding
@@ -159,7 +217,8 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			// Copy over the UUID
 			strncpy(bindings[msg.bid]->timeline->uuid, msg.uuid, QOT_MAX_UUIDLEN);
 
-			// TODO: Create the POSIX clock
+			// Register the QoT clock
+			//qot_clock_register(&binding->timeline->clock);
 
 			// Add the timeline
 			hash_add(qot_timelines_hash, &bindings[msg.bid]->timeline->collision_hash, key);
@@ -174,7 +233,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		qot_add_res(bindings[msg.bid], &bindings[msg.bid]->timeline->head_res);
 
 		// Send back the data structure with the new binding and clock info
-		if (copy_to_user((qot_message*)arg, &msg, sizeof(qot_message)))
+		if (copy_to_user((struct qot_message*)arg, &msg, sizeof(struct qot_message)))
 			return -EACCES;
 
 		break;
@@ -182,52 +241,26 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	case QOT_UNBIND_TIMELINE:
 
 		// Get the parameters passed into the ioctl
-		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
 		// Sanity check
 		if (msg.bid < 0 || msg.bid > QOT_MAX_BINDINGS || !bindings[msg.bid])
 			return -EACCES;
 
-		// Remove the entries from the sort tables (ordering will be updated)
-		list_del(&bindings[msg.bid]->res_list);
-		list_del(&bindings[msg.bid]->acc_list);
-
-		// If we have removed the last binding from a timeline, then the lists
-		// associated with the timeline should both be empty
-		if (	list_empty(&bindings[msg.bid]->timeline->head_acc) 
-			&&  list_empty(&bindings[msg.bid]->timeline->head_res))
-		{
-			// Remove element from the hashmap
-			hash_del(&bindings[msg.bid]->timeline->collision_hash);
-
-			// TODO: remove the POSIX clock
-
-			// Free the timeline entry memory
-			kfree(bindings[msg.bid]->timeline);
-		}
-
-		// Free the memory used by this binding
-		kfree(bindings[msg.bid]);
-
-		// Set to null to indicate availability
-		bindings[msg.bid] = NULL;
-
-		// Indicate that we now have a free binding
-		binding_next = msg.bid;
-
-		break;
-
-	case QOT_GET_ACHIEVED:
-
-		// NOT IMPLEMENTED YET
+		// Try and remove the binding
+		//qot_remove_binding(bindings[msg.bid]);
+		
+		// If this is the earliest free binding, then cache it
+		if (binding_next > msg.bid)
+			binding_next = msg.bid;
 
 		break;
 
 	case QOT_SET_ACCURACY:
 
 		// Get the parameters passed into the ioctl
-		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
 		// Sanity check
@@ -248,7 +281,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	case QOT_SET_RESOLUTION:
 
 		// Get the parameters passed into the ioctl
-		if (copy_from_user(&msg, (qot_message*)arg, sizeof(qot_message)))
+		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
 		// Sanity check
@@ -285,67 +318,68 @@ static struct file_operations qot_fops = {
     .owner = THIS_MODULE,
     .open = qot_ioctl_open,
     .release = qot_ioctl_close,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35))
-    .ioctl = qot_ioctl_access
-#else
     .unlocked_ioctl = qot_ioctl_access
-#endif
 };
 
 // Called on initialization
-int init_module(void)
+int qot_init(void)
 {
 	int ret;
-    struct device *dev_ret;
 
-	// Intiialize our timeline hash table
+	// Intialize clock framework
+	//qot_clock_init();
+
+	// Intialize our timeline hash table
 	hash_init(qot_timelines_hash);
 
 	// Initialize ioctl
-	printk(KERN_WARNING "Intializing QoT stack\n");
     if ((ret = alloc_chrdev_region(&dev, FIRST_MINOR, MINOR_CNT, "qot_ioctl")) < 0)
-    {
-    	printk(KERN_WARNING "region alloc\n");
         return ret;
-    }
     cdev_init(&c_dev, &qot_fops); 
     if ((ret = cdev_add(&c_dev, dev, MINOR_CNT)) < 0)
-    {
-    	printk(KERN_WARNING "cdev_add alloc\n");
         return ret;
-    }
     if (IS_ERR(cl = class_create(THIS_MODULE, "char")))
     {
-    	printk(KERN_WARNING "class_create\n");
         cdev_del(&c_dev);
         unregister_chrdev_region(dev, MINOR_CNT);
         return PTR_ERR(cl);
     }
     if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, "qot")))
     {
-    	printk(KERN_WARNING "device_create\n");
         class_destroy(cl);
         cdev_del(&c_dev);
         unregister_chrdev_region(dev, MINOR_CNT);
         return PTR_ERR(dev_ret);
     }
-    printk(KERN_WARNING "success\n");
  	
-    // SUCCESS
+    // Success
  	return 0;
 } 
 
 // Called on exit
-void cleanup_module(void)
+void qot_cleanup(void)
 {
+	int bid;
+
+	// Remove all bindings and timelines
+	for (bid = 0; bid < binding_size; bid++)
+		qot_remove_binding(bindings[bid]);
+
 	// Stop ioctl
-	printk(KERN_WARNING "Freeing QoT stack\n");
     device_destroy(cl, dev);
     class_destroy(cl);
     cdev_del(&c_dev);
     unregister_chrdev_region(dev, MINOR_CNT);
+
+	// Intialize clock framework
+	//qot_clock_exit();
 }
 
+// Module definitions
+module_init(qot_init);
+module_exit(qot_cleanup);
+
+// The line below enforces out code to be GPL, because of the POSIX license
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
 MODULE_DESCRIPTION("QoT ioctl driver");

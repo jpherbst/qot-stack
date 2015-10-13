@@ -1,3 +1,31 @@
+/*
+ * @file qot_clock.c
+ * @brief POSIX clock API for the QoT framework, based largely on Linux PTP clocks
+ * @author Fatima Anwar 
+ * 
+ * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, 
+ * are permitted provided that the following conditions are met:
+ * 	1. Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
@@ -9,78 +37,19 @@ static struct class *qot_clock_class;
 
 static DEFINE_IDA(qot_clocks_map);
 
-static struct posix_clock_operations qot_clock_ops = {
-	.owner			= THIS_MODULE,
-	.clock_adjtime	= qot_clock_adjtime,
-	.clock_gettime	= qot_clock_gettime,
-	.clock_getres	= qot_clock_getres,
-	.clock_settime	= qot_clock_settime,
-	.ioctl			= qot_clock_ioctl,
-	.open			= qot_clock_open,
-	.release		= qot_clock_close,
-};
-
-/* ioctl implementation */
-
-int qot_clock_open(struct posix_clock *pc, fmode_t fmode)
+static int qot_clock_open(struct posix_clock *pc, fmode_t fmode)
 {
 	return 0;
 }
 
-int qot_clock_close(struct posix_clock *pc, fmode_t fmode)
+static int qot_clock_close(struct posix_clock *pc)
 {
 	return 0;
 }
 
-long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
+static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 {
-	struct qot_clock clk;
-	struct qot_timeline_data *qotclk = container_of(pc, struct qot_timeline_data, clock);
-	struct qot_timeline_data *firstclk;
-	int err = 0;
-
-	switch (cmd)
-	{
-
-	case QOT_GET_TIMELINE_ID:
-		
-		uint16_t timeline_id;
-
-		firstclk = hlist_entry(qotclk->accuracy_sort_hash->next, struct qot_timeline_data, accuracy_sort_hash);
-		timeline_id = firstclk->info->timeline;
-		if (copy_to_user((uint16_t*)arg, &timeline_id, sizeof(uint16_t)))
-			err = -EFAULT;
-
-		break;
-
-	case QOT_GET_ACCURACY:
-
-		struct timespec accuracy;
-
-		firstclk = hlist_entry(qotclk->accuracy_sort_hash->next, struct qot_timeline_data, accuracy_sort_hash);
-		accuracy = firstclk->info->accuracy;
-		if (copy_to_user((struct timespec*)arg, &accuracy, sizeof(struct timespec)))
-			err = -EFAULT;
-		
-		break;
-
-	case QOT_GET_RESOLUTION:
-
-		struct timespec resolution;
-
-		firstclk = list_entry(qotclk->resolution_sort_list->next, struct qot_timeline_data, resolution_sort_list);
-		resolution = firstclk->info->resolution;
-		if (copy_to_user((struct timespec*)arg, &resolution, sizeof(struct timespec)))
-			err = -EFAULT;
-
-		break;
-
-	default:
-		err = -ENOTTY;
-		break;
-	}
-
-	return err;
+	return  0;
 }
 
 static int qot_clock_getres(struct posix_clock *pc, struct timespec *tp)
@@ -103,98 +72,72 @@ static int qot_clock_adjtime(struct posix_clock *pc, struct timex *tx)
 	return 0;
 }
 
-static void delete_qot_clock(struct posix_clock *pc)
+static struct posix_clock_operations qot_clock_ops = {
+        .owner          = THIS_MODULE,
+        .clock_adjtime  = qot_clock_adjtime,
+        .clock_gettime  = qot_clock_gettime,
+        .clock_getres   = qot_clock_getres,
+        .clock_settime  = qot_clock_settime,
+        .ioctl          = qot_clock_ioctl,
+        .open           = qot_clock_open,
+        .release        = qot_clock_close,
+};
+
+static void qot_delete_clock(struct posix_clock *pc)
 {
-	struct qot_timeline_data *qotclk = container_of(pc, struct qot_timeline_data, clock);
-	ida_simple_remove(&qot_clocks_map, qotclk->index);
-	kfree(qotclk);
+	struct qot_clock *clock = container_of(pc, struct qot_clock, posix);
+	ida_simple_remove(&qot_clocks_map, clock->index);
 }
 
-/* public interface */
-
-struct qot_timeline_data *qot_clock_register(struct qot_clock *info, int config)
+int qot_timeline_register(struct qot_clock* clock)
 {
-	struct qot_timeline_data *qotclk;
-	int err = 0, index, major = MAJOR(qot_clock_devt);
+	// Get the clock index
+	clock->index = ida_simple_get(&qot_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
+	if (clock->index < 0)
+		return -1;
 
-	/* Initialize a clock structure. */
-	err = -ENOMEM;
-	qotclk = kzalloc(sizeof(struct qot_timeline_data), GFP_KERNEL);
-	if (qotclk == NULL)
-		goto no_memory;
+	// Set the clock
+	clock->posix.ops = qot_clock_ops;
+	clock->posix.release = qot_delete_clock;	
+	clock->devid = MKDEV(MAJOR(qot_clock_devt), clock->index);
 
-	qotclk->info = info;
+	// Create a new device in our class
+	clock->dev = device_create(qot_clock_class, NULL, clock->devid, clock, "timeline%d", clock->index);
+	if (IS_ERR(clock->dev))
+		return -2;
 
-	if(!config)
-		goto return_data;
+	// Set the driver data
+	dev_set_drvdata(clock->dev, clock);
 
-	index = ida_simple_get(&qot_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
-	if (index < 0) {
-		err = index;
-		goto no_slot;
-	}
+	// Create the POSIX clock
+	if (posix_clock_register(&clock->posix, clock->devid))
+		return -3;
 
-	qotclk->clock.ops = qot_clock_ops;
-	qotclk->clock.release = delete_qot_clock;	
-	qotclk->devid = MKDEV(major, index);
-	qotclk->index = index;
-
-	/* Create a new device in our class. */
-	qotclk->dev = device_create(qot_clock_class, NULL, qotclk->devid, qotclk,
-				 "timeline/%d", qotclk->index);
-	if (IS_ERR(qotclk->dev))
-		goto no_slot;
-
-	dev_set_drvdata(qotclk->dev, qotclk);
-
-	/* Create a posix clock. */
-	err = posix_clock_register(&qotclk->clock, qotclk->devid);
-	if (err) {
-		pr_err("failed to create posix clock\n");
-		goto no_slot;
-	}
-
-return_data:
-	return qotclk;
-
-no_slot:
-	kfree(qotclk);
-no_memory:
-	return ERR_PTR(err);
-}
-EXPORT_SYMBOL(qot_clock_register);
-
-int qot_clock_unregister(struct qot_timeline_data *qotclk)
-{
-	qotclk->defunct = 1;
-
-	/* Release the clock's resources. */
-	device_destroy(qot_clock_class, qotclk->devid);
-
-	posix_clock_unregister(&qotclk->clock);
+	// Success
 	return 0;
 }
-EXPORT_SYMBOL(qot_clock_unregister);
 
-int qot_clock_index(struct qot_timeline_data *qotclk)
+int qot_timeline_unregister(struct qot_clock* clock)
 {
-	return qotclk->index;
+	// Release clock resources
+	device_destroy(qot_clock_class, clock->devid);
+
+	// Unregister clock
+	posix_clock_unregister(&clock->posix);
+
+	return 0;
 }
-EXPORT_SYMBOL(qot_clock_index);
 
-/* module operations */
-
-static void __exit qot_clock_exit(void)
+void qot_timeline_exit(void)
 {
 	class_destroy(qot_clock_class);
 	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
 	ida_destroy(&qot_clocks_map);
 }
 
-static int __init qot_clock_init(void)
+int qot_timeline_init(void)
 {
 	int err;
-
 	qot_clock_class = class_create(THIS_MODULE, "qotclk");
 	if (IS_ERR(qot_clock_class)) {
 		pr_err("qotclk: failed to allocate class\n");
@@ -215,9 +158,6 @@ no_region:
 	return err;
 }
 
-subsys_initcall(qot_clock_init);
-module_exit(qot_clock_exit);
-
-MODULE_AUTHOR("Fatima Anwar <fatimanwar@ucla.edu>");
-MODULE_DESCRIPTION("QoT timelines support");
 MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
+MODULE_DESCRIPTION("QoT ioctl driver");
