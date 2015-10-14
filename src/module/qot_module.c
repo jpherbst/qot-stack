@@ -25,6 +25,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/timecounter.h>
+#include <linux/workqueue.h>
 #include <linux/version.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
@@ -41,6 +43,10 @@
 // This module functionality
 #include "qot_ioctl.h"
 
+// Max adjustment for clock disciplining
+#define QOT_MAX_ADJUSTMENT  	(1000000)
+#define QOT_OVERFLOW_PERIOD		(HZ*8)
+
 // Module information
 #define MODULE_NAME "qot"
 #define FIRST_MINOR 0
@@ -48,15 +54,21 @@
 
 // Stores information about a timeline
 struct qot_timeline {
-    char uuid[QOT_MAX_UUIDLEN];			// unique id for a timeline
-    struct hlist_node collision_hash;	// pointer to next timeline for the same hash key
-    struct list_head head_acc;			// head pointing to maximum accuracy structure
-    struct list_head head_res;			// head pointing to maximum resolution structure
-    struct qot_metric actual;			// achieved accuracy and resolution
-    struct posix_clock clock;			// the posix clock 
-    struct device *dev;					// parent device
-    dev_t devid;						// device id
-    int index;                      	// index into clocks.map
+    char uuid[QOT_MAX_UUIDLEN];			// Unique id for this timeline
+    struct hlist_node collision_hash;	// Pointer to next timeline with common hash key
+    struct list_head head_acc;			// Head pointing to maximum accuracy structure
+    struct list_head head_res;			// Head pointing to maximum resolution structure
+    struct qot_metric actual;			// Achieved accuracy and resolution
+    struct posix_clock clock;			// The POSIX clock 
+	struct cyclecounter cc;				// Cycle counter
+	struct timecounter tc;				// Time counter
+	uint32_t cc_mult; 					// Nominal frequency
+	int32_t dialed_frequency; 			// Frequency adjustment memory
+	struct delayed_work overflow_work;	// Periodic overflow checking
+	spinlock_t lock; 					// Protects time registers
+    struct device *dev;					// Parent device
+    dev_t devid;						// Device id
+    int index;                      	// Index in clock map (X in /dev/timelineX)
 };
 
 // Stores information about an application binding to a timeline
@@ -68,10 +80,10 @@ struct qot_binding {
 };
  
 // Device class (scheduler)
-static dev_t dev;					// Devices
-static struct cdev c_dev;			// Character device
-static struct class *cl;			// Class
-static struct device *dev_ret;		// Device
+static dev_t dev;						// Devices
+static struct cdev c_dev;				// Character device
+static struct class *cl;				// Class
+static struct device *dev_ret;			// Device
 
 // Device class (timelines)
 static dev_t qot_clock_devt;
@@ -89,6 +101,78 @@ DEFINE_HASHTABLE(qot_timelines_hash, QOT_HASHTABLE_BITS);
 
 // Don't quite know why this is required
 DEFINE_IDA(qot_clocks_map);
+
+// SOFTWARE-BASED TIME DISCIPLINE //////////////////////////////////////////////
+
+static int qot_adjfreq(struct qot_timeline *timeline, int32_t ppb)
+{
+	uint64_t adj;
+	uint32_t diff, mult, flags;
+	int32_t neg_adj = 0;
+	if (ppb < 0)
+	{
+		neg_adj = 1;
+		ppb = -ppb;
+	}
+	mult = timeline->cc_mult;
+	adj = mult;
+	adj *= ppb;
+	diff = div_u64(adj, 1000000000ULL);
+	spin_lock_irqsave(&timeline->lock, flags);
+	timecounter_read(&timeline->tc);
+	timeline->cc.mult = neg_adj ? mult - diff : mult + diff;
+	spin_unlock_irqrestore(&timeline->lock, flags);
+	return 0;
+}
+
+static int qot_adjtime(struct qot_timeline *timeline, int64_t delta)
+{
+	uint32_t flags;
+	spin_lock_irqsave(&timeline->lock, flags);
+	timecounter_adjtime(&timeline->tc, delta);
+	spin_unlock_irqrestore(&timeline->lock, flags);
+	return 0;
+}
+
+static int qot_gettime(struct qot_timeline *timeline, struct timespec64 *ts)
+{
+	uint64_t ns;
+	uint32_t flags;
+	spin_lock_irqsave(&timeline->lock, flags);
+	ns = timecounter_read(&timeline->tc);
+	spin_unlock_irqrestore(&timeline->lock, flags);
+	*ts = ns_to_timespec64(ns);
+	return 0;
+}
+
+static int qot_settime(struct qot_timeline *timeline, const struct timespec64 *ts)
+{
+	uint64_t ns;
+	uint32_t flags;
+	ns = timespec64_to_ns(ts);	
+	spin_lock_irqsave(&timeline->lock, flags);
+	timecounter_init(&timeline->tc, &timeline->cc, ns);
+	spin_unlock_irqrestore(&timeline->lock, flags);
+	return 0;
+}
+
+static void qot_overflow_check(struct work_struct *work)
+{
+	struct timespec64 ts;
+	struct qot_timeline *timeline = container_of(work, struct qot_timeline, overflow_work.work);
+	qot_gettime(timeline, &ts)
+	schedule_delayed_work(&timeline->overflow_work, QOT_OVERFLOW_PERIOD);
+}
+
+static cycle_t qot_systim_read(const struct cyclecounter *cc)
+{
+	u64 val = 0;
+	struct cpts_event *event;
+	struct list_head *this, *next;
+	struct cpts *cpts = container_of(cc, struct cpts, cc);
+	// READ OMAP TIMER
+	return val;
+}
 
 // POSIX CLOCK MANAGEMENT //////////////////////////////////////////////////////
 
@@ -131,35 +215,76 @@ static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned l
 
 static int qot_clock_getres(struct posix_clock *pc, struct timespec *tp)
 {
-	tp->tv_sec = 0;
+	tp->tv_sec  = 0;
 	tp->tv_nsec = 1;
 	return 0;
 }
 
 static int qot_clock_settime(struct posix_clock *pc, const struct timespec *tp)
 {
-	return  0;
+	struct qot_timeline *timeline = container_of(pc, struct qot_timeline, clock);
+	struct timespec64 ts = timespec_to_timespec64(*tp);
+	return qot_settime(timeline, &ts);
 }
 
 static int qot_clock_gettime(struct posix_clock *pc, struct timespec *tp)
 {
-	return 0;
+	struct qot_timeline *timeline = container_of(pc, struct qot_timeline, clock);
+	struct timespec64 ts;
+	int err;
+	err = qot_gettime(timeline, &ts);
+	if (!err)
+		*tp = timespec64_to_timespec(ts);
+	return err;
 }
 
 static int qot_clock_adjtime(struct posix_clock *pc, struct timex *tx)
 {
-	return 0;
+	struct qot_timeline *timeline = container_of(pc, struct qot_timeline, clock);
+	int err = -EOPNOTSUPP;
+	if (tx->modes & ADJ_SETOFFSET)
+	{
+		struct timespec ts;
+		ktime_t kt;
+		int64_t delta;
+		ts.tv_sec  = tx->time.tv_sec;
+		ts.tv_nsec = tx->time.tv_usec;
+		if (!(tx->modes & ADJ_NANO))
+			ts.tv_nsec *= 1000;
+		if ((unsigned long) ts.tv_nsec >= NSEC_PER_SEC)
+			return -EINVAL;
+		kt = timespec_to_ktime(ts);
+		delta = ktime_to_ns(kt);
+		err = qot_adjtime(timeline, delta);
+	} 
+	else if (tx->modes & ADJ_FREQUENCY)
+	{
+		int64_t ppb = 1 + tx->freq;
+		ppb *= 125;
+		ppb >>= 13;
+		if (ppb > QOT_MAX_ADJUSTMENT || ppb < -QOT_MAX_ADJUSTMENT)
+			return -ERANGE;
+		err = qot_adjfreq(timeline, ppb);
+		timeline->dialed_frequency = tx->freq;
+	} 
+	else if (tx->modes == 0)
+	{
+		tx->freq = timeline->dialed_frequency;
+		err = 0;
+	}
+
+	return err;
 }
 
 static struct posix_clock_operations qot_clock_ops = {
-        .owner          = THIS_MODULE,
-        .clock_adjtime  = qot_clock_adjtime,
-        .clock_gettime  = qot_clock_gettime,
-        .clock_getres   = qot_clock_getres,
-        .clock_settime  = qot_clock_settime,
-        .ioctl          = qot_clock_ioctl,
-        .open           = qot_clock_open,
-        .release        = qot_clock_close,
+    .owner          = THIS_MODULE,
+    .clock_adjtime  = qot_clock_adjtime,
+    .clock_gettime  = qot_clock_gettime,
+    .clock_getres   = qot_clock_getres,
+    .clock_settime  = qot_clock_settime,
+    .ioctl          = qot_clock_ioctl,
+    .open           = qot_clock_open,
+    .release        = qot_clock_close,
 };
 
 static void qot_clock_delete(struct posix_clock *pc)
@@ -170,10 +295,27 @@ static void qot_clock_delete(struct posix_clock *pc)
 
 static int qot_clock_register(struct qot_timeline* timeline)
 {
+	// Initialize the spin tlock
+	spin_lock_init(&timeline->lock);
+
 	// Get the clock index
 	timeline->index = ida_simple_get(&qot_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
 	if (timeline->index < 0)
 		return -1;
+
+	// Create the cycle and time counter
+	timeline->cc.read  = qot_systim_read;		// Tick counter
+	timeline->cc.mask  = CLOCKSOURCE_MASK(32);	// 32 bit counter
+	timeline->cc_mult  = mult;					// Param for 24MHz
+	timeline->cc.mult  = mult;					// Param for 24MHz
+	timeline->cc.shift = shift;					// Param for 24MHz
+	spin_lock_irqsave(&timeline->lock, flags);
+	timecounter_init(&timeline->tc, &timeline->cc, ktime_to_ns(ktime_get_real()));
+	spin_unlock_irqrestore(&timeline->lock, flags);
+
+	// Overflow management
+	INIT_DELAYED_WORK(&timeline->overflow_work, qot_overflow_check);
+	schedule_delayed_work(&timeline->overflow_work, QOT_OVERFLOW_PERIOD);
 
 	// Set the clock
 	timeline->clock.ops = qot_clock_ops;
