@@ -166,11 +166,8 @@ static void qot_overflow_check(struct work_struct *work)
 
 static cycle_t qot_systim_read(const struct cyclecounter *cc)
 {
-	u64 val = 0;
-	struct cpts_event *event;
-	struct list_head *this, *next;
-	struct cpts *cpts = container_of(cc, struct cpts, cc);
-	// READ OMAP TIMER
+	struct qot_timeline *timeline = container_of(cc, struct qot_timeline, cc);
+
 	return val;
 }
 
