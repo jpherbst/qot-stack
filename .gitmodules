@@ -2,10 +2,6 @@
 	path = thirdparty/opensplice
 	url = https://github.com/asymingt/opensplice.git
 	ignore = all
-[submodule "thirdparty/dds-tutorial-cpp-ex"]
-	path = thirdparty/dds-tutorial-cpp-ex
-	url = https://github.com/asymingt/dds-tutorial-cpp-ex.git
-	ignore = all
 [submodule "thirdparty/Kronux"]
 	path = thirdparty/Kronux
 	url = https://github.com/asymingt/Kronux.git
