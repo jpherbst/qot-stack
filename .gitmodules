@@ -13,3 +13,4 @@
 [submodule "thirdparty/bb-kernel"]
 	path = thirdparty/bb-kernel
 	url = https://github.com/asymingt/bb-kernel.git
+	ignore = all
