@@ -28,8 +28,13 @@
 #ifndef _QOT_CLOCK_H_
 #define _QOT_CLOCK_H_
 
-// Register a POSIX clock and return its index
-int qot_clock_register(void);
+#include "qot.h"
+
+// Register a POSIX clock with a given UUID
+int qot_clock_register(const char *uuid);
+
+// Set the target accuracy of a clock
+int qot_clock_set_target(int index, struct qot_metric *metric);
 
 // Remove a POSIX clock
 int qot_clock_unregister(int index);

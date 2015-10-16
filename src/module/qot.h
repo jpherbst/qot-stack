@@ -31,7 +31,6 @@
 #include <linux/ioctl.h>
 
 // Various system parameters
-#define QOT_MAX_BINDINGS    (65536)
 #define QOT_MAX_UUIDLEN 	(32)
 #define QOT_HASHTABLE_BITS	(16)
 #define QOT_IOCTL_CORE		"qot"
@@ -62,8 +61,9 @@ struct qot_message {
 #define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
 
 // IOCTL with /dev/timeline*
-#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 5, struct qot_metric*)
-#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
-#define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 7, char*)
+#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE, 5, struct qot_metric*)
+#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
+#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 7, struct qot_metric*)
+#define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 8, char*)
 
 #endif

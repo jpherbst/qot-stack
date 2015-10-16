@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
 	int32_t bid = qot_bind_timeline("TEST_TIMELINE_UUID", 1e6, 1e3);
 	if (bid < 0)
 	{
-		printf("Could not bind to timeline: %d\n",bid);
+		printf("Could not bind to timeline (have you insmod the driver module?) %d\n",bid);
 		return 1;
 	}
 

@@ -53,8 +53,11 @@
 
 // Stores sufficient information
 struct qot_clock {
-    struct device *dev;					// Parent device of the clock
+	char *uuid;							// Reference to the UUID
+	struct qot_metric target;			// The target accuracy/resolution
+	struct qot_metric actual;			// The actual accuracy/resolution
     dev_t devid;						// Device identifier
+    struct device *dev;					// Parent device of the clock
     struct posix_clock clock;			// The POSIX clock 
 	struct timecounter tc;				// Time counter
 	struct cyclecounter cc;				// Cycle counter
@@ -127,14 +130,30 @@ static int qot_clock_close(struct posix_clock *pc)
 
 static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 {
+	struct qot_clock *clk = container_of(pc, struct qot_clock, clock);
 	switch (cmd)
 	{
+
+	case QOT_SET_ACTUAL_METRIC:
+		if (copy_from_user(&clk->actual, (struct qot_metric*)arg, sizeof(struct qot_metric)))
+			return -EFAULT;
+		break;
+
 	case QOT_GET_ACTUAL_METRIC:
+		if (copy_to_user((struct qot_metric*)arg, &clk->actual, sizeof(struct qot_metric)))
+			return -EFAULT;
 		break;
+
 	case QOT_GET_TARGET_METRIC:
+		if (copy_to_user((struct qot_metric*)arg, &clk->target, sizeof(struct qot_metric)))
+			return -EFAULT;
 		break;
+
 	case QOT_GET_UUID:
+		if (copy_to_user((char*)arg, &clk->uuid, sizeof(char)*QOT_MAX_UUIDLEN))
+			return -EFAULT;
 		break;
+
 	default:
 		return -ENOTTY;
 		break;
@@ -232,7 +251,7 @@ static void qot_overflow_check(struct work_struct *work)
 // FUNCTIONS DESIGNED TO BE CALLED FROM TIMELINE /////////////////////////////////////////
 
 // Register a clock
-int qot_clock_register(void)
+int qot_clock_register(const char *uuid)
 {	
 	struct qot_clock* clk;
 	int index;
@@ -241,6 +260,9 @@ int qot_clock_register(void)
 	clk = kzalloc(sizeof(struct qot_clock), GFP_KERNEL);
 	if (clk == NULL)
 		return -1;
+
+	// Set the UUID (callee responsible for memory management)
+	clk->uuid = (char *) uuid;
 
 	// Obtain a new binding ID
 	index = idr_alloc(&idr_clocks, clk, 0, MINORMASK + 1, GFP_KERNEL);
@@ -282,6 +304,17 @@ free_clock:
 	return -2;
 }
 
+// Set the target accuracy of a clock
+int qot_clock_set_target(int index, struct qot_metric *metric)
+{
+	// Grab the binding from the ID
+	struct qot_clock *clk = idr_find(&idr_clocks, index);
+	if (!clk)
+		return -1;
+	clk->target.acc = metric->acc;
+	clk->target.res = metric->res;
+	return 0;
+}
 
 // Completely destroy a binding
 int qot_destroy_clock(int id, void *p, void *data)

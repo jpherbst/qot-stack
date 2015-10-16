@@ -146,7 +146,7 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 		strncpy(binding->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
 
 		// Register a new clock for this timeline
-		binding->timeline->index = qot_clock_register();
+		binding->timeline->index = qot_clock_register(uuid);
 		if (binding->timeline->index < 0)	
 			goto free_timeline;
 
@@ -174,8 +174,20 @@ free_binding:
 	return -1;
 }
 
+// Get the POSIX clock index for a given binding ID
+int qot_timeline_index(int bid)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
+
+	// Return the timeline clock index
+	return binding->timeline->index;	
+}
+
 // Completely destroy a binding
-int qot_destroy_binding(int id, void *p, void *data)
+int qot_destroy_binding(int bid, void *p, void *data)
 {
 	// Cast to find the binding information
 	struct qot_binding *binding = (struct qot_binding *) p;
@@ -203,14 +215,14 @@ int qot_destroy_binding(int id, void *p, void *data)
 	kfree(binding);
 
 	// Remove the binding ID form the list
-	idr_remove(&idr_bindings, id);
+	idr_remove(&idr_bindings, bid);
 
 	// Success
 	return 0;
 }
 
 // Unbind from a timeline
-int32_t qot_timeline_unbind(int bid)
+int qot_timeline_unbind(int bid)
 {
 	// Grab the binding from the ID
 	struct qot_binding *binding = idr_find(&idr_bindings, bid);
@@ -225,7 +237,7 @@ int32_t qot_timeline_unbind(int bid)
 }
 
 // Update the accuracy of a binding
-int32_t qot_timeline_set_accuracy(int bid, uint64_t acc)
+int qot_timeline_set_accuracy(int bid, uint64_t acc)
 {
 	// Grab the binding from the ID
 	struct qot_binding *binding = idr_find(&idr_bindings, bid);
@@ -245,7 +257,7 @@ int32_t qot_timeline_set_accuracy(int bid, uint64_t acc)
 }
 
 // Update the resolution of a binding
-int32_t qot_timeline_set_resolution(int bid, uint64_t res)
+int qot_timeline_set_resolution(int bid, uint64_t res)
 {
 	// Grab the binding from the ID
 	struct qot_binding *binding = idr_find(&idr_bindings, bid);
@@ -265,7 +277,7 @@ int32_t qot_timeline_set_resolution(int bid, uint64_t res)
 }
 
 // Initialize the timeline system
-int32_t qot_timeline_init(void)
+int qot_timeline_init(void)
 {
 	// Allocates clock ids
 	idr_init(&idr_bindings);

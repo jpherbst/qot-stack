@@ -37,7 +37,7 @@
 #include <sys/ioctl.h>
 
 // We include the ioctl header here, so that user apps don't need to know about it
-#include "../module/qot_ioctl.h"
+#include "../module/qot.h"
 
 // Useful declarations
 #define CLOCKFD 				3
@@ -95,7 +95,7 @@ int32_t qot_bind_timeline(const char *uuid, uint64_t accuracy, uint64_t resoluti
 			return INVALID_BINDING_ID;
 
 		// Construct the file handle tot he poix clock /dev/timelineX
-	    sprintf(device, "%s%u", QOT_TIMELINE_PREFIX, msg.tid);
+	    sprintf(device, "/dev/%s%u", QOT_IOCTL_TIMELINE, msg.tid);
 		
 		// Open the clock
 		bid2fd[msg.bid] = open(device, O_RDWR);
@@ -214,30 +214,4 @@ int32_t qot_gettime(int32_t bid, struct timespec *ts)
 
 	// Return success
 	return clock_gettime(FD_TO_CLOCKID(bid2fd[bid]), ts);
-}
-
-int32_t qot_wait_until(int32_t bid, struct timespec *ts)
-{
-	// Open a channel to the scheduler
-	int32_t fd = qot_open();
-	if (fd < 0)
-		return NO_SCHEDULER_CHDEV;
-
-	// Package up a rewuest
-	struct qot_message msg;
-	msg.bid = bid;
-	memcpy(&msg.event, ts, sizeof(struct timespec));
-	
-	// Default return code
-	int32_t ret = IOCTL_ERROR;
-
-	// update this clock
-	if (ioctl(fd, QOT_WAIT_UNTIL, &msg) == SUCCESS)
-		ret = SUCCESS;
-
-	// Close communication with the scheduler
-	qot_close(fd);
-
-	// Return success code
-	return ret;
 }

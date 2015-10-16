@@ -98,6 +98,14 @@ int32_t qot_event_compare(int32_t id, struct qot_compare_event *event)
 }
 EXPORT_SYMBOL(qot_event_compare);
 
+// Remap the read query from a cycle counter to a clocksource
+cycle_t qot_read_remap(const struct cyclecounter *cc)
+{
+	if (clksrc)
+		return clksrc->read(clksrc);
+	return 0;
+}
+
 // Copy over the read() function and initial mult/shift for projection
 int32_t qot_cyclecounter_init(struct cyclecounter *cc)
 {
@@ -105,7 +113,7 @@ int32_t qot_cyclecounter_init(struct cyclecounter *cc)
 	if (clksrc)
 	{
 		// Copy over the cycle counter info from the clocksource
-		cc->read  = clksrc->read;
+		cc->read  = qot_read_remap;
 		cc->mask  = clksrc->mask;
 		cc->mult  = clksrc->mult;
 		cc->shift = clksrc->shift;
@@ -142,6 +150,12 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 {
 	struct qot_message msg;
 	int32_t ret;
+
+	// Deny all access if there is no clocksource registered
+	if (!clksrc)
+		return -EACCES;
+
+	// Check what message was sent
 	switch (cmd)
 	{
 

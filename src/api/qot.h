@@ -89,12 +89,4 @@ int32_t qot_set_resolution(int32_t bid, uint64_t resolution);
  **/
 int32_t qot_gettime(int32_t bid, struct timespec *ts);
 
-/**
- * @brief Wait until a specific time
- * @param bid The binding id
- * @param ts Pointer to timespec struct representing event
- * @return Positive: success Negative: error
- **/
-int32_t qot_wait_until(int32_t bid, struct timespec *ts);
-
 #endif
