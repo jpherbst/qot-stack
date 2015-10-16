@@ -31,20 +31,6 @@
 // Kernel code required for inclusion by callee
 #include <linux/timecounter.h>
 
-// Basic properties of an oscillator
-struct qot_oscillator {
-	uint64_t frequency;						// Fundamental output frequency
-	uint64_t short_term_stability;			// Short term stability
-	uint64_t phase_noise;					// Phase noise
-	uint64_t aging;							// Aging in parts per billion
-	uint64_t temperature_stability;			// Temperature stability
-	uint64_t power_consumption;				// Power consumption
-	uint64_t warm_up_time;					// Warm up time
-	int (*power_on)(void);					// Turn on an oscillator
-	int (*power_off)(void);					// Turn off this oscillator
-	int (*enable)(void);					// Switch to this oscillator
-};
-
 // Information about a capture event
 struct qot_capture_event {
 	uint32_t id;							// Hardware timer ID
@@ -62,28 +48,23 @@ struct qot_compare_event {
 	uint8_t  enable;						// [0] = disable, [1] = enabled
 };
 
-// Register a clock source as the primary driver of time
-int32_t qot_register(struct clocksource *clk);
+// EXPORTED FUNCTIONS DESIGNED TO BE CALLED BY THE PLATFORM IMPLEMENTATION //////
 
-// Add an oscillator
-int32_t qot_add_oscillator(struct qot_oscillator* osc);
+// Register a given clocksource as the primary driver for time
+int qot_register(struct clocksource *clk);
 
-// Register the existence of a timer pin
-int32_t qot_add_compare(int32_t id);
+// Called when the driver receives a capture event
+int qot_event_capture(int id, struct qot_capture_event *event);
 
-// Called by driver when a capture event occurs
-int32_t qot_add_capture(int32_t id);
+// Send a compare event to the driver
+int qot_event_compare(int id, struct qot_compare_event *event);
 
-// Register the existence of a timer pin
-int32_t qot_event_capture(int32_t id, struct qot_capture_event *event);
+// Unregister the  clock source, oscillators and pins
+int qot_unregister(void);
 
-// Called by driver when a capture event occurs
-int32_t qot_event_compare(int32_t id, struct qot_compare_event *event);
+// FUNCTIONS DESIGNED TO BE CALLED BY THE CLOCK SUBSYSTEM ///////////////////////
 
 // Copy over the read() function and initial mult/shift for projection
 int32_t qot_cyclecounter_init(struct cyclecounter *cc);
-
-// Uncregister the  clock source, oscillators and pins
-int32_t qot_unregister(struct clocksource *clk);
 
 #endif

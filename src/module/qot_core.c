@@ -54,86 +54,6 @@ static struct device *dev_ret;
 // Key data structures
 static struct clocksource *clksrc = NULL;
 
-// EXPORTED FUNCTIONALITY ////////////////////////////////////////////////////////
-
-// Register a clock source as the primary driver of time
-int32_t qot_register(struct clocksource *clksrc)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_register);
-
-// Add an oscillator
-int32_t qot_add_oscillator(struct qot_oscillator* oscillator)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_add_oscillator);
-
-// Register the existence of a timer pin
-int32_t qot_add_compare(int32_t id)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_add_compare);
-
-// Called by driver when a capture event occurs
-int32_t qot_add_capture(int32_t id)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_add_capture);
-
-// Register the existence of a timer pin
-int32_t qot_event_capture(int32_t id, struct qot_capture_event *event)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_event_capture);
-
-// Called by driver when a capture event occurs
-int32_t qot_event_compare(int32_t id, struct qot_compare_event *event)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_event_compare);
-
-// Remap the read query from a cycle counter to a clocksource
-cycle_t qot_read_remap(const struct cyclecounter *cc)
-{
-	if (clksrc)
-		return clksrc->read(clksrc);
-	return 0;
-}
-
-// Copy over the read() function and initial mult/shift for projection
-int32_t qot_cyclecounter_init(struct cyclecounter *cc)
-{
-	// If we have a clock source set
-	if (clksrc)
-	{
-		// Copy over the cycle counter info from the clocksource
-		cc->read  = qot_read_remap;
-		cc->mask  = clksrc->mask;
-		cc->mult  = clksrc->mult;
-		cc->shift = clksrc->shift;
-
-		// Success
-		return 0;
-	}
-
-	// Failure
-	return -1;
-}
-EXPORT_SYMBOL(qot_cyclecounter_init);
-
-// Uncregister the  clock source, oscillators and pins
-int32_t qot_unregister(struct clocksource *clk)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_unregister);
-
 // SCHEDULER IOCTL FUNCTIONALITY /////////////////////////////////////////////////////
 
 static int qot_ioctl_open(struct inode *i, struct file *f)
@@ -237,9 +157,81 @@ static struct file_operations qot_fops = {
     .unlocked_ioctl = qot_ioctl_access
 };
 
+// EXPORTED FUNCTIONALITY ////////////////////////////////////////////////////////
+
+// Register a clock source as the primary driver of time
+int qot_register(struct clocksource *clksrc_in)
+{
+	if (!clksrc_in)
+	{
+		clksrc = clksrc_in;
+		return 0;
+	}	
+	return -1;
+}
+EXPORT_SYMBOL(qot_register);
+
+// Register the existence of a timer pin
+int qot_event_capture(int id, struct qot_capture_event *event)
+{
+	// TO BE IMPLEMENTED
+	return 0;
+}
+EXPORT_SYMBOL(qot_event_capture);
+
+// Called by driver when a capture event occurs
+int qot_event_compare(int id, struct qot_compare_event *event)
+{
+	// TO BE IMPLEMENTED
+	return 0;
+}
+EXPORT_SYMBOL(qot_event_compare);
+
+// Remap the read query from a cycle counter to a clocksource
+cycle_t qot_read_remap(const struct cyclecounter *cc)
+{
+	if (clksrc)
+		return clksrc->read(clksrc);
+	return 0;
+}
+
+// Copy over the read() function and initial mult/shift for projection
+int qot_cyclecounter_init(struct cyclecounter *cc)
+{
+	// If we have a clock source set
+	if (clksrc)
+	{
+		// Copy over the cycle counter info from the clocksource
+		cc->read  = qot_read_remap;
+		cc->mask  = clksrc->mask;
+		cc->mult  = clksrc->mult;
+		cc->shift = clksrc->shift;
+
+		// Success
+		return 0;
+	}
+
+	// Failure
+	return -1;
+}
+EXPORT_SYMBOL(qot_cyclecounter_init);
+
+// Unregister the clock source
+int qot_unregister(void)
+{
+	if (clksrc)
+	{
+		clksrc = NULL;
+		return 0;
+	}	
+	return -1;
+}
+EXPORT_SYMBOL(qot_unregister);
+
+
 // MODULE LOAD AND UNLOAD ////////////////////////////////////////////////////////
 
-int32_t qot_init(void)
+int qot_init(void)
 {
 	int32_t ret;
 

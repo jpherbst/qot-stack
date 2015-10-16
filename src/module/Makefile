@@ -1,9 +1,6 @@
 obj-m += qot.o
 qot-objs += qot_core.o qot_timeline.o qot_clock.o
-#obj-m += qot_am335x.o
-#obj-m += qot_am335x_chronos.o
-#obj-m += qot_am335x_lowpower.o
-#obj-m += qot_am335x_gpsdo.o
+obj-m += qot_am335x.o
 
 KERNELDIR ?= /lib/modules/$(shell uname -r)
 

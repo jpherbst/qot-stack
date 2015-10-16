@@ -305,14 +305,14 @@ free_clock:
 }
 
 // Set the target accuracy of a clock
-int qot_clock_set_target(int index, struct qot_metric *metric)
+int qot_clock_set_target(int index, uint64_t acc, uint64_t res)
 {
 	// Grab the binding from the ID
 	struct qot_clock *clk = idr_find(&idr_clocks, index);
 	if (!clk)
 		return -1;
-	clk->target.acc = metric->acc;
-	clk->target.res = metric->res;
+	clk->target.acc = acc;
+	clk->target.res = res;
 	return 0;
 }
 

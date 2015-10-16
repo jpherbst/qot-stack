@@ -48,11 +48,10 @@ qot_am335x {
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/interrupt.h>
-
-// Clock related kernel stuff
-#include <linux/workqueue.h>
+#include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/clocksource.h>
+#include <linux/workqueue.h>
 
 // Module information
 #define MODULE_NAME "qot_am335x"
@@ -67,6 +66,7 @@ qot_am335x {
 
 // QoT kernel API
 #include "qot.h"
+#include "qot_core.h"
 
 // FORWARD DELCLARATIONS /////////////////////////////////////////////////////////
 
@@ -80,35 +80,11 @@ struct qot_am335x_data {
 	struct omap_dm_timer *timer7;
 };
 
-// Stores a capture event for future processing
-struct qot_am335x_capture {
-	struct qot_capture_event event;
-	struct work_struct capture_work;
-};
-
-// Stateless queue for capture events	
-static struct workqueue_struct *queue_capture;
-
-// Allow compilation on (x86 type systems)
+// Allow compilation on x86 type systems
 extern struct device_node *of_find_node_by_phandle(phandle handle);
 
 // Lock to protect asynchronous IRQ events from colliding
 static DEFINE_SPINLOCK(qot_am335x_lock);
-
-// DEFERRED WORK ////////////////////////////////////////////////////////////////////
-
-static void qot_am335x_captue_work(struct work_struct *work)
-{
-	// Extract the capture information
-	struct qot_am335x_capture *capture
-		= container_of(work, struct qot_am335x_capture, capture_work);
-	
-	// Pass the capture up to the HAL
-	qot_capture(&capture->event);
-	
-	// Free the memory used by this work
-	kfree(capture);
-}
 
 // REGISTER SETUP FOR TIMERS ////////////////////////////////////////////////////////
 
@@ -179,96 +155,12 @@ static void omap_dm_timer_setup_compare(struct omap_dm_timer *timer)
 	omap_dm_timer_start(timer);
 }
 
-
-// This function
-
-static void qot_am_event_scheduler(struct roseline_clock_data *pdata, int type)
-{
-	uint32_t h, l;
-	u32 load, match, value;
-
-	// Optimization: don't bother checking compare timer that's disabled
-	if (!pdata->comp.enable)
-	{
-		// Stop any events from occuring
-		__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_LOAD_REG,  0, pdata->compare_timer->posted);
-		__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_MATCH_REG, 0, pdata->compare_timer->posted);
-		pdata->compare_timer->context.tmar = 0;
-		pdata->compare_timer->context.tldr = 0;
-
-		// Success
-		return;
-	}
-
-	// If a match has just been fired
-	switch (type)
-	{
-	// Both the initialization and the capture overflow cases do the same thing.
-	// The objective is to check whether we need to schedule a load / match in
-	// the current 32bit timer period 
-	case FROM_INIT:
-
-		// We need to increment this to get expected behaviour
-		if (pdata->comp.limit > 0) 
-			pdata->comp.limit++;
-
-	case FROM_CAPTURE_OVERFLOW:
-
-		// Find the high and low bits of the timer
-		h = (pdata->comp.next >> 32);
-		l = (pdata->comp.next);
-
-		// If the event must occur in the current overflow
-		if (h == pdata->capt.overflow)
-		{	
-			// Set load and match
-			load  = -(pdata->comp.cycles_high + pdata->comp.cycles_low);
-			match = -(pdata->comp.cycles_low);
-			value = __omap_dm_timer_read(pdata->capture_timer, OMAP_TIMER_COUNTER_REG, pdata->capture_timer->posted) - l + KLUDGE_FACTOR;
-			__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_COUNTER_REG, value, pdata->compare_timer->posted);
-			__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_LOAD_REG, load, pdata->compare_timer->posted);
-			__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_MATCH_REG, match, pdata->compare_timer->posted);
-			pdata->compare_timer->context.tcrr = value;
-			pdata->compare_timer->context.tmar = match;
-			pdata->compare_timer->context.tldr = load;		
-		}
-
-		break;
-
-	// If a match has just been fired, it means that we have transitioned from a high to
-	// a low PWM cycle. We need to check how many cycles were requested by the user. If 
-	// we have reached that number, we need to turn disable the timer to prevent
-	case FROM_COMPARE_MATCH:
-
-		// A pdata->comp.limit = zero indicates an infinite loop. So, we need to 
-		// disable the PWM. We do this by setting enable = 0.
-		if (pdata->comp.limit > 1)
-			pdata->comp.limit--;
-		else if (pdata->comp.limit == 1)
-		{
-			// Reset load and match to stop toggles
-			load  = 0;
-			match = 0;
-			__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_LOAD_REG,  load,  pdata->compare_timer->posted);
-			__omap_dm_timer_write(pdata->compare_timer, OMAP_TIMER_MATCH_REG, match, pdata->compare_timer->posted);
-			pdata->compare_timer->context.tmar = match;
-			pdata->compare_timer->context.tldr = load;
-			omap_dm_timer_trigger(pdata->compare_timer);
-			pdata->comp.enable = 0;
-		}
-		
-		break;
-
-	}
-}
-
 // Interrupt handler for compare timers
 static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 {
 	unsigned long flags;
 	unsigned int irq_status;
 	struct omap_dm_timer *timer = data;
-	struct qot_am335x_capture *capture;
 
 	spin_lock_irqsave(&qot_am335x_lock, flags);
 
@@ -278,6 +170,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was a capture event
 	if (irq_status & OMAP_TIMER_INT_CAPTURE)
 	{
+		/*
 		// Alloate work memeory
 		capture = (struct qot_am335x_capture*) 
 			kmalloc(sizeof(struct qot_am335x_capture), GFP_KERNEL)
@@ -294,17 +187,20 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 
 		// Enqueue the work for processing by the top half
 		queue_work(queue_capture, &capture->work);
+		*/
 	}
 
 	// If this was an overflow event
 	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
 	{
+		// TODO: deal with overflows
 		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_OVERFLOW);
 	}
 
 	// if this was a match event
 	if (irq_status & OMAP_TIMER_INT_MATCH)
 	{
+		// TODO: deal with matches
 		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_MATCH);
 	}
 
@@ -355,7 +251,7 @@ static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am3
 {
     omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
     omap_dm_timer_set_int_disable(timer, 
-    	OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_COMPARE| OMAP_TIMER_INT_OVERFLOW);
+    	OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
     free_irq(timer->irq, pdata);
     omap_dm_timer_stop(timer);
     omap_dm_timer_free(timer);
@@ -457,7 +353,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	of_node_put(timer_node);
 
 	// Register the clocksource with the QoT HAL
-	qot_core_register(&pdata->clksrc);
+	qot_register(&pdata->clksrc);
 
 	// Setup the secondary timers (for interrupt processing and generation)
 	for (i = 4; i <= 7; i++)
@@ -495,14 +391,12 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 			omap_dm_timer_setup_compare(timer);
 			omap_dm_timer_use_clk(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
-			qot_register_compare(timer->id);
 		}
 		else
 		{
 			omap_dm_timer_setup_capture(timer, timer_irqcfg);
 			omap_dm_timer_use_clk(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
-			qot_register_capture(timer->id);
 		}
 		switch(i)
 		{
@@ -519,18 +413,6 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	// Return th platform data
 	return pdata;
 }
-
-int qot_am335x_ext_osc_register(struct qot_properties* osc)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_am335x_ext_osc_register);
-
-int qot_am335x_ext_osc_unregister(struct qot_properties* osc)
-{
-	return 0;
-}
-EXPORT_SYMBOL(qot_am335x_ext_osc_unregister);
 
 // MODULE INITIALIZATION //////////////////////////////////////////////////////
 
@@ -562,9 +444,6 @@ static int qot_am335x_probe(struct platform_device *pdev)
 		// Return error if no platform data was allocated
 		if (!pdev->dev.platform_data)
 			return -ENODEV;
-
-		// Create a work queue for event capture
-		queue_capture = create_workqueue("capture");
 	}
 	else
 	{
@@ -587,48 +466,29 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	pdata = pdev->dev.platform_data;
 	if (pdata)
 	{
-		// Flush and destroy the work queues
-		flush_workqueue(queue_capture);
-		destroy_workqueue(queue_capture);
-
 		// Unregister the clock source with the HAL
-		qot_core_unregister(&pdata->clksrc);
+		qot_unregister();
 
 		// Clean up the core timer
-		qot_am335x_clocksource_cleanup(pdata->clksrc);
-		if (core)
-			qot_am335x_timer_cleanup(pdata->core, pdev);
+		qot_am335x_clocksource_cleanup(&pdata->clksrc);
+		if (pdata->core)
+			qot_am335x_timer_cleanup(pdata->core, pdata);
 
 		// Clean up the individual timers
 		if (pdata->timer4) 
-			qot_am335x_timer_cleanup(pdata->timer4, pdev);
+			qot_am335x_timer_cleanup(pdata->timer4, pdata);
 		if (pdata->timer5) 
-			qot_am335x_timer_cleanup(pdata->timer5, pdev);
+			qot_am335x_timer_cleanup(pdata->timer5, pdata);
 		if (pdata->timer6) 
-			qot_am335x_timer_cleanup(pdata->timer6, pdev);
+			qot_am335x_timer_cleanup(pdata->timer6, pdata);
 		if (pdata->timer7) 
-			qot_am335x_timer_cleanup(pdata->timer7, pdev);
+			qot_am335x_timer_cleanup(pdata->timer7, pdata);
 
 		// Free the platform data
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);
 		pdev->dev.platform_data = NULL;
 	}
 	platform_set_drvdata(pdev, NULL);
-
-	/*
-	struct qot_oscillator {
-		.frequency = 24000000,
-		.short_term_stability = 100,
-		.phase_noise = 100,
-		.aging = 100,
-		.temperature_stability = ,
-		.power_consumption = ,
-		.warm_up_time = ,
-		.power_on = ,
-		.power_off = ,
-		.enable = ,
-	};
-	*/
 
 	// Restore IRQs
 	spin_unlock_irqrestore(&qot_am335x_lock, flags);

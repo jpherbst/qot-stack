@@ -34,7 +34,7 @@
 int qot_clock_register(const char *uuid);
 
 // Set the target accuracy of a clock
-int qot_clock_set_target(int index, struct qot_metric *metric);
+int qot_clock_set_target(int index, uint64_t acc, uint64_t res);
 
 // Remove a POSIX clock
 int qot_clock_unregister(int index);

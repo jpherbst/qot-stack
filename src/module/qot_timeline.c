@@ -191,6 +191,8 @@ int qot_destroy_binding(int bid, void *p, void *data)
 {
 	// Cast to find the binding information
 	struct qot_binding *binding = (struct qot_binding *) p;
+	if (!binding)
+		return -1;
 
 	// Remove the entries from the sort tables (ordering will be updated)
 	list_del(&binding->res_list);
@@ -225,13 +227,26 @@ int qot_destroy_binding(int bid, void *p, void *data)
 int qot_timeline_unbind(int bid)
 {
 	// Grab the binding from the ID
-	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	struct qot_binding *binding;
+	struct qot_timeline *timeline;
+
+	// Find the binding associated with the given index
+	binding = idr_find(&idr_bindings, bid);
 	if (!binding)
 		return -1;
+
+	// Find the timeline to which this binding points
+	timeline = binding->timeline;
 
 	// Remove the binding completely
 	qot_destroy_binding(bid, (void *)binding, NULL);
 	
+	// This unbinding may lead to a change in target
+	qot_clock_set_target(timeline->index, 
+		list_entry(timeline->head_res.next, struct qot_binding, res_list)->request.acc,
+		list_entry(timeline->head_res.next, struct qot_binding, res_list)->request.res
+	);
+
 	// Success
 	return 0;
 }
