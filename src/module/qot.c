@@ -1,6 +1,6 @@
 /*
- * @file qot_module.h
- * @brief Linux 4.1.x kernel module for creation anmd destruction of QoT timelines
+ * @file qot_timelines.h
+ * @brief Linux 4.1.6 kernel module for creation anmd destruction of QoT timelines
  * @author Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -24,6 +24,75 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#include <linux/module.h>
+
+// Private structure for maintaining information about a timing system
+struct qot_core {
+	struct clocksource *clksrc;				// Clocksource
+	struct list_head *oscillators;			// List of oscillators
+	struct list_head *capture_pins;			// List of capture pins
+};
+
+// Register the core timer
+int qot_core_register(struct clocksource *clk)
+{
+	return 0;
+}
+EXPORT_SYMBOL(qot_core_register);
+
+// Add an osciallator
+int qot_oscillator_register(struct qot_oscillator* osc)
+{
+	return 0;
+}
+EXPORT_SYMBOL(qot_oscillator_register);
+
+// Unregister the core and remove all oscillators
+void qot_core_unregister(void)
+{
+	return;
+}
+EXPORT_SYMBOL(qot_core_unregister);
+
+
+int qot_init(void)
+{
+	return 0;
+} 
+
+void qot_cleanup(void)
+{
+	return;
+}
+
+// Module definitions
+module_init(qot_init);
+module_exit(qot_cleanup);
+
+// The line below enforces out code to be GPL, because of the POSIX license
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
+MODULE_DESCRIPTION("QoT ioctl driver");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 
 #include <linux/timecounter.h>
 #include <linux/workqueue.h>
@@ -663,3 +732,5 @@ module_exit(qot_cleanup);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
 MODULE_DESCRIPTION("QoT ioctl driver");
+
+*/

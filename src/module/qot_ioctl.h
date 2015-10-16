@@ -30,11 +30,12 @@
 
 #include <linux/ioctl.h>
 
-// Maximum length of the identifier
+// Various system parameters
 #define QOT_MAX_BINDINGS    (65536)
 #define QOT_MAX_UUIDLEN 	(32)
 #define QOT_HASHTABLE_BITS	(16)
-#define QOT_TIMELINE_PREFIX	"/dev/timeline"
+#define QOT_IOCTL_CORE		"qot"
+#define QOT_IOCTL_TIMELINE	"timeline"
 
 // QoT message type 
 struct qot_metric {
@@ -54,14 +55,14 @@ struct qot_message {
 // Magic code specific to our ioctl code
 #define MAGIC_CODE 0xEF
 
-// Interaction with scheduler
+// IOCTL with /dev/qot
 #define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, struct qot_message*)
 #define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 2, struct qot_message*)
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 3, struct qot_message*)
 #define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
 #define QOT_WAIT_UNTIL 			 _IOW(MAGIC_CODE, 5, struct qot_message*)
 
-// Interaction with a timeline
+// IOCTL with /dev/timeline*
 #define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
 #define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 7, struct qot_metric*)
 #define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 8, char*)
