@@ -1,7 +1,7 @@
 /*
- * @file qot_timelines.h
+ * @file qot_clock.h
  * @brief Linux 4.1.6 kernel module for creation and destruction of QoT timelines
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -25,28 +25,19 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _QOT_TIMELINE_H_
-#define _QOT_TIMELINE_H_
+#ifndef _QOT_CLOCK_H_
+#define _QOT_CLOCK_H_
 
-// Bind to a clock called UUID with a given accuracy and resolution
-int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res);
+// Register a POSIX clock and return its index
+int32_t qot_clock_register(void);
 
-// Get the POSIX clock index for a given binding ID
-int32_t qot_timeline_index(int32_t bid);
+// Remove a POSIX clock
+int32_t qot_clock_unregister(int32_t index);
 
-// Unbind from a timeline
-int32_t qot_timeline_unbind(int32_t bid);
+// Initialize the clock engine
+int32_t qot_clock_init(void);
 
-// Update the accuracy of a binding
-int32_t qot_timeline_set_accuracy(int32_t bid, uint64_t acc);
-
-// Update the resolution of a binding
-int32_t qot_timeline_set_resolution(int32_t bid, uint64_t res);
-
-// Initialize the timeline engine
-int32_t qot_timeline_init(void);
-
-// Clean up the timeline engine
-void qot_timeline_cleanup(void);
+// Clean up the clock engine
+void qot_clock_cleanup(void);
 
 #endif
