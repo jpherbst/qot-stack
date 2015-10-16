@@ -28,6 +28,9 @@
 #ifndef _QOT_CORE_H_
 #define _QOT_CORE_H_
 
+// Kernel code required for inclusion by callee
+#include <linux/timecounter.h>
+
 // Basic properties of an oscillator
 struct qot_oscillator {
 	uint64_t frequency;						// Fundamental output frequency
@@ -77,8 +80,8 @@ int32_t qot_event_capture(int32_t id, struct qot_capture_event *event);
 // Called by driver when a capture event occurs
 int32_t qot_event_compare(int32_t id, struct qot_compare_event *event);
 
-// Read the current hardware count of the current clock source
-cycle_t qot_read_count(void);
+// Copy over the read() function and initial mult/shift for projection
+int32_t qot_cyclecounter_init(struct cyclecounter *cc);
 
 // Uncregister the  clock source, oscillators and pins
 int32_t qot_unregister(struct clocksource *clk);

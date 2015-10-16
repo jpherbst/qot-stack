@@ -26,6 +26,7 @@
  */
 
 // Kernel aPIs
+#include <linux/clocksource.h>
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
@@ -97,14 +98,26 @@ int32_t qot_event_compare(int32_t id, struct qot_compare_event *event)
 }
 EXPORT_SYMBOL(qot_event_compare);
 
-// Read the current hardware count of the current clock source
-cycle_t qot_read_count(void)
+// Copy over the read() function and initial mult/shift for projection
+int32_t qot_cyclecounter_init(struct cyclecounter *cc)
 {
-	//if (clksrc)
-	//	return clksrc->read();
-	return 0;
+	// If we have a clock source set
+	if (clksrc)
+	{
+		// Copy over the cycle counter info from the clocksource
+		cc->read  = clksrc->read;
+		cc->mask  = clksrc->mask;
+		cc->mult  = clksrc->mult;
+		cc->shift = clksrc->shift;
+
+		// Success
+		return 0;
+	}
+
+	// Failure
+	return -1;
 }
-EXPORT_SYMBOL(qot_read_count);
+EXPORT_SYMBOL(qot_cyclecounter_init);
 
 // Uncregister the  clock source, oscillators and pins
 int32_t qot_unregister(struct clocksource *clk)

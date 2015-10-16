@@ -33,6 +33,7 @@
 
 // This file includes
 #include "qot.h"
+#include "qot_clock.h"
 #include "qot_timeline.h"
 
 // Stores information about a timeline
@@ -151,8 +152,9 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 		// Copy over the UUID
 		strncpy(bindings[bid]->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
 
-		// Register the QoT clock
-		if (qot_clock_register(bindings[bid]->timeline))
+		// Register a new clock for this timeline
+		bindings[bid]->timeline->index = qot_clock_register();
+		if (bindings[bid]->timeline->index < 0)	
 			return -EACCES;
 
 		// Add the timeline
@@ -197,7 +199,7 @@ int32_t qot_timeline_unbind(int32_t bid)
 		hash_del(&bindings[bid]->timeline->collision_hash);
 
 		// Unregister the QoT clock
-		qot_clock_unregister(bindings[bid]->timeline);
+		qot_clock_unregister(bindings[bid]->timeline->index);
 
 		// Free the timeline entry memory
 		kfree(bindings[bid]->timeline);
