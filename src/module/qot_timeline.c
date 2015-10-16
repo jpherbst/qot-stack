@@ -26,10 +26,13 @@
  */
 
 // Kernel APIs
+#include <linux/idr.h>
 #include <linux/hashtable.h>
 #include <linux/dcache.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/fs.h>
 
 // This file includes
 #include "qot.h"
@@ -48,18 +51,16 @@ struct qot_timeline {
 // Stores information about an application binding to a timeline
 struct qot_binding {
 	struct qot_metric request;			// Requested accuracy and resolution 
-    struct list_head res_list;			// Next resolution 
-    struct list_head acc_list;			// Next accuracy
-    struct list_head list;				// Next binding
+    struct list_head res_list;			// Next resolution (ordered)
+    struct list_head acc_list;			// Next accuracy (ordered)
+    struct list_head list;				// Next binding (gives ability to iterate over all)
     struct qot_timeline* timeline;		// Parent timeline
 };
 
-// Keep track of the next binding ID
-static struct qot_binding *bindings[QOT_MAX_BINDINGS];
-static int32_t binding_next =  0;
-static int32_t binding_last = -1;
+// Use the IDR mechanism to dynamically allocate binding ids and find them quickly
+static struct idr idr_bindings;
 
-// A hash table designed to quickly find timeline based on its UUID
+// A hash table designed to quickly find a timeline based on its UUID
 DEFINE_HASHTABLE(qot_timelines_hash, QOT_HASHTABLE_BITS);
 
 // DATA STRUCTURE MANAGEMENT ///////////////////////////////////////////////////
@@ -71,12 +72,6 @@ static  uint32_t qot_hash_uuid(const char *uuid)
 	while (*uuid)
 		hash = partial_name_hash(*uuid++, hash);
 	return end_name_hash(hash);
-}
-
-// Check to see if bindng is valid
-static uint8_t qot_is_binding_invalid(uint32_t bid)
-{
-	return (bid < 0 || bid >= QOT_MAX_BINDINGS || !bindings[bid]);
 }
 
 // Insert a new binding into the accuracy list
@@ -114,140 +109,157 @@ static inline void qot_insert_list_res(struct qot_binding *binding_list, struct 
 // Bind to a clock called UUID with a given accuracy and resolution
 int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 {	
-	struct qot_timeline *obj;
-	int32_t bid;
+	struct qot_timeline *timeline;
+	struct qot_binding *binding;
+	int bid;
 	uint32_t key;
 
 	// Allocate memory for the new binding
-	bindings[binding_next] = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
-	if (bindings[binding_next] == NULL)
+	binding = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
+	if (binding == NULL)
 		return -ENOMEM;
 
-	// Find the next binding in the sequence, and record the last
-	for (bid = binding_next; binding_next < QOT_MAX_BINDINGS; binding_next++)
-		if (!bindings[binding_next])
-			break;
-	if (binding_last < binding_next)
-		binding_last = binding_next;		
+	// Obtain a new binding ID
+	bid = idr_alloc(&idr_bindings, binding, 0, MINORMASK + 1, GFP_KERNEL);
+	if (bid < 0)
+		goto free_binding;
 
 	// Generate a key for the UUID
 	key = qot_hash_uuid(uuid);
 
 	// Copy over data accuracy and resolution requirements
-	bindings[bid]->request.acc = acc;
-	bindings[bid]->request.res = res;
-	bindings[bid]->timeline = NULL;
+	binding->request.acc = acc;
+	binding->request.res = res;
+	binding->timeline = NULL;
 
 	// Check to see if this hash element exists
-	hash_for_each_possible(qot_timelines_hash, obj, collision_hash, key)
-		if (!strcmp(obj->uuid, uuid))
-			bindings[bid]->timeline = obj;
+	hash_for_each_possible(qot_timelines_hash, timeline, collision_hash, key)
+		if (!strcmp(timeline->uuid, uuid)) binding->timeline = timeline;
 
 	// If the hash element does not exist, add it
-	if (!bindings[bid]->timeline)
+	if (!binding->timeline)
 	{
 		// If we get to this point, there is no corresponding UUID in the hash
-		bindings[bid]->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
+		binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 		
 		// Copy over the UUID
-		strncpy(bindings[bid]->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
+		strncpy(binding->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
 
 		// Register a new clock for this timeline
-		bindings[bid]->timeline->index = qot_clock_register();
-		if (bindings[bid]->timeline->index < 0)	
-			return -EACCES;
+		binding->timeline->index = qot_clock_register();
+		if (binding->timeline->index < 0)	
+			goto free_timeline;
 
 		// Add the timeline
-		hash_add(qot_timelines_hash, &bindings[bid]->timeline->collision_hash, key);
+		hash_add(qot_timelines_hash, &binding->timeline->collision_hash, key);
 
 		// Initialize list heads
-		INIT_LIST_HEAD(&bindings[bid]->timeline->head_acc);
-		INIT_LIST_HEAD(&bindings[bid]->timeline->head_res);
+		INIT_LIST_HEAD(&binding->timeline->head_acc);
+		INIT_LIST_HEAD(&binding->timeline->head_res);
 	}
 
 	// In both cases, we must insert and sort the two linked lists
-	qot_insert_list_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
-	qot_insert_list_res(bindings[bid], &bindings[bid]->timeline->head_res);
+	qot_insert_list_acc(binding, &binding->timeline->head_acc);
+	qot_insert_list_res(binding, &binding->timeline->head_res);
 
+	// Success
 	return 0;
+
+// If there is a problem at any point
+free_timeline:
+	kfree(binding->timeline);
+
+free_binding:
+	kfree(binding);
+	return -1;
 }
 
-// Get POSIX clock index for a timeline
-int32_t qot_timeline_index(int32_t bid)
+// Completely destroy a binding
+int qot_destroy_binding(int id, void *p, void *data)
 {
-	if (qot_is_binding_invalid(bid))
-		return -1;
-	return bindings[bid]->timeline->index;
-}
-
-// Unbind from a timeline
-int32_t qot_timeline_unbind(int32_t bid)
-{
-	if (qot_is_binding_invalid(bid))
-		return -1;
+	// Cast to find the binding information
+	struct qot_binding *binding = (struct qot_binding *) p;
 
 	// Remove the entries from the sort tables (ordering will be updated)
-	list_del(&bindings[bid]->res_list);
-	list_del(&bindings[bid]->acc_list);
+	list_del(&binding->res_list);
+	list_del(&binding->acc_list);
 
 	// If we have removed the last binding from a timeline, then the lists
 	// associated with the timeline should both be empty
-	if (	list_empty(&bindings[bid]->timeline->head_acc) 
-		&&  list_empty(&bindings[bid]->timeline->head_res))
+	if (	list_empty(&binding->timeline->head_acc) 
+		&&  list_empty(&binding->timeline->head_res))
 	{
 		// Remove element from the hashmap
-		hash_del(&bindings[bid]->timeline->collision_hash);
+		hash_del(&binding->timeline->collision_hash);
 
 		// Unregister the QoT clock
-		qot_clock_unregister(bindings[bid]->timeline->index);
+		qot_clock_unregister(binding->timeline->index);
 
 		// Free the timeline entry memory
-		kfree(bindings[bid]->timeline);
+		kfree(binding->timeline);
 	}
 
 	// Free the memory used by this binding
-	kfree(bindings[bid]);
+	kfree(binding);
 
-	// Update the binding list
-	if (bid < binding_next)
-		binding_next = bid;		
+	// Remove the binding ID form the list
+	idr_remove(&idr_bindings, id);
 
 	// Success
 	return 0;
 }
 
-// Update the accuracy of a binding
-int32_t qot_timeline_set_accuracy(int32_t bid, uint64_t acc)
+// Unbind from a timeline
+int32_t qot_timeline_unbind(int bid)
 {
-	if (qot_is_binding_invalid(bid))
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
+
+	// Remove the binding completely
+	qot_destroy_binding(bid, (void *)binding, NULL);
+	
+	// Success
+	return 0;
+}
+
+// Update the accuracy of a binding
+int32_t qot_timeline_set_accuracy(int bid, uint64_t acc)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
 		return -1;
 
 	// Copy over the accuracy
-	bindings[bid]->request.acc = acc;
+	binding->request.acc = acc;
 
 	// Delete the item from the list
-	list_del(&bindings[bid]->acc_list);
+	list_del(&binding->acc_list);
 
 	// Add the item back into the list at the correct point
-	qot_insert_list_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
+	qot_insert_list_acc(binding, &binding->timeline->head_acc);
 
 	return 0;
 }
 
 // Update the resolution of a binding
-int32_t qot_timeline_set_resolution(int32_t bid, uint64_t res)
+int32_t qot_timeline_set_resolution(int bid, uint64_t res)
 {
-	if (qot_is_binding_invalid(bid))
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
 		return -1;
 
 	// Copy over the resolution
-	bindings[bid]->request.res = res;
+	binding->request.res = res;
 
 	// Delete the item from the list
-	list_del(&bindings[bid]->res_list);
+	list_del(&binding->res_list);
 
 	// Add the item back into the list at the correct point
-	qot_insert_list_res(bindings[bid], &bindings[bid]->timeline->head_res);
+	qot_insert_list_res(binding, &binding->timeline->head_res);
 
 	return 0;
 }
@@ -255,14 +267,19 @@ int32_t qot_timeline_set_resolution(int32_t bid, uint64_t res)
 // Initialize the timeline system
 int32_t qot_timeline_init(void)
 {
+	// Allocates clock ids
+	idr_init(&idr_bindings);
+
+	// Success
 	return 0;
 } 
 
 // Cleanup the timeline system
 void qot_timeline_cleanup(void)
 {
-	// Remove all bindings and timelines
-	int bid;
-	for (bid = 0; bid <= binding_last; bid++)
-		qot_timeline_unbind(bid);
+	// Desttroy every binding
+	idr_for_each(&idr_bindings, qot_destroy_binding, NULL);
+
+	// Allocates clock ids
+	idr_destroy(&idr_bindings);
 }

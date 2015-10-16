@@ -29,13 +29,13 @@
 #define _QOT_CLOCK_H_
 
 // Register a POSIX clock and return its index
-int32_t qot_clock_register(void);
+int qot_clock_register(void);
 
 // Remove a POSIX clock
-int32_t qot_clock_unregister(int32_t index);
+int qot_clock_unregister(int index);
 
 // Initialize the clock engine
-int32_t qot_clock_init(void);
+int qot_clock_init(void);
 
 // Clean up the clock engine
 void qot_clock_cleanup(void);

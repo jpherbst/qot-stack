@@ -26,6 +26,7 @@
  */
 
 // Kernel APIs
+#include <linux/idr.h>
 #include <linux/list.h>
 #include <linux/workqueue.h>
 #include <linux/timecounter.h>
@@ -52,7 +53,6 @@
 
 // Stores sufficient information
 struct qot_clock {
-    int index;                      	// Index in clock map (X in /dev/timelineX)
     struct device *dev;					// Parent device of the clock
     dev_t devid;						// Device identifier
     struct posix_clock clock;			// The POSIX clock 
@@ -61,18 +61,14 @@ struct qot_clock {
 	uint32_t cc_mult; 					// Nominal frequency
 	int32_t dialed_frequency; 			// Frequency adjustment memory
 	struct delayed_work overflow_work;	// Periodic overflow checking
-    struct list_head list;				// Keep a list of clocks
 };
-
-// Head of the clock list
-static LIST_HEAD(clock_list);
 
 // Required for character devices
 static dev_t qot_clock_devt;
 static struct class *qot_clock_class;
 
-// Create a clock map
-DEFINE_IDA(qot_clocks_map);
+// Use the IDR mechanism to dynamically allocate clock ids and find them quickly
+static struct idr idr_clocks;
 
 // SOFTWARE-BASED TIME DISCIPLINE //////////////////////////////////////////////
 
@@ -222,8 +218,7 @@ static struct posix_clock_operations qot_clock_ops = {
 
 static void qot_clock_delete(struct posix_clock *pc)
 {
-	struct qot_clock *clk = container_of(pc, struct qot_clock, clock);
-	ida_simple_remove(&qot_clocks_map, clk->index);
+	// Don't do anything
 }
 
 static void qot_overflow_check(struct work_struct *work)
@@ -237,18 +232,19 @@ static void qot_overflow_check(struct work_struct *work)
 // FUNCTIONS DESIGNED TO BE CALLED FROM TIMELINE /////////////////////////////////////////
 
 // Register a clock
-int32_t qot_clock_register(void)
+int qot_clock_register(void)
 {	
 	struct qot_clock* clk;
+	int index;
 
 	// Try and allocate some memory
 	clk = kzalloc(sizeof(struct qot_clock), GFP_KERNEL);
 	if (clk == NULL)
 		return -1;
 
-	// Get an index for this clock ID
-	clk->index = ida_simple_get(&qot_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
-	if (clk->index < 0)
+	// Obtain a new binding ID
+	index = idr_alloc(&idr_clocks, clk, 0, MINORMASK + 1, GFP_KERNEL);
+	if (index < 0)
 		goto free_clock;
 
 	// Initialize a cycle counter with the info from the QoT core clock an initial 
@@ -264,8 +260,8 @@ int32_t qot_clock_register(void)
 	// Create a new character device for the clock
 	clk->clock.ops = qot_clock_ops;
 	clk->clock.release = qot_clock_delete;	
-	clk->devid = MKDEV(MAJOR(qot_clock_devt), clk->index);
-	clk->dev = device_create(qot_clock_class, NULL, clk->devid, clk, "timeline%d", clk->index);
+	clk->devid = MKDEV(MAJOR(qot_clock_devt), index);
+	clk->dev = device_create(qot_clock_class, NULL, clk->devid, clk, "timeline%d", index);
 	if (IS_ERR(clk->dev))
 		goto free_clock;
 
@@ -276,11 +272,8 @@ int32_t qot_clock_register(void)
 	if (posix_clock_register(&clk->clock, clk->devid))
 		goto free_device;
 
-	// Add the new clock onto the list
-	list_add(&clk->list, &clock_list);
-
 	// Success
-	return clk->index;
+	return index;
 
 free_device:
 	device_destroy(qot_clock_class, clk->devid);
@@ -289,42 +282,47 @@ free_clock:
 	return -2;
 }
 
-// Unregister a clock
-int32_t qot_clock_unregister(int32_t index)
+
+// Completely destroy a binding
+int qot_destroy_clock(int id, void *p, void *data)
 {
-	// If there are no clocks in the list, we can't do anything
-	struct qot_clock *clk;
-	struct list_head *pos, *q;
-	list_for_each_safe(pos, q, &clock_list)
-	{	
-		clk = list_entry(pos, struct qot_clock, list);
-		if (clk->index == index)
-		{
-			// Delete the list item
-			list_del(pos);
+	// Cast to find the binding information
+	struct qot_clock *clk = (struct qot_clock *) p;
 
-			// Release clock resources
-			device_destroy(qot_clock_class, clk->devid);
+	// Release clock resources
+	device_destroy(qot_clock_class, clk->devid);
 
-			// Unregister clock
-			posix_clock_unregister(&clk->clock);
+	// Unregister clock
+	posix_clock_unregister(&clk->clock);
 
-			// Free the memory
-			kfree(clk);
+	// Remove the binding ID form the list
+	idr_remove(&idr_clocks, id);
 
-			// Success
-			return 0;
-		}
-	}
+	// Success
+	return 0;
+}
 
-	// Failure
-	return -1;
+// Unregister a clock
+int qot_clock_unregister(int index)
+{
+	// Grab the binding from the ID
+	struct qot_clock *clk = idr_find(&idr_clocks, index);
+	if (!clk)
+		return -1;
+
+	// Success
+	return qot_destroy_clock(index, (void *)clk, NULL);
 }
 
 // Initialize the clock subsystem
-int32_t qot_clock_init(void)
+int qot_clock_init(void)
 {
-	int32_t ret;
+	int ret;
+
+	// Allocates clock ids
+	idr_init(&idr_clocks);
+	
+	// Create a device class for posix clock character devices
 	qot_clock_class = class_create(THIS_MODULE, MODULE_NAME);
 	if (IS_ERR(qot_clock_class))
 		return PTR_ERR(qot_clock_class);
@@ -340,29 +338,13 @@ int32_t qot_clock_init(void)
 // Cleanup the clock subsystem
 void qot_clock_cleanup(void)
 {
-    // Remove all posix clocks 
-	struct qot_clock *clk;
-	struct list_head *pos, *q;
-	list_for_each_safe(pos, q, &clock_list)
-	{	
-		// Grab the clock information
-		clk = list_entry(pos, struct qot_clock, list);
-		
-		// Delete the list item
-		list_del(pos);
+	// Desttroy every binding
+	idr_for_each(&idr_clocks, qot_destroy_clock, NULL);
 
-		// Release clock resources
-		device_destroy(qot_clock_class, clk->devid);
-
-		// Unregister clock
-		posix_clock_unregister(&clk->clock);
-
-		// Free the memory
-		kfree(clk);
-	}
+	// Allocates clock ids
+	idr_destroy(&idr_clocks);
 
 	// Remove the clock class
     class_destroy(qot_clock_class);
 	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
-	ida_destroy(&qot_clocks_map);
 }

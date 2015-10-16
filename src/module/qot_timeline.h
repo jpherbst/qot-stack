@@ -32,16 +32,16 @@
 int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res);
 
 // Get the POSIX clock index for a given binding ID
-int32_t qot_timeline_index(int32_t bid);
+int32_t qot_timeline_index(int bid);
 
 // Unbind from a timeline
-int32_t qot_timeline_unbind(int32_t bid);
+int32_t qot_timeline_unbind(int bid);
 
 // Update the accuracy of a binding
-int32_t qot_timeline_set_accuracy(int32_t bid, uint64_t acc);
+int32_t qot_timeline_set_accuracy(int bid, uint64_t acc);
 
 // Update the resolution of a binding
-int32_t qot_timeline_set_resolution(int32_t bid, uint64_t res);
+int32_t qot_timeline_set_resolution(int bid, uint64_t res);
 
 // Initialize the timeline engine
 int32_t qot_timeline_init(void);
