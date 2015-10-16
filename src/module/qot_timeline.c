@@ -1,5 +1,5 @@
 /*
- * @file qot_timelines.h
+ * @file qot_timelines.c
  * @brief Linux 4.1.6 kernel module for creation anmd destruction of QoT timelines
  * @author Fatima Anwar 
  * 
@@ -25,50 +25,302 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// Kernel APIs
+#include <linux/hashtable.h>
+#include <linux/dcache.h>
 #include <linux/module.h>
+#include <linux/device.h>
+#include <linux/cdev.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/posix-clock.h>
 
-// Private structure for maintaining information about a timing system
-struct qot_core {
-	struct clocksource *clksrc;				// Clocksource
-	struct list_head *oscillators;			// List of oscillators
-	struct list_head *capture_pins;			// List of capture pins
+// This file includes
+#include "qot.h"
+#include "qot_timeline.h"
+
+// General module information
+#define MODULE_NAME "timeline"
+#define FIRST_MINOR 0
+#define MINOR_CNT   1
+
+// Required for character devices
+static dev_t qot_clock_devt;
+static struct class *qot_clock_class;
+
+// Stores information about a timeline
+struct qot_timeline {
+    char uuid[QOT_MAX_UUIDLEN];			// Unique id for this timeline
+    struct hlist_node collision_hash;	// Pointer to next timeline with common hash key
+    struct list_head head_acc;			// Head pointing to maximum accuracy structure
+    struct list_head head_res;			// Head pointing to maximum resolution structure
+    int index;							// POSIX clock index
 };
 
-// Register the core timer
-int qot_core_register(struct clocksource *clk)
+// Stores information about an application binding to a timeline
+struct qot_binding {
+	struct qot_metric request;			// Requested accuracy and resolution 
+    struct list_head res_list;			// Next resolution 
+    struct list_head acc_list;			// Next accuracy
+    struct list_head list;				// Next binding
+    struct qot_timeline* timeline;		// Parent timeline
+};
+
+// Keep track of the next binding ID
+static struct qot_binding *bindings[QOT_MAX_BINDINGS];
+static int32_t binding_next =  0;
+static int32_t binding_last = -1;
+
+// Create a clock map
+DEFINE_IDA(qot_clocks_map);
+
+// A hash table designed to quickly find timeline based on its UUID
+DEFINE_HASHTABLE(qot_timelines_hash, QOT_HASHTABLE_BITS);
+
+// POSIX CLOCK CREATION AND DESTRUCTION ////////////////////////////////////////
+
+static int qot_clock_register(struct qot_timeline* timeline)
 {
+	// Success
 	return 0;
 }
-EXPORT_SYMBOL(qot_core_register);
 
-// Add an osciallator
-int qot_oscillator_register(struct qot_oscillator* osc)
+static int qot_clock_unregister(struct qot_timeline* timeline)
 {
+	// Release clock resources
 	return 0;
 }
-EXPORT_SYMBOL(qot_oscillator_register);
 
-// Unregister the core and remove all oscillators
-void qot_core_unregister(void)
+// DATA STRUCTURE MANAGEMENT ///////////////////////////////////////////////////
+
+// Generate an unsigned int hash from a null terminated string
+static  uint32_t qot_hash_uuid(const char *uuid)
 {
-	return;
+	uint32_t hash = init_name_hash();
+	while (*uuid)
+		hash = partial_name_hash(*uuid++, hash);
+	return end_name_hash(hash);
 }
-EXPORT_SYMBOL(qot_core_unregister);
 
-
-int qot_init(void)
+// Check to see if bindng is valid
+static uint8_t qot_is_binding_invalid(uint32_t bid)
 {
+	return (bid < 0 || bid >= QOT_MAX_BINDINGS || !bindings[bid]);
+}
+
+// Insert a new binding into the accuracy list
+static inline void qot_insert_list_acc(struct qot_binding *binding_list, struct list_head *head)
+{
+	struct qot_binding *bind_obj;
+	list_for_each_entry(bind_obj, head, acc_list)
+	{
+		if (bind_obj->request.acc > binding_list->request.acc)
+		{
+			list_add_tail(&binding_list->acc_list, &bind_obj->acc_list);
+			return;
+		}
+	}
+	list_add_tail(&binding_list->acc_list, head);
+}
+
+// Insert a new binding into the resolution list
+static inline void qot_insert_list_res(struct qot_binding *binding_list, struct list_head *head)
+{
+	struct qot_binding *bind_obj;
+	list_for_each_entry(bind_obj, head, res_list)
+	{
+		if (bind_obj->request.res > binding_list->request.res)
+		{
+			list_add_tail(&binding_list->res_list, &bind_obj->res_list);
+			return;
+		}
+	}
+	list_add_tail(&binding_list->res_list, head);
+}
+
+// EXPORTED FUNCTIONALITY ////////////////////////////////////////////////////////
+
+// Bind to a clock called UUID with a given accuracy and resolution
+int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
+{	
+	struct qot_timeline *obj;
+	int32_t bid;
+	uint32_t key;
+
+	// Allocate memory for the new binding
+	bindings[binding_next] = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
+	if (bindings[binding_next] == NULL)
+		return -ENOMEM;
+
+	// Find the next binding in the sequence, and record the last
+	for (bid = binding_next; binding_next < QOT_MAX_BINDINGS; binding_next++)
+		if (!bindings[binding_next])
+			break;
+	if (binding_last < binding_next)
+		binding_last = binding_next;		
+
+	// Generate a key for the UUID
+	key = qot_hash_uuid(uuid);
+
+	// Copy over data accuracy and resolution requirements
+	bindings[bid]->request.acc = acc;
+	bindings[bid]->request.res = res;
+	bindings[bid]->timeline = NULL;
+
+	// Check to see if this hash element exists
+	hash_for_each_possible(qot_timelines_hash, obj, collision_hash, key)
+		if (!strcmp(obj->uuid, uuid))
+			bindings[bid]->timeline = obj;
+
+	// If the hash element does not exist, add it
+	if (!bindings[bid]->timeline)
+	{
+		// If we get to this point, there is no corresponding UUID in the hash
+		bindings[bid]->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
+		
+		// Copy over the UUID
+		strncpy(bindings[bid]->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
+
+		// Register the QoT clock
+		if (qot_clock_register(bindings[bid]->timeline))
+			return -EACCES;
+
+		// Add the timeline
+		hash_add(qot_timelines_hash, &bindings[bid]->timeline->collision_hash, key);
+
+		// Initialize list heads
+		INIT_LIST_HEAD(&bindings[bid]->timeline->head_acc);
+		INIT_LIST_HEAD(&bindings[bid]->timeline->head_res);
+	}
+
+	// In both cases, we must insert and sort the two linked lists
+	qot_insert_list_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
+	qot_insert_list_res(bindings[bid], &bindings[bid]->timeline->head_res);
+
+	return 0;
+}
+EXPORT_SYMBOL(qot_timeline_bind);
+
+// Get POSIX clock index for a timeline
+int32_t qot_timeline_index(int32_t bid)
+{
+	if (qot_is_binding_invalid(bid))
+		return -1;
+	return bindings[bid]->timeline->index;
+}
+EXPORT_SYMBOL(qot_timeline_index);
+
+// Unbind from a timeline
+int32_t qot_timeline_unbind(int32_t bid)
+{
+	if (qot_is_binding_invalid(bid))
+		return -1;
+
+	// Remove the entries from the sort tables (ordering will be updated)
+	list_del(&bindings[bid]->res_list);
+	list_del(&bindings[bid]->acc_list);
+
+	// If we have removed the last binding from a timeline, then the lists
+	// associated with the timeline should both be empty
+	if (	list_empty(&bindings[bid]->timeline->head_acc) 
+		&&  list_empty(&bindings[bid]->timeline->head_res))
+	{
+		// Remove element from the hashmap
+		hash_del(&bindings[bid]->timeline->collision_hash);
+
+		// Unregister the QoT clock
+		qot_clock_unregister(bindings[bid]->timeline);
+
+		// Free the timeline entry memory
+		kfree(bindings[bid]->timeline);
+	}
+
+	// Free the memory used by this binding
+	kfree(bindings[bid]);
+
+	// Update the binding list
+	if (bid < binding_next)
+		binding_next = bid;		
+
+	// Success
+	return 0;
+}
+EXPORT_SYMBOL(qot_timeline_unbind);
+
+// Update the accuracy of a binding
+int32_t qot_timeline_set_accuracy(int32_t bid, uint64_t acc)
+{
+	if (qot_is_binding_invalid(bid))
+		return -1;
+
+	// Copy over the accuracy
+	bindings[bid]->request.acc = acc;
+
+	// Delete the item from the list
+	list_del(&bindings[bid]->acc_list);
+
+	// Add the item back into the list at the correct point
+	qot_insert_list_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
+
+	return 0;
+}
+EXPORT_SYMBOL(qot_timeline_set_accuracy);
+
+// Update the resolution of a binding
+int32_t qot_timeline_set_resolution(int32_t bid, uint64_t res)
+{
+	if (qot_is_binding_invalid(bid))
+		return -1;
+
+	// Copy over the resolution
+	bindings[bid]->request.res = res;
+
+	// Delete the item from the list
+	list_del(&bindings[bid]->res_list);
+
+	// Add the item back into the list at the correct point
+	qot_insert_list_res(bindings[bid], &bindings[bid]->timeline->head_res);
+
+	return 0;
+}
+EXPORT_SYMBOL(qot_timeline_set_resolution);
+
+// MODULE LOAD AND UNLOAD ////////////////////////////////////////////////////////
+
+int32_t qot_timelines_init(void)
+{
+	int32_t ret;
+
+    // Initilize device class for timelines
+	qot_clock_class = class_create(THIS_MODULE, MODULE_NAME);
+	if (IS_ERR(qot_clock_class))
+		return PTR_ERR(qot_clock_class);
+	ret = alloc_chrdev_region(&qot_clock_devt, 0, MINORMASK + 1, MODULE_NAME);
+	if (ret < 0)
+	{
+		class_destroy(qot_clock_class);	
+		return 1;
+	}
+
 	return 0;
 } 
 
-void qot_cleanup(void)
+void qot_timelines_cleanup(void)
 {
-	return;
+	// Remove all bindings and timelines
+	int bid;
+	for (bid = 0; bid <= binding_last; bid++)
+		qot_timeline_unbind(bid);
+
+    // Remove all posix clocks 
+    class_destroy(qot_clock_class);
+	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
+	ida_destroy(&qot_clocks_map);
 }
 
 // Module definitions
-module_init(qot_init);
-module_exit(qot_cleanup);
+module_init(qot_timelines_init);
+module_exit(qot_timelines_cleanup);
 
 // The line below enforces out code to be GPL, because of the POSIX license
 MODULE_LICENSE("GPL");
@@ -518,7 +770,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -ENOMEM;
 
 		// Find the next available binding (not necessarily contiguous)
-		for (msg.bid = binding_next; binding_next <= QOT_MAX_BINDINGS; binding_next++)
+		for (bid = binding_next; binding_next <= QOT_MAX_BINDINGS; binding_next++)
 			if (!bindings[binding_next])
 				break;
 
@@ -527,47 +779,47 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			binding_size = binding_next;		
 
 		// Copy over data accuracy and resolution requirements
-		bindings[msg.bid]->request.acc = msg.request.acc;
-		bindings[msg.bid]->request.res = msg.request.res;
+		bindings[bid]->request.acc = request.acc;
+		bindings[bid]->request.res = request.res;
 
 		// Generate a key for the UUID
-		key = qot_hash_uuid(msg.uuid);
+		key = qot_hash_uuid(uuid);
 
 		// Presume non-existent until found
-		bindings[msg.bid]->timeline = NULL;
+		bindings[bid]->timeline = NULL;
 
 		// Check to see if this hash element exists
 		hash_for_each_possible(qot_timelines_hash, obj, collision_hash, key)
-			if (!strcmp(obj->uuid, msg.uuid))
-				bindings[msg.bid]->timeline = obj;
+			if (!strcmp(obj->uuid, uuid))
+				bindings[bid]->timeline = obj;
 
 		// If the hash element does not exist, add it
-		if (!bindings[msg.bid]->timeline)
+		if (!bindings[bid]->timeline)
 		{
 			// If we get to this point, there is no corresponding UUID in the hash
-			bindings[msg.bid]->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
+			bindings[bid]->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 			
 			// Copy over the UUID
-			strncpy(bindings[msg.bid]->timeline->uuid, msg.uuid, QOT_MAX_UUIDLEN);
+			strncpy(bindings[bid]->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
 
 			// Register the QoT clock
-			if (qot_clock_register(bindings[msg.bid]->timeline))
+			if (qot_clock_register(bindings[bid]->timeline))
 				return -EACCES;
 
 			// Save the clock index for the user
-			msg.tid = bindings[msg.bid]->timeline->index;
+			tid = bindings[bid]->timeline->index;
 
 			// Add the timeline
-			hash_add(qot_timelines_hash, &bindings[msg.bid]->timeline->collision_hash, key);
+			hash_add(qot_timelines_hash, &bindings[bid]->timeline->collision_hash, key);
 
 			// Initialize list heads
-			INIT_LIST_HEAD(&bindings[msg.bid]->timeline->head_acc);
-			INIT_LIST_HEAD(&bindings[msg.bid]->timeline->head_res);
+			INIT_LIST_HEAD(&bindings[bid]->timeline->head_acc);
+			INIT_LIST_HEAD(&bindings[bid]->timeline->head_res);
 		}
 
 		// In both cases, we must insert and sort the two linked lists
-		qot_add_acc(bindings[msg.bid], &bindings[msg.bid]->timeline->head_acc);
-		qot_add_res(bindings[msg.bid], &bindings[msg.bid]->timeline->head_res);
+		qot_add_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
+		qot_add_res(bindings[bid], &bindings[bid]->timeline->head_res);
 
 		// Send back the data structure with the new binding and clock info
 		if (copy_to_user((struct qot_message*)arg, &msg, sizeof(struct qot_message)))
@@ -582,15 +834,15 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Sanity check
-		if (msg.bid < 0 || msg.bid > QOT_MAX_BINDINGS || !bindings[msg.bid])
+		if (bid < 0 || bid > QOT_MAX_BINDINGS || !bindings[bid])
 			return -EACCES;
 
 		// Try and remove the binding
-		qot_remove_binding(bindings[msg.bid]);
+		qot_remove_binding(bindings[bid]);
 		
 		// If this is the earliest free binding, then cache it
-		if (binding_next > msg.bid)
-			binding_next = msg.bid;
+		if (binding_next > bid)
+			binding_next = bid;
 
 		break;
 
@@ -601,17 +853,17 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Sanity check
-		if (msg.bid < 0 || msg.bid > QOT_MAX_BINDINGS || !bindings[msg.bid])
+		if (bid < 0 || bid > QOT_MAX_BINDINGS || !bindings[bid])
 			return -EACCES;
 
 		// Copy over the accuracy
-		bindings[msg.bid]->request.acc = msg.request.acc;
+		bindings[bid]->request.acc = request.acc;
 
 		// Delete the item
-		list_del(&bindings[msg.bid]->acc_list);
+		list_del(&bindings[bid]->acc_list);
 
 		// Add the item back
-		qot_add_acc(bindings[msg.bid], &bindings[msg.bid]->timeline->head_acc);
+		qot_add_acc(bindings[bid], &bindings[bid]->timeline->head_acc);
 
 		break;
 
@@ -622,17 +874,17 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Sanity check
-		if (msg.bid < 0 || msg.bid > QOT_MAX_BINDINGS || !bindings[msg.bid])
+		if (bid < 0 || bid > QOT_MAX_BINDINGS || !bindings[bid])
 			return -EACCES;
 
 		// Copy over the resolution
-		bindings[msg.bid]->request.res = msg.request.res;
+		bindings[bid]->request.res = request.res;
 
 		// Delete the item
-		list_del(&bindings[msg.bid]->res_list);
+		list_del(&bindings[bid]->res_list);
 
 		// Add the item back
-		qot_add_res(bindings[msg.bid], &bindings[msg.bid]->timeline->head_res);
+		qot_add_res(bindings[bid], &bindings[bid]->timeline->head_res);
 
 		break;
 

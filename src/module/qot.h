@@ -1,6 +1,6 @@
 /*
- * @file qot.h
- * @brief Linux 4.1.6 kernel module for creation and destruction of QoT timelines
+ * @file qot_ioctl.h
+ * @brief IOCTL interface for communication between the scheduler and API
  * @author Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -28,51 +28,42 @@
 #ifndef _QOT_H_
 #define _QOT_H_
 
-// Basic properties of an oscillator (provided by device)
-struct qot_properties {
-	uint64_t frequency;						// Fundamental output frequency
-	uint64_t short_term_stability;			// Short term stability
-	uint64_t phase_noise;					// Phase noise
-	uint64_t aging;							// Aging in parts per billion
-	uint64_t temperature_stability;			// Temperature stability
-	uint64_t power_consumption;				// Power consumption
-	uint64_t warm_up_time;					// Warm up time
-	int (*power_on)(void);					// Turn on an oscillator
-	int (*power_off)(void);					// Turn off this oscillator
-	int (*enable)(void);					// Switch to this oscillator
-	struct list_head list;					// List...
+#include <linux/ioctl.h>
+
+// Various system parameters
+#define QOT_MAX_BINDINGS    (65536)
+#define QOT_MAX_UUIDLEN 	(32)
+#define QOT_HASHTABLE_BITS	(16)
+#define QOT_IOCTL_CORE		"qot"
+#define QOT_IOCTL_TIMELINE	"timeline"
+
+// QoT message type 
+struct qot_metric {
+	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
+	uint64_t res;	    				// Required clock resolution
 };
 
-// Information about a capture event
-struct qot_capture_event {
-	uint32_t id;							// Hardware timer ID
-	uint64_t count_at_capture;				// Hardware count at capture
-	uint64_t count_at_interrupt;			// Hardware count at INTERRUPTION
+// QoT message type 
+struct qot_message {
+	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
+	struct qot_metric request;			// Request metrics			
+	int bid;				   			// Binding id 
+	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
+	struct timespec event;				// Timestamp
 };
 
-// Information about a compare event
-struct qot_compare_info {
-	uint32_t id;							// Hardware timer ID
-	uint64_t next;							// Time of next event (clock ticks)
-	uint64_t cycles_high;					// High cycle time (clock ticks)
-	uint64_t cycles_low;					// Low cycle time (clock ticks)
-	uint64_t limit;							// Number of repetition (0 = infinite)
-	uint8_t  enable;						// [0] = disable, [1] = enabled
-};
+// Magic code specific to our ioctl code
+#define MAGIC_CODE 0xEF
 
-// Register a clock source as the primary driver of time
-int qot_register(struct clocksource *clk);
+// IOCTL with /dev/qot
+#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, struct qot_message*)
+#define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 2, struct qot_message*)
+#define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 3, struct qot_message*)
+#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
 
-// Add an oscillator
-int qot_add_osc(struct qot_oscillator* osc);
-
-// Register the existence of a timer pin
-int qot_add_pin(int id, void (*compare)(struct qot_compare_event*));
-
-// Called by driver when a capture event occurs
-int qot_capture(const char* name, int id);
-
-// Register a clock source as the primary driver of time
-int qot_unregister(struct clocksource *clk);
+// IOCTL with /dev/timeline*
+#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 5, struct qot_metric*)
+#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
+#define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 7, char*)
 
 #endif

@@ -615,6 +615,21 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, NULL);
 
+	/*
+	struct qot_oscillator {
+		.frequency = 24000000,
+		.short_term_stability = 100,
+		.phase_noise = 100,
+		.aging = 100,
+		.temperature_stability = ,
+		.power_consumption = ,
+		.warm_up_time = ,
+		.power_on = ,
+		.power_off = ,
+		.enable = ,
+	};
+	*/
+
 	// Restore IRQs
 	spin_unlock_irqrestore(&qot_am335x_lock, flags);
 
