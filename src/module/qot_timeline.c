@@ -28,7 +28,6 @@
 // Kernel APIs
 #include <linux/idr.h>
 #include <linux/rbtree.h>
-#include <linux/dcache.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
@@ -159,7 +158,6 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 	// Copy over data accuracy and resolution requirements
 	binding->request.acc = acc;
 	binding->request.res = res;
-	binding->timeline = NULL;
 
 	// Check to see if this hash element exists
 	binding->timeline = qot_timeline_search(&timeline_root, uuid);
@@ -167,7 +165,7 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 	// If the timeline does not exist, we need to create it
 	if (!binding->timeline)
 	{
-		// If we get to this point, there is no corresponding UUID in the hash
+		// If we get to this point, there is no corresponding UUID
 		binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 		
 		// Copy over the UUID and register a clock

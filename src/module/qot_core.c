@@ -33,6 +33,9 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/rbtree.h>
+#include <linux/sched.h>
+#include <linux/poll.h>
 
 // This file includes
 #include "qot.h"
@@ -51,18 +54,93 @@ static struct cdev c_dev;
 static struct class *cl;
 static struct device *dev_ret;
 
+// Stores information about an application binding to a timeline
+struct qot_owner {
+    struct rb_node node;			// Red-black tree node
+	struct file *fileobject;		// Application's file object 	 
+	wait_queue_head_t wq;			// Application's wait queue 	 
+	int flag;						// Application's data ready flag 
+};
+
+// A hash table designed to quickly find a timeline based on its UUID
+static struct rb_root owner_root = RB_ROOT;
+
 // Key data structures
 static struct clocksource *clksrc = NULL;
+
+// DATA STRUCTURE MANAGEMENT /////////////////////////////////////////////////////////
+
+static struct qot_owner *qot_owner_search(struct rb_root *root, struct file *fileobject)
+{
+	int result;
+	struct qot_owner *owner;
+	struct rb_node *node = root->rb_node;
+	while (node)
+	{
+		owner = container_of(node, struct qot_owner, node);
+		result = fileobject - owner->fileobject;
+		if (result < 0)
+			node = node->rb_left;
+		else if (result > 0)
+			node = node->rb_right;
+		else
+			return owner;
+	}
+	return NULL;
+}
+
+static int qot_owner_insert(struct rb_root *root, struct qot_owner *data)
+{
+	int result;
+	struct qot_owner *owner;
+	struct rb_node **new = &(root->rb_node), *parent = NULL;
+	while (*new)
+	{
+		owner = container_of(*new, struct qot_owner, node);
+		result = data->fileobject - owner->fileobject;
+		parent = *new;
+		if (result < 0)
+			new = &((*new)->rb_left);
+		else if (result > 0)
+			new = &((*new)->rb_right);
+		else
+			return 0;
+	}
+	rb_link_node(&data->node, parent, new);
+	rb_insert_color(&data->node, root);
+	return 1;
+}
 
 // SCHEDULER IOCTL FUNCTIONALITY /////////////////////////////////////////////////////
 
 static int qot_ioctl_open(struct inode *i, struct file *f)
 {
+	struct qot_owner *owner = kzalloc(sizeof(struct qot_owner), GFP_KERNEL);
+	if (!owner)
+		return -ENOMEM;
+	
+	// Initialize the poll info for this file descriptor
+	init_waitqueue_head(&owner->wq);
+	owner->fileobject = f;
+	owner->flag = 0;
+
+	// Insert the poll info into he 
+	if (qot_owner_insert(&owner_root, owner))
+    	return 0;
+
+    // Only get here if there is a problem
+    kfree(owner);
     return 0;
 }
 
 static int qot_ioctl_close(struct inode *i, struct file *f)
 {
+	struct qot_owner *owner = qot_owner_search(&owner_root, f);
+	if (owner)
+	{
+		rb_erase(&owner->node, &owner_root);
+		kfree(owner);
+	}
     return 0;
 }
 
@@ -70,6 +148,12 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 {
 	struct qot_message msg;
 	int32_t ret;
+	struct qot_owner *owner;
+
+	// Sanity check that owner of file exists
+	owner = qot_owner_search(&owner_root, f);
+	if (!owner)
+		return -EACCES;
 
 	// Deny all access if there is no clocksource registered
 	if (!clksrc)
@@ -149,12 +233,27 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	return 0;
 }
 
+// Check to see if a capture event has occurred
+static unsigned int qot_poll(struct file *f, poll_table *wait)
+{
+	unsigned int mask = 0;
+	struct qot_owner *owner = qot_owner_search(&owner_root, f);
+	if (owner)
+	{
+		poll_wait(f, &owner->wq, wait);
+		if (owner->flag) 
+			mask |= (POLLIN | POLLRDNORM);
+	}
+	return mask;
+}
+
 // Define the file operations over th ioctl
 static struct file_operations qot_fops = {
     .owner = THIS_MODULE,
     .open = qot_ioctl_open,
     .release = qot_ioctl_close,
-    .unlocked_ioctl = qot_ioctl_access
+    .unlocked_ioctl = qot_ioctl_access,
+    .poll = qot_poll,
 };
 
 // EXPORTED FUNCTIONALITY ////////////////////////////////////////////////////////
