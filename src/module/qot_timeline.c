@@ -27,7 +27,7 @@
 
 // Kernel APIs
 #include <linux/idr.h>
-#include <linux/hashtable.h>
+#include <linux/rbtree.h>
 #include <linux/dcache.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -42,7 +42,7 @@
 // Stores information about a timeline
 struct qot_timeline {
     char uuid[QOT_MAX_UUIDLEN];			// Unique id for this timeline
-    struct hlist_node collision_hash;	// Pointer to next timeline with common hash key
+    struct rb_node node;				// Red-black tree is used to store timelines on UUID
     struct list_head head_acc;			// Head pointing to maximum accuracy structure
     struct list_head head_res;			// Head pointing to maximum resolution structure
     int index;							// POSIX clock index
@@ -61,18 +61,9 @@ struct qot_binding {
 static struct idr idr_bindings;
 
 // A hash table designed to quickly find a timeline based on its UUID
-DEFINE_HASHTABLE(qot_timelines_hash, QOT_HASHTABLE_BITS);
+static struct rb_root timeline_root = RB_ROOT;
 
 // DATA STRUCTURE MANAGEMENT ///////////////////////////////////////////////////
-
-// Generate an unsigned int hash from a null terminated string
-static  uint32_t qot_hash_uuid(const char *uuid)
-{
-	uint32_t hash = init_name_hash();
-	while (*uuid)
-		hash = partial_name_hash(*uuid++, hash);
-	return end_name_hash(hash);
-}
 
 // Insert a new binding into the accuracy list
 static inline void qot_insert_list_acc(struct qot_binding *binding_list, struct list_head *head)
@@ -104,15 +95,56 @@ static inline void qot_insert_list_res(struct qot_binding *binding_list, struct 
 	list_add_tail(&binding_list->res_list, head);
 }
 
+// Search our data structure for a given timeline
+static struct qot_timeline *qot_timeline_search(struct rb_root *root, const char *uuid)
+{
+	int result;
+	struct qot_timeline *timeline;
+	struct rb_node *node = root->rb_node;
+	while (node)
+	{
+		timeline = container_of(node, struct qot_timeline, node);
+		result = strcmp(uuid, timeline->uuid);
+		if (result < 0)
+			node = node->rb_left;
+		else if (result > 0)
+			node = node->rb_right;
+		else
+			return timeline;
+	}
+	return NULL;
+}
+
+// Insert a timeline into our data structure
+static int qot_timeline_insert(struct rb_root *root, struct qot_timeline *data)
+{
+	int result;
+	struct qot_timeline *timeline;
+	struct rb_node **new = &(root->rb_node), *parent = NULL;
+	while (*new)
+	{
+		timeline = container_of(*new, struct qot_timeline, node);
+		result = strcmp(data->uuid, timeline->uuid);
+		parent = *new;
+		if (result < 0)
+			new = &((*new)->rb_left);
+		else if (result > 0)
+			new = &((*new)->rb_right);
+		else
+			return 0;
+	}
+	rb_link_node(&data->node, parent, new);
+	rb_insert_color(&data->node, root);
+	return 1;
+}
+
 // GENERAL FUNCTIONS ////////////////////////////////////////////////////////
 
 // Bind to a clock called UUID with a given accuracy and resolution
 int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 {	
-	struct qot_timeline *timeline;
 	struct qot_binding *binding;
 	int bid;
-	uint32_t key;
 
 	// Allocate memory for the new binding
 	binding = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
@@ -124,38 +156,32 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 	if (bid < 0)
 		goto free_binding;
 
-	// Generate a key for the UUID
-	key = qot_hash_uuid(uuid);
-
 	// Copy over data accuracy and resolution requirements
 	binding->request.acc = acc;
 	binding->request.res = res;
 	binding->timeline = NULL;
 
 	// Check to see if this hash element exists
-	hash_for_each_possible(qot_timelines_hash, timeline, collision_hash, key)
-		if (!strcmp(timeline->uuid, uuid)) binding->timeline = timeline;
+	binding->timeline = qot_timeline_search(&timeline_root, uuid);
 
-	// If the hash element does not exist, add it
+	// If the timeline does not exist, we need to create it
 	if (!binding->timeline)
 	{
 		// If we get to this point, there is no corresponding UUID in the hash
 		binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 		
-		// Copy over the UUID
+		// Copy over the UUID and register a clock
 		strncpy(binding->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
-
-		// Register a new clock for this timeline
 		binding->timeline->index = qot_clock_register(uuid);
 		if (binding->timeline->index < 0)	
 			goto free_timeline;
-
-		// Add the timeline
-		hash_add(qot_timelines_hash, &binding->timeline->collision_hash, key);
-
+		
 		// Initialize list heads
 		INIT_LIST_HEAD(&binding->timeline->head_acc);
 		INIT_LIST_HEAD(&binding->timeline->head_res);
+
+		// Add the timeline
+		qot_timeline_insert(&timeline_root, binding->timeline);
 	}
 
 	// In both cases, we must insert and sort the two linked lists
@@ -203,11 +229,11 @@ int qot_destroy_binding(int bid, void *p, void *data)
 	if (	list_empty(&binding->timeline->head_acc) 
 		&&  list_empty(&binding->timeline->head_res))
 	{
-		// Remove element from the hashmap
-		hash_del(&binding->timeline->collision_hash);
-
 		// Unregister the QoT clock
 		qot_clock_unregister(binding->timeline->index);
+
+		// Remove the timeline node from the red-black tree
+		rb_erase(&binding->timeline->node, &timeline_root);
 
 		// Free the timeline entry memory
 		kfree(binding->timeline);
