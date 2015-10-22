@@ -1,7 +1,7 @@
 /*
  * @file qot_am335x.c
  * @brief QoT Driver for BBB-GPSDO in Linux 4.1.6
- * @author Andrew Symington
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *

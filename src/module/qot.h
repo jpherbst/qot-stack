@@ -1,7 +1,7 @@
 /*
  * @file qot_ioctl.h
  * @brief IOCTL interface for communication between the scheduler and API
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *

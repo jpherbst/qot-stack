@@ -1,7 +1,7 @@
 /*
  * @file qot_timelines.c
  * @brief Linux 4.1.6 kernel module for creation anmd destruction of QoT timelines
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *

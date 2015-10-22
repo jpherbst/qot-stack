@@ -1,7 +1,7 @@
 /*
  * @file qot_core.h
  * @brief Linux 4.1.6 kernel module for creation and destruction of QoT timelines
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -65,6 +65,6 @@ int qot_unregister(void);
 // FUNCTIONS DESIGNED TO BE CALLED BY THE CLOCK SUBSYSTEM ///////////////////////
 
 // Copy over the read() function and initial mult/shift for projection
-int32_t qot_cyclecounter_init(struct cyclecounter *cc);
+int qot_cyclecounter_init(struct cyclecounter *cc);
 
 #endif
