@@ -251,7 +251,7 @@ void Timeline::CaptureThread()
 				strcpy(msg.capture.name,it->first.c_str());
 
 				// This will only return true if *new* data has arrived
-				if (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
+				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
 					it->second(it->first, msg.capture.event);
 			}
 		}
