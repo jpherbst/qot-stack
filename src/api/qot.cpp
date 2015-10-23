@@ -1,7 +1,7 @@
 /*
  * @file qot.cpp
  * @brief Userspace C++ API to manage QoT timelines
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -36,7 +36,14 @@
 extern "C"
 {
 	// Userspeace ioctl
+	#include <unistd.h>
+	#include <fcntl.h>
+	#include <stdio.h>
+	#include <string.h>
+	#include <stdint.h>
+	#include <time.h>
 	#include <sys/ioctl.h>
+	#include <sys/poll.h>
 
 	// Our module communication protocol
 	#include "../module/qot.h"
@@ -44,7 +51,8 @@ extern "C"
 
 using namespace qot;
 
-Timeline::Timeline(const char* uuid, uint64_t acc, uint64_t res)
+Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
+	: fd_qot(-1), lk(this->m), thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
 	this->fd_qot = open("/dev/qot", O_RDWR);
@@ -52,7 +60,7 @@ Timeline::Timeline(const char* uuid, uint64_t acc, uint64_t res)
 		throw CannotCommunicateWithCoreException();
 
 	// Check to make sure the UUID is valid
-	if (strlen(uuid) > QOT_MAX_UUIDLEN)
+	if (uuid.length() > QOT_MAX_UUIDLEN)
 		throw ProblematicUUIDException();
 
 	// Package up a request	to send over ioctl
@@ -61,7 +69,7 @@ Timeline::Timeline(const char* uuid, uint64_t acc, uint64_t res)
 	msg.tid = 0;
 	msg.request.acc = acc;
 	msg.request.res = res;
-	strncpy(msg.uuid, uuid, QOT_MAX_UUIDLEN);
+	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_UUIDLEN);
 
 	// Add this clock to the qot clock list through scheduler
 	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg) == 0)
@@ -85,11 +93,17 @@ Timeline::Timeline(const char* uuid, uint64_t acc, uint64_t res)
 
 		// Convert the file descriptor to a clock handle
 		this->clk = ((~(clockid_t) (this->fd_clk) << 3) | 3);
+
+		// We can now start polling, because the timeline is setup
+    	this->cv.notify_one();
 	}
 }
 
 Timeline::~Timeline()
 {
+	// Join the thread
+    thread.join();
+
 	// Close the clock and timeline
 	if (this->fd_clk) close(fd_clk);
 	if (this->fd_qot) close(fd_qot);
@@ -132,19 +146,114 @@ int64_t Timeline::GetTime()
 	return (int64_t) ts.tv_sec * 1000000000ULL + (int64_t) ts.tv_nsec;
 }
 
-int Timeline::RequestCapture(const char* pname, uint8_t enable,
-	void (callback)(const char *pname, int64_t val))
+int Timeline::RequestCapture(const std::string& pname, uint8_t enable,
+	CaptureCallbackType callback)
 {
+	// Check to make sure the pin name is valid
+	if (pname.length() > QOT_MAX_NAMELEN)
+		throw ProblematicPinNameException();
+
+	// Package up a rewuest
+	struct qot_message msg;
+	msg.bid = this->bid;
+	msg.capture.enable = enable;
+	strcpy(msg.capture.name,pname.c_str());
+
+	// Update this clock
+	if (ioctl(this->fd_qot, QOT_SET_CAPTURE, &msg) == 0)
+	{
+		// Cnvert to a string
+		std::string str = pname;
+
+		// Add the capture 
+		if (enable)
+			this->callbacks[str] = callback;
+		else
+		{
+			// Erase the capture
+			CaptureCallbackMap::iterator it = this->callbacks.find(str);
+			if (it != this->callbacks.end())
+				this->callbacks.erase(it);
+		}
+
+		// Success
+		return 0;
+	}
+
+	// We only get here on failure
+	throw CommunicationWithCoreFailedException();
+}
+
+int Timeline::RequestCompare(const std::string& pname, uint8_t enable, 
+	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
+{
+	// Check to make sure the pin name is valid
+	if (pname.length() > QOT_MAX_NAMELEN)
+		throw ProblematicPinNameException();
+
+	// Package up a request
+	struct qot_message msg;
+	msg.bid = this->bid;
+	msg.compare.enable = enable;
+	msg.compare.start = start;
+	msg.compare.high = high;
+	msg.compare.low = low;
+	msg.compare.repeat = repeat;
+	strcpy(msg.compare.name,pname.c_str());
+	
+	// Update this clock
+	if (ioctl(this->fd_qot, QOT_SET_COMPARE, &msg) == 0)
+		return 0;
+
+	// We only get here on failure
+	throw CommunicationWithCoreFailedException();
+}
+
+int64_t Timeline::WaitUntil(int64_t val)
+{
+	// Make a nanosleep-like system call to the QoT code, which passes a binding
+	// ID and  the absolute wake-up time to the scheduler. The scheduler can then
+	// perfom a busy wait until the global time is reached. To do this the 
+	// scheduler periodically back-projects the global time to a local time. When
+	// the current local time is sufficiently close to the desired wake up time, 
+	// then the scheduler starts a high resolution timer to fire at the event. 
+
+	// qot_absolute_nanosleep(this->bid, val);
+
 	return 0;
 }
 
-int Timeline::RequestCompare(const char* pname, uint8_t enable, 
-	int64_t start, uint64_t high, uint64_t low, uint64_t limit)
+void Timeline::CaptureThread()
 {
-	return 0;
-}
+	// Wait until the main thread sets up the binding and posix clock
+    while (fd_qot < 0) 
+    	this->cv.wait(this->lk);
 
-int Timeline::WaitUntil(uint64_t val)
-{
-	return 0;
+    // Start polling
+    while (this->fd_qot > 0)
+    {
+    	// Initialize the polling struct
+		struct pollfd pfd[1];
+		memset(pfd,0,sizeof(pfd));
+		pfd[0].fd = this->fd_qot;
+		pfd[0].events = POLLIN;
+
+		// Wait until the poll or a timeout
+		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS) && (pfd[0].revents & POLLIN))
+		{
+			// Iterate over all timers to see if they have been updated
+			CaptureCallbackMap::iterator it;
+			for (it = this->callbacks.begin(); it != this->callbacks.end(); it++)
+			{			  
+				// Copy the timer name and ask the kernel for the time
+				struct qot_message msg;
+				msg.bid = this->bid;
+				strcpy(msg.capture.name,it->first.c_str());
+
+				// This will only return true if *new* data has arrived
+				if (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
+					it->second(it->first, msg.capture.event);
+			}
+		}
+	}
 }

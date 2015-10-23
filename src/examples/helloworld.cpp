@@ -36,6 +36,7 @@
 #define TIMELINE_UUID    "my_test_timeline"
 #define WAIT_TIME_SECS   1
 #define NUM_ITERATIONS   10
+#define OFFSET_MSEC      1000
 
 // This function is called by the QoT API when a capture event occus
 void callback(const char *pname, int64_t epoch)
@@ -54,7 +55,9 @@ int main(int argc, char *argv[])
 		{
 			int64_t tval = timeline.GetTime();
 			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
-			usleep(WAIT_TIME_SECS*1e6);
+			std::cout << "WAITING FOR " << OFFSET_MSEC << "ms AT " << tval << std::endl;
+			timeline.WaitUntil(tval + OFFSET_MSEC * 1e6);
+			std::cout << "RESUMED AT " << timeline.GetTime() << std::endl;
 		}
 	}
 	catch (std::exception &e)

@@ -54,17 +54,9 @@ int main(int argc, char *argv[])
 	{
 		// Bind to the timeline
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
-		
-		// Get the time plus an offset
-		int64_t tval = timeline.GetTime() + OFFSET_MSEC * 1e6;
-
-		// Send a compare request
-		timeline.RequestCompare("timer6", 1, tval, HIGH_MSEC, LOW_MSEC, CYCLE_LIMIT);
-		
-		// Sleep for 10 seconds
-		std::cout << "Waiting " << WAIT_TIME_SECS << " seconds for a compare event... " << std::endl;
-		usleep(WAIT_TIME_SECS*1e6);
-
+		timeline.RequestCompare("timer6", 1, timeline.GetTime(), HIGH_MSEC, LOW_MSEC, CYCLE_LIMIT);
+		std::cout << "WAITING FOR " << WAIT_TIME_SECS << "s FOR COMPARE" << std::endl;
+		timeline.WaitUntil(timeline.GetTime() + WAIT_TIME_SECS * 1e9);
 	}
 	catch (std::exception &e)
 	{

@@ -32,14 +32,34 @@
 
 // Various system parameters
 #define QOT_MAX_UUIDLEN 	(32)
+#define QOT_MAX_NAMELEN 	(32)
 #define QOT_HASHTABLE_BITS	(16)
 #define QOT_IOCTL_CORE		"qot"
 #define QOT_IOCTL_TIMELINE	"timeline"
+#define QOT_POLL_TIMEOUT_MS  (1000)
 
 // QoT message type 
 struct qot_metric {
 	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
 	uint64_t res;	    				// Required clock resolution
+};
+
+// QoT capture information
+struct qot_capture {
+	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
+	uint8_t enable;						// Turn on or off
+	int64_t event;						// Event (in global time!)
+	uint32_t seq;						// Prevents duplicate sequence number
+};
+
+// QoT compare information
+struct qot_compare {
+	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
+	uint8_t enable;						// Turn on or off
+	int64_t start;						// Global time of first rising edge
+	uint32_t high;						// Duty cycle high time (in global time units)
+	uint32_t low;						// Duty cycle low time (in global time units)
+	uint32_t repeat;					// Number of repetitions (0 = repeat indefinitely)
 };
 
 // QoT message type 
@@ -48,22 +68,25 @@ struct qot_message {
 	struct qot_metric request;			// Request metrics			
 	int bid;				   			// Binding id 
 	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
-	struct timespec event;				// Timestamp
+	struct qot_capture capture;			// Capture information
+	struct qot_compare compare;			// Compare information
 };
 
 // Magic code specific to our ioctl code
 #define MAGIC_CODE 0xEF
 
 // IOCTL with /dev/qot
-#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE, 1, struct qot_message*)
-#define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE, 2, struct qot_message*)
-#define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE, 3, struct qot_message*)
-#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE, 4, struct qot_message*)
+#define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE,  0, struct qot_message*)
+#define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE,  1, struct qot_message*)
+#define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE,  2, struct qot_message*)
+#define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE,  3, struct qot_message*)
+#define QOT_SET_CAPTURE 		 _IOW(MAGIC_CODE,  4, struct qot_message*)
+#define QOT_GET_CAPTURE 		 _IOR(MAGIC_CODE,  5, struct qot_message*)
+#define QOT_SET_COMPARE 		 _IOW(MAGIC_CODE,  6, struct qot_message*)
 
 // IOCTL with /dev/timeline*
-#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE, 5, struct qot_metric*)
-#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE, 6, struct qot_metric*)
-#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE, 7, struct qot_metric*)
-#define QOT_GET_UUID 			 _IOR(MAGIC_CODE, 8, char*)
+#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE,  7, struct qot_metric*)
+#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE,  8, struct qot_metric*)
+#define QOT_GET_METADATA 	 	 _IOR(MAGIC_CODE,  9, struct qot_message*)
 
 #endif

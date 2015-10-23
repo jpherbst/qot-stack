@@ -37,7 +37,7 @@
 #define WAIT_TIME_SECS   10
 
 // This function is called by the QoT API when a capture event occus
-void callback(const char *pname, int64_t epoch)
+void callback(const std::string &pname, int64_t epoch)
 {
 	std::cout << "Event captured at time " << epoch << std::endl;
 }
@@ -49,18 +49,13 @@ int main(int argc, char *argv[])
 	try
 	{
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
-	
-		// Request a capture event
 		if (timeline.RequestCapture(CAPTURE_PIN_UUID, 1, callback))
 		{
 			std::cout << "Could not request to be notified of a capture event on timer " << CAPTURE_PIN_UUID << std::endl;
 			return 1;
 		}
-
-		// Sleep for 10 seconds
-		std::cout << "Waiting " << WAIT_TIME_SECS << " seconds for a capture event... " << std::endl;
-		usleep(WAIT_TIME_SECS*1e6);
-
+		std::cout << "WAITING FOR " << WAIT_TIME_SECS << "s FOR CAPTURE" << std::endl;
+		timeline.WaitUntil(timeline.GetTime() + WAIT_TIME_SECS * 1e9);
 	}
 	catch (std::exception &e)
 	{

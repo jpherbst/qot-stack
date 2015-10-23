@@ -1,7 +1,7 @@
 /*
  * @file qot.hpp
  * @brief Userspace C++ API to manage QoT timelines
- * @author Fatima Anwar 
+ * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -28,20 +28,22 @@
 #ifndef QOT_HPP
 #define QOT_HPP
 
+#include <string>
 #include <exception>
-
-extern "C"
-{
-	#include <unistd.h>
-	#include <fcntl.h>
-	#include <stdio.h>
-	#include <string.h>
-	#include <stdint.h>
-	#include <time.h>
-}
+#include <thread>
+#include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <map>
 
 namespace qot
 {
+	/**
+	 * @brief Convenience decalaration
+	 */
+	typedef std::function<void(const std::string &pname, int64_t val)> CaptureCallbackType;
+	typedef std::map<std::string,CaptureCallbackType> CaptureCallbackMap;
+
 	/**
 	 * @brief Various exceptions
 	 */
@@ -53,6 +55,11 @@ namespace qot
 	struct ProblematicUUIDException : public std::exception {
 		const char * what () const throw () {
 			return "The specified UUID exceeds the size limit";
+		}
+	};
+	struct ProblematicPinNameException : public std::exception {
+		const char * what () const throw () {
+			return "The specified pin name exceeds the size limit";
 		}
 	};
 	struct CannotBindToTimelineException : public std::exception {
@@ -83,7 +90,7 @@ namespace qot
 		 * @param res Required resolution
 		 * @return Positive: success Negative: error
 		 **/
-		public: Timeline(const char* uuid, uint64_t acc, uint64_t res);
+		public: Timeline(const std::string &uuid, uint64_t acc, uint64_t res);
 
 		/**
 		 * @brief Unbind from a timeline
@@ -120,8 +127,8 @@ namespace qot
 		 * @param callback Callback funtion for capture
 		 * @return 0+: success, <0: error
 		 **/
-		public: int RequestCapture(const char* pname, uint8_t enable,
-			void (callback)(const char *pname, int64_t val));
+		public: int RequestCapture(const std::string &pname, uint8_t enable,
+			CaptureCallbackType callback);
 
 		/**
 		 * @brief Request a compare action on a given pin
@@ -134,24 +141,34 @@ namespace qot
 		 * @param limit The total number of cycles (0: infinite)
 		 * @return 0+: success, <0: error
 		 **/
-		public: int RequestCompare(const char* pname, uint8_t enable, 
-			int64_t start, uint64_t high, uint64_t low, uint64_t limit);
+		public: int RequestCompare(const std::string &pname, uint8_t enable, 
+			int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
 
 		/**
 		 * @brief Request a compare action on a given pin
 		 * @param bid The binding id
 		 * @param val The global time to wakeup
-		 * @return 0+: success, <0: error
+		 * @return < 0 : time was in the past, > 0 estimated precision
 		 **/
-		public: int WaitUntil(uint64_t val);
+		public: int64_t WaitUntil(int64_t val);
+
+		/**
+		 * @brief Blocking poll on fd for capture events
+		 **/
+		private: void CaptureThread();
 
 		/**
 		 * @brief Internal data structures
 		 **/
-		private: int fd_qot;	// Descriptor for qot ioctl
-		private: int fd_clk;	// Descriptor for timeline
-		private: int bid;		// Binding ID
-		private: clockid_t clk;	// POSIX clock ID
+		private: int fd_qot;						// Descriptor for qot ioctl
+		private: int fd_clk;						// Descriptor for timeline
+		private: int bid;							// Binding ID
+		private: clockid_t clk;						// POSIX clock ID
+		private: std::thread thread;				// Worker thread for capture
+		private: CaptureCallbackMap callbacks;		// Callback list
+		private: std::mutex m;						// Mutex
+		private: std::condition_variable cv;		// Conditional variable
+		private: std::unique_lock<std::mutex> lk;	// Lock
 	};
 }
 
