@@ -35,6 +35,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <map>
+#include <algorithm>
 
 namespace qot
 {
@@ -42,7 +43,7 @@ namespace qot
 	 * @brief Convenience decalaration
 	 */
 	typedef std::function<void(const std::string &pname, int64_t val)> CaptureCallbackType;
-	typedef std::map<std::string,CaptureCallbackType> CaptureCallbackMap;
+	typedef std::function<void(const std::string &name, int8_t event)> EventCallbackType;
 
 	/**
 	 * @brief Various exceptions
@@ -77,9 +78,15 @@ namespace qot
 			return "The qot core respodned with an error";
 		}
 	};
+	struct CommunicationWithPOSIXClockException : public std::exception {
+		const char * what () const throw () {
+			return "The qot core respodned with an error";
+		}
+	};
 
 	/**
-	 * @brief Bind to a timeline
+	 * @brief The timeline class is the primary interface between user-space code and
+	 *        the quality of time stack. 
 	 */
 	class Timeline
 	{
@@ -98,41 +105,51 @@ namespace qot
 		public: ~Timeline();
 
 		/**
-		 * @brief Update the requested binding accuracy
-		 * @param bid The binding id
+		 * @brief Set the desired binding accuracy
 		 * @param accuracy The new accuracy
 		 * @return Positive: success Negative: error
 		 **/
 		public: int SetAccuracy(uint64_t acc);
 
 		/**
-		 * @brief Update the requested binding resolution
-		 * @param bid The binding id
-		 * @param accuracy The new resolution
+		 * @brief Set the desired binding resolution
+		 * @param res The new resolution
 		 * @return Positive: success Negative: error
 		 **/
 		public: int SetResolution(uint64_t res);
 
 		/**
 		 * @brief Get the current global timeline
-		 * @return The time
+		 * @return The time (in nanoseconds) since the Unix epoch
 		 **/
 		public: int64_t GetTime();
 
 		/**
-		 * @brief Request a capture action on a given pin
-		 * @param bid The binding id
-		 * @param pname The pin name (must be offered by the driver)
-		 * @param enable Turn compare on or off 
-		 * @param callback Callback funtion for capture
-		 * @return 0+: success, <0: error
+		 * @brief Get the accuracy achieved by the system
+		 * @return The current accuracy
 		 **/
-		public: int RequestCapture(const std::string &pname, uint8_t enable,
-			CaptureCallbackType callback);
+		public: uint64_t GetAccuracy();
+
+		/**
+		 * @brief Get the resolution achieved by the system
+		 * @return The current accuracy
+		 **/
+		public: uint64_t GetResolution();
+
+		/**
+		 * @brief Get the name of this application (how it presents itself to peers)
+		 * @return The name of the binding / application
+		 **/
+		public: std::string GetName();
+
+		/**
+		 * @brief Get the name of this application (how it presents itself to peers)
+		 * @param name the new name for this application
+		 **/
+		public: void SetName(const std::string &name);
 
 		/**
 		 * @brief Request a compare action on a given pin
-		 * @param bid The binding id
 		 * @param pname The pin name (must be offered by the driver)
 		 * @param enable Turn compare on or off 
 		 * @param start The global start time
@@ -141,14 +158,25 @@ namespace qot
 		 * @param limit The total number of cycles (0: infinite)
 		 * @return 0+: success, <0: error
 		 **/
-		public: int RequestCompare(const std::string &pname, uint8_t enable, 
+		public: int GenerateInterrupt(const std::string &pname, uint8_t enable, 
 			int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
 
 		/**
-		 * @brief Request a compare action on a given pin
-		 * @param bid The binding id
-		 * @param val The global time to wakeup
-		 * @return < 0 : time was in the past, > 0 estimated precision
+		 * @brief Request to be notified of network events (device, action)
+		 * @param callback Callback funtion for device binding
+		 **/
+		public: void SetEventCallback(EventCallbackType callback);
+
+		/**
+		 * @brief Request to be notified when a capture event occurs
+		 * @param callback Callback funtion for capture
+		 **/
+		public: void SetCaptureCallback(CaptureCallbackType callback);
+
+		/**
+		 * @brief Wait until some global time (if in past calls back immediately)
+		 * @param val Global time
+		 * @return Predicted error 
 		 **/
 		public: int64_t WaitUntil(int64_t val);
 
@@ -158,14 +186,23 @@ namespace qot
 		private: void CaptureThread();
 
 		/**
+		 * @brief Create a random string of fixed length
+		 * @param length the length of the string
+		 * @return the random string
+		 **/
+		private: static std::string RandomString(uint32_t length);
+
+		/**
 		 * @brief Internal data structures
 		 **/
+		private: std::string name;					// Unique ID for this application
 		private: int fd_qot;						// Descriptor for qot ioctl
 		private: int fd_clk;						// Descriptor for timeline
 		private: int bid;							// Binding ID
 		private: clockid_t clk;						// POSIX clock ID
 		private: std::thread thread;				// Worker thread for capture
-		private: CaptureCallbackMap callbacks;		// Callback list
+		private: CaptureCallbackType cb_capture;	// Callback for captures
+		private: EventCallbackType cb_event;		// Callback for devices
 		private: std::mutex m;						// Mutex
 		private: std::condition_variable cv;		// Conditional variable
 		private: std::unique_lock<std::mutex> lk;	// Lock

@@ -51,8 +51,10 @@ extern "C"
 
 using namespace qot;
 
+// Bind to a timeline
 Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
-	: fd_qot(-1), lk(this->m), thread(std::bind(&Timeline::CaptureThread, this))
+	: name(RandomString(32)), fd_qot(-1), lk(this->m), 
+		thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
 	this->fd_qot = open("/dev/qot", O_RDWR);
@@ -99,6 +101,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 	}
 }
 
+// Unbind from a timeline
 Timeline::~Timeline()
 {
 	// Join the thread
@@ -109,6 +112,7 @@ Timeline::~Timeline()
 	if (this->fd_qot) close(fd_qot);
 }
 
+// Set the binding accuracy
 int Timeline::SetAccuracy(uint64_t acc)
 {
 	// Package up a rewuest
@@ -124,6 +128,7 @@ int Timeline::SetAccuracy(uint64_t acc)
 	throw CommunicationWithCoreFailedException();
 }
 
+// Set the binding resolution
 int Timeline::SetResolution(uint64_t res)
 {
 	// Package up a rewuest
@@ -139,6 +144,7 @@ int Timeline::SetResolution(uint64_t res)
 	throw CommunicationWithCoreFailedException();
 }
 
+// Get the current time
 int64_t Timeline::GetTime()
 {	
 	struct timespec ts;
@@ -146,45 +152,40 @@ int64_t Timeline::GetTime()
 	return (int64_t) ts.tv_sec * 1000000000ULL + (int64_t) ts.tv_nsec;
 }
 
-int Timeline::RequestCapture(const std::string& pname, uint8_t enable,
-	CaptureCallbackType callback)
+// Get the achieved accuracy
+uint64_t Timeline::GetAccuracy()
 {
-	// Check to make sure the pin name is valid
-	if (pname.length() > QOT_MAX_NAMELEN)
-		throw ProblematicPinNameException();
-
 	// Package up a rewuest
-	struct qot_message msg;
-	msg.bid = this->bid;
-	msg.capture.enable = enable;
-	strcpy(msg.capture.name,pname.c_str());
-
-	// Update this clock
-	if (ioctl(this->fd_qot, QOT_SET_CAPTURE, &msg) == 0)
-	{
-		// Cnvert to a string
-		std::string str = pname;
-
-		// Add the capture 
-		if (enable)
-			this->callbacks[str] = callback;
-		else
-		{
-			// Erase the capture
-			CaptureCallbackMap::iterator it = this->callbacks.find(str);
-			if (it != this->callbacks.end())
-				this->callbacks.erase(it);
-		}
-
-		// Success
-		return 0;
-	}
-
-	// We only get here on failure
-	throw CommunicationWithCoreFailedException();
+	struct qot_metric msg;
+	if (ioctl(this->fd_clk, QOT_GET_ACTUAL_METRIC, &msg) == 0)
+		return msg.acc;
+	throw CommunicationWithPOSIXClockException();
 }
 
-int Timeline::RequestCompare(const std::string& pname, uint8_t enable, 
+// Get the achieved resolutions
+uint64_t Timeline::GetResolution()
+{
+	// Package up a rewuest
+	struct qot_metric msg;
+	if (ioctl(this->fd_clk, QOT_GET_ACTUAL_METRIC, &msg) == 0)
+		return msg.res;
+	throw CommunicationWithPOSIXClockException();
+}
+
+// Get the name of the application
+std::string Timeline::GetName()
+{
+	return this->name;
+}
+
+// Set the name of the application
+void Timeline::SetName(const std::string &name)
+{
+	this->name = name;
+}
+
+// Generate an interrupt on a given timer pin
+int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable, 
 	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
 {
 	// Check to make sure the pin name is valid
@@ -209,20 +210,32 @@ int Timeline::RequestCompare(const std::string& pname, uint8_t enable,
 	throw CommunicationWithCoreFailedException();
 }
 
+// Wait until some global time
 int64_t Timeline::WaitUntil(int64_t val)
 {
+	// TODO:
 	// Make a nanosleep-like system call to the QoT code, which passes a binding
 	// ID and  the absolute wake-up time to the scheduler. The scheduler can then
 	// perfom a busy wait until the global time is reached. To do this the 
 	// scheduler periodically back-projects the global time to a local time. When
 	// the current local time is sufficiently close to the desired wake up time, 
 	// then the scheduler starts a high resolution timer to fire at the event. 
-
-	// qot_absolute_nanosleep(this->bid, val);
-
+	// eg. qot_absolute_nanosleep(this->bid, val);
 	return 0;
 }
 
+// Listen for an interrupt on a pin
+void Timeline::SetCaptureCallback(CaptureCallbackType callback)
+{
+	this->cb_capture = callback;
+}
+
+void Timeline::SetEventCallback(EventCallbackType callback)
+{
+	this->cb_event = callback;
+}
+
+// A thread to manage file descriptor polling (should introduce a mutex)
 void Timeline::CaptureThread()
 {
 	// Wait until the main thread sets up the binding and posix clock
@@ -238,22 +251,47 @@ void Timeline::CaptureThread()
 		pfd[0].fd = this->fd_qot;
 		pfd[0].events = POLLIN;
 
-		// Wait until the poll or a timeout
-		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS) && (pfd[0].revents & POLLIN))
+		// Wait until an asynchronous data push from the kernel module
+		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
 		{
-			// Iterate over all timers to see if they have been updated
-			CaptureCallbackMap::iterator it;
-			for (it = this->callbacks.begin(); it != this->callbacks.end(); it++)
-			{			  
-				// Copy the timer name and ask the kernel for the time
-				struct qot_message msg;
+			// We have received notification of a capture event
+			if (pfd[0].revents & QOT_ACTION_CAPTURE)
+			{
+				// Keep querying for capture events until there are none left
+				qot_message msg;
 				msg.bid = this->bid;
-				strcpy(msg.capture.name,it->first.c_str());
-
-				// This will only return true if *new* data has arrived
 				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
-					it->second(it->first, msg.capture.event);
+					if (cb_capture) 
+						this->cb_capture(msg.capture.name,msg.capture.event);
+			}
+
+			// We have received notification of a device bind/unbind
+			if (pfd[0].revents & QOT_ACTION_EVENT)
+			{
+				// Keep querying for capture events until there are none left
+				qot_message msg;
+				msg.bid = this->bid;
+				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
+					if (cb_event) 
+						this->cb_event(msg.name,msg.event);
 			}
 		}
 	}
+}
+
+// Random string generator
+std::string Timeline::RandomString(uint32_t length)
+{
+    auto randchar = []() -> char
+    {
+        const char charset[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+        const size_t max_index = (sizeof(charset) - 1);
+        return charset[ rand() % max_index ];
+    };
+    std::string str(length,0);
+    std::generate_n( str.begin(), length, randchar );
+    return str;
 }

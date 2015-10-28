@@ -39,7 +39,7 @@
 // This function is called by the QoT API when a capture event occus
 void callback(const std::string &pname, int64_t epoch)
 {
-	std::cout << "Event captured at time " << epoch << std::endl;
+	std::cout << "Event captured at time " << epoch << " on timer pin " << pname <<  std::endl;
 }
 
 // Main entry point of application
@@ -49,11 +49,7 @@ int main(int argc, char *argv[])
 	try
 	{
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
-		if (timeline.RequestCapture(CAPTURE_PIN_UUID, 1, callback))
-		{
-			std::cout << "Could not request to be notified of a capture event on timer " << CAPTURE_PIN_UUID << std::endl;
-			return 1;
-		}
+		timeline.SetCaptureCallback(callback);
 		std::cout << "WAITING FOR " << WAIT_TIME_SECS << "s FOR CAPTURE" << std::endl;
 		timeline.WaitUntil(timeline.GetTime() + WAIT_TIME_SECS * 1e9);
 	}

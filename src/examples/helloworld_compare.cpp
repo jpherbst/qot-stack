@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	{
 		// Bind to the timeline
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
-		timeline.RequestCompare("timer6", 1, timeline.GetTime(), HIGH_MSEC, LOW_MSEC, CYCLE_LIMIT);
+		timeline.GenerateInterrupt("timer6", 1, timeline.GetTime(), HIGH_MSEC, LOW_MSEC, CYCLE_LIMIT);
 		std::cout << "WAITING FOR " << WAIT_TIME_SECS << "s FOR COMPARE" << std::endl;
 		timeline.WaitUntil(timeline.GetTime() + WAIT_TIME_SECS * 1e9);
 	}

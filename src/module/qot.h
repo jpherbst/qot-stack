@@ -37,6 +37,14 @@
 #define QOT_IOCTL_CORE		"qot"
 #define QOT_IOCTL_TIMELINE	"timeline"
 #define QOT_POLL_TIMEOUT_MS  (1000)
+#define QOT_ACTION_CAPTURE	POLLIN
+#define QOT_ACTION_EVENT	POLLOUT
+
+// Actions
+enum qot_event {
+	BIND   = 0,
+	UNBIND = 1
+};
 
 // QoT message type 
 struct qot_metric {
@@ -65,9 +73,11 @@ struct qot_compare {
 // QoT message type 
 struct qot_message {
 	char uuid[QOT_MAX_UUIDLEN];			// UUID of reference timeline shared among all collaborating entities
+	char name[QOT_MAX_UUIDLEN];			// Name of the entity 
 	struct qot_metric request;			// Request metrics			
 	int bid;				   			// Binding id 
 	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
+	int event;							// 1 = bind, 1 = unbind
 	struct qot_capture capture;			// Capture information
 	struct qot_compare compare;			// Compare information
 };
@@ -80,13 +90,14 @@ struct qot_message {
 #define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE,  1, struct qot_message*)
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE,  2, struct qot_message*)
 #define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE,  3, struct qot_message*)
-#define QOT_SET_CAPTURE 		 _IOW(MAGIC_CODE,  4, struct qot_message*)
+#define QOT_GET_EVENT 			 _IOR(MAGIC_CODE,  4, struct qot_message*)
 #define QOT_GET_CAPTURE 		 _IOR(MAGIC_CODE,  5, struct qot_message*)
 #define QOT_SET_COMPARE 		 _IOW(MAGIC_CODE,  6, struct qot_message*)
 
 // IOCTL with /dev/timeline*
-#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE,  7, struct qot_metric*)
-#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE,  8, struct qot_metric*)
-#define QOT_GET_METADATA 	 	 _IOR(MAGIC_CODE,  9, struct qot_message*)
+#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE,  7, struct qot_metric*)
+#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE,  8, struct qot_metric*)
+#define QOT_GET_TARGET_METRIC 	 _IOR(MAGIC_CODE,  9, struct qot_metric*)
+#define QOT_GET_METADATA 	 	 _IOR(MAGIC_CODE, 10, struct qot_message*)
 
 #endif

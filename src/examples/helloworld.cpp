@@ -39,9 +39,11 @@
 #define OFFSET_MSEC      1000
 
 // This function is called by the QoT API when a capture event occus
-void callback(const char *pname, int64_t epoch)
+void callback(const std::string &name, bool epoch)
 {
-	std::cout << "Event captured at time " << epoch << std::endl;
+	std::cout << "Some other device " << name << " just ";
+	std::cout << (epoch ? "bound to" : "unbound from");
+	std::cout << " the timeline" << std::endl;
 }
 
 // Main entry point of application
@@ -50,7 +52,8 @@ int main(int argc, char *argv[])
 	// Bind to a timeline
 	try
 	{
-		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);	
+		qot::Timeline timeline("my_test_timeline", 1e6, 1e3);	
+		timeline.SetName("HelloWorld");
 		for (int i = 0; i < NUM_ITERATIONS; i++)
 		{
 			int64_t tval = timeline.GetTime();
