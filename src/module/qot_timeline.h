@@ -28,20 +28,43 @@
 #ifndef _QOT_TIMELINE_H_
 #define _QOT_TIMELINE_H_
 
+// BASIC FUNCTIONS
+
 // Bind to a clock called UUID with a given accuracy and resolution
 int qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res);
 
 // Get the POSIX clock index for a given binding ID
 int qot_timeline_index(int bid);
 
+// Get the timeline UUID for a given binding ID
+const char* qot_timeline_uuid(int bid);
+
 // Unbind from a timeline
 int qot_timeline_unbind(int bid);
+
+// CLOCK CONFIGURATION
 
 // Update the accuracy of a binding
 int qot_timeline_set_accuracy(int bid, uint64_t acc);
 
 // Update the resolution of a binding
 int qot_timeline_set_resolution(int bid, uint64_t res);
+
+// COORDINATE TRANSFORMATIONS
+
+// Convert a core time (ns) to a timeline time (ns)
+int qot_timeline_time_core2line(int bid, int64_t *core);
+
+// Convert a timeline time (ns) to a core time (ns)
+int qot_timeline_time_line2core(int bid, int64_t *line);
+
+// Convert a core duration (ns) to a timeline duration (ns)
+int qot_timeline_duration_core2line(int bid, uint64_t *core);
+
+// Convert a timeline duration (ns) to a core duration (ns)
+int qot_timeline_duration_line2core(int bid, uint64_t *line);
+
+// BASIC INITIALIZATION
 
 // Initialize the timeline engine
 int qot_timeline_init(void);

@@ -130,28 +130,38 @@ static int qot_clock_close(struct posix_clock *pc)
 
 static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 {
+	struct qot_message msg;
+	struct qot_event event;
 	struct qot_clock *clk = container_of(pc, struct qot_clock, clock);
 	switch (cmd)
 	{
 
+	// Set the actual accuracy and resolution that was achieved by the synchronization service
 	case QOT_SET_ACTUAL_METRIC:
 		if (copy_from_user(&clk->actual, (struct qot_metric*)arg, sizeof(struct qot_metric)))
 			return -EFAULT;
 		break;
 
+	// Get the actual accuracy and resolution that was achieved by the synchronization service
 	case QOT_GET_ACTUAL_METRIC:
 		if (copy_to_user((struct qot_metric*)arg, &clk->actual, sizeof(struct qot_metric)))
 			return -EFAULT;
 		break;
 
-	case QOT_GET_TARGET_METRIC:
-		if (copy_to_user((struct qot_metric*)arg, &clk->target, sizeof(struct qot_metric)))
+	// Get the name of this timeline and the target metric
+	case QOT_GET_INFORMATION:
+		strcpy(msg.uuid, clk->uuid);
+		msg.request.acc = clk->target.acc;
+		msg.request.res = clk->target.res;
+		if (copy_to_user((struct qot_message*)arg, &msg, sizeof(struct qot_message)))
 			return -EFAULT;
 		break;
 
-	case QOT_GET_UUID:
-		if (copy_to_user((char*)arg, &clk->uuid, sizeof(char)*QOT_MAX_UUIDLEN))
+	// Push an event from the synchronization service down to all bindings to given UUID
+	case QOT_SET_EVENT:
+		if (copy_from_user(&event, (struct qot_event*)arg, sizeof(struct qot_event)))
 			return -EFAULT;
+		qot_push_event(clk->uuid, event.name, event.type);
 		break;
 
 	default:
@@ -268,9 +278,6 @@ int qot_clock_register(const char *uuid)
 	index = idr_alloc(&idr_clocks, clk, 0, MINORMASK + 1, GFP_KERNEL);
 	if (index < 0)
 		goto free_clock;
-
-	// Initialize a cycle counter with the info from the QoT core clock an initial 
-	qot_cyclecounter_init(&clk->cc);
 
 	// Initialize a timecounter as a wrapper to the cycle counter
 	timecounter_init(&clk->tc, &clk->cc, 0);

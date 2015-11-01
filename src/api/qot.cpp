@@ -62,7 +62,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 		throw CannotCommunicateWithCoreException();
 
 	// Check to make sure the UUID is valid
-	if (uuid.length() > QOT_MAX_UUIDLEN)
+	if (uuid.length() > QOT_MAX_NAMELEN)
 		throw ProblematicUUIDException();
 
 	// Package up a request	to send over ioctl
@@ -71,7 +71,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 	msg.tid = 0;
 	msg.request.acc = acc;
 	msg.request.res = res;
-	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_UUIDLEN);
+	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_NAMELEN);
 
 	// Add this clock to the qot clock list through scheduler
 	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg) == 0)
@@ -262,7 +262,7 @@ void Timeline::CaptureThread()
 				msg.bid = this->bid;
 				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
 					if (cb_capture) 
-						this->cb_capture(msg.capture.name,msg.capture.event);
+						this->cb_capture(msg.capture.name, msg.capture.edge);
 			}
 
 			// We have received notification of a device bind/unbind
@@ -273,7 +273,7 @@ void Timeline::CaptureThread()
 				msg.bid = this->bid;
 				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
 					if (cb_event) 
-						this->cb_event(msg.name,msg.event);
+						this->cb_event(msg.event.name, msg.event.type);
 			}
 		}
 	}
@@ -284,10 +284,7 @@ std::string Timeline::RandomString(uint32_t length)
 {
     auto randchar = []() -> char
     {
-        const char charset[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
+        const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const size_t max_index = (sizeof(charset) - 1);
         return charset[ rand() % max_index ];
     };

@@ -40,7 +40,7 @@
 
 // Stores information about a timeline
 struct qot_timeline {
-    char uuid[QOT_MAX_UUIDLEN];			// Unique id for this timeline
+    char uuid[QOT_MAX_NAMELEN];			// Unique id for this timeline
     struct rb_node node;				// Red-black tree is used to store timelines on UUID
     struct list_head head_acc;			// Head pointing to maximum accuracy structure
     struct list_head head_res;			// Head pointing to maximum resolution structure
@@ -169,7 +169,7 @@ int32_t qot_timeline_bind(const char *uuid, uint64_t acc, uint64_t res)
 		binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 		
 		// Copy over the UUID and register a clock
-		strncpy(binding->timeline->uuid, uuid, QOT_MAX_UUIDLEN);
+		strncpy(binding->timeline->uuid, uuid, QOT_MAX_NAMELEN);
 		binding->timeline->index = qot_clock_register(uuid);
 		if (binding->timeline->index < 0)	
 			goto free_timeline;
@@ -208,6 +208,18 @@ int qot_timeline_index(int bid)
 
 	// Return the timeline clock index
 	return binding->timeline->index;	
+}
+
+// Get the timeline UUID for a given binding ID
+const char* qot_timeline_uuid(int bid)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return NULL;
+
+	// Return the timeline clock index
+	return binding->timeline->uuid;
 }
 
 // Completely destroy a binding
@@ -311,6 +323,50 @@ int qot_timeline_set_resolution(int bid, uint64_t res)
 
 	// Add the item back into the list at the correct point
 	qot_insert_list_res(binding, &binding->timeline->head_res);
+
+	return 0;
+}
+
+// Inline conversion of a timeline time (ns) to a core time (ns)
+int qot_timeline_time_core2line(int bid, int64_t *core)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
+
+	return 0;
+}
+
+// Inline conversion of a core time (ns) to a timeline time (ns)
+int qot_timeline_time_line2core(int bid, int64_t *line)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
+
+	return 0;
+}
+
+// Convert a core duration (ns) to a timeline duration (ns)
+int qot_timeline_duration_core2line(int bid, uint64_t *core)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
+
+	return 0;
+}
+
+// Convert a timeline duration (ns) to a core duration (ns)
+int qot_timeline_duration_line2core(int bid, uint64_t *line)
+{
+	// Grab the binding from the ID
+	struct qot_binding *binding = idr_find(&idr_bindings, bid);
+	if (!binding)
+		return -1;
 
 	return 0;
 }

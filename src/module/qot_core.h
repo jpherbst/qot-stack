@@ -28,43 +28,29 @@
 #ifndef _QOT_CORE_H_
 #define _QOT_CORE_H_
 
-// Kernel code required for inclusion by callee
-#include <linux/timecounter.h>
-
-// Information about a capture event
-struct qot_capture_event {
-	uint32_t id;							// Hardware timer ID
-	uint64_t count_at_capture;				// Hardware count at capture
-	uint64_t count_at_interrupt;			// Hardware count at interrupt
-};
-
-// Information about a compare event
-struct qot_compare_event {
-	uint32_t id;							// Hardware timer ID
-	uint64_t next;							// Time of next event (clock ticks)
-	uint64_t cycles_high;					// High cycle time (clock ticks)
-	uint64_t cycles_low;					// Low cycle time (clock ticks)
-	uint64_t limit;							// Number of repetition (0 = infinite)
-	uint8_t  enable;						// [0] = disable, [1] = enabled
-};
-
-// EXPORTED FUNCTIONS DESIGNED TO BE CALLED BY THE PLATFORM IMPLEMENTATION //////
+/*
+ * struct qot_driver - Callbacks that allow the QoT to core hooks into the hardware
+ *                     timers. Implementation is really up to the driver.
+ *
+ * @compare:            read the current "core" time value in nanoseconds
+ * @compare:            action a pin interrupt for the given period
+ */
+struct qot_driver {
+	int64_t (*read)(void);
+	int (*compare)(const char *name, uint8_t enable, 
+		int64_t start, uint64_t high, uint64_t low, uint32_t repeat);
+};	
 
 // Register a given clocksource as the primary driver for time
-int qot_register(struct clocksource *clk);
+int qot_register(struct qot_driver *driver);
 
-// Called when the driver receives a capture event
-int qot_event_capture(int id, struct qot_capture_event *event);
+// Send a compare action to the QoT stack (from the driver)
+int qot_push_capture(const char *name, int64_t epoch);
 
-// Send a compare event to the driver
-int qot_event_compare(int id, struct qot_compare_event *event);
+// Send an event action to the QoT stack (incoming from the POSIX clock)
+int qot_push_event(const char *uuid, const char* name, int64_t type);
 
 // Unregister the  clock source, oscillators and pins
 int qot_unregister(void);
-
-// FUNCTIONS DESIGNED TO BE CALLED BY THE CLOCK SUBSYSTEM ///////////////////////
-
-// Copy over the read() function and initial mult/shift for projection
-int qot_cyclecounter_init(struct cyclecounter *cc);
 
 #endif

@@ -26,7 +26,6 @@
  */
 
 // Kernel aPIs
-#include <linux/clocksource.h>
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
@@ -54,19 +53,33 @@ static struct cdev c_dev;
 static struct class *cl;
 static struct device *dev_ret;
 
+// Data structure for storing captures
+struct qot_capture_item {
+	struct qot_capture data;
+	struct list_head list;
+};
+
+// Data structure for storing events
+struct qot_event_item {
+	struct qot_event data;
+	struct list_head list;
+};
+
 // Stores information about an application binding to a timeline
 struct qot_owner {
-    struct rb_node node;			// Red-black tree node
+	struct rb_node node;			// Red-black tree node
 	struct file *fileobject;		// Application's file object 	 
 	wait_queue_head_t wq;			// Application's wait queue 	 
 	int flag;						// Application's data ready flag 
+	struct list_head capture_list;	// Pointer to capture data
+	struct list_head event_list;	// Pointer to event data
 };
 
-// A hash table designed to quickly find a timeline based on its UUID
+// A red-black tree designed to quickly find a file owner for a binding
 static struct rb_root owner_root = RB_ROOT;
 
-// Key data structures
-static struct clocksource *clksrc = NULL;
+// The implementation of the driver
+static struct qot_driver *driver = NULL;
 
 // DATA STRUCTURE MANAGEMENT /////////////////////////////////////////////////////////
 
@@ -119,7 +132,9 @@ static int qot_ioctl_open(struct inode *i, struct file *f)
 	if (!owner)
 		return -ENOMEM;
 	
-	// Initialize the poll info for this file descriptor
+	// Initialize the capture list and polling structures for this ioctl channel
+	INIT_LIST_HEAD(&owner->capture_list);
+	INIT_LIST_HEAD(&owner->event_list);
 	init_waitqueue_head(&owner->wq);
 	owner->fileobject = f;
 	owner->flag = 0;
@@ -149,6 +164,8 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_message msg;
 	int32_t ret;
 	struct qot_owner *owner;
+	struct qot_capture_item *capture_item;
+	struct qot_event_item *event_item;
 
 	// Sanity check that owner of file exists
 	owner = qot_owner_search(&owner_root, f);
@@ -156,7 +173,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		return -EACCES;
 
 	// Deny all access if there is no clocksource registered
-	if (!clksrc)
+	if (!driver)
 		return -EACCES;
 
 	// Check what message was sent
@@ -169,12 +186,12 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
-		// Bind to a timeline with a given accuracy and resolution
+		// Try and bind to a timeline with a given accuracy and resolution
 		msg.bid = qot_timeline_bind(msg.uuid, msg.request.acc, msg.request.res);
 		if (msg.bid < 0)
 			return -EACCES;
 
-		// Get the posix index
+		// Copy over the binding ID and try and get a clock ID
 		msg.tid = qot_timeline_index(msg.bid);
 		if (msg.tid < 0)
 			return -EACCES;
@@ -224,6 +241,83 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		break;
 
+	case QOT_GET_CAPTURE:
+
+		// Get the owner associated with this ioctl channel
+		owner = qot_owner_search(&owner_root, f);
+		if (!owner)
+			return -EACCES;
+
+		// We need to signal the user-space to stop pulling captures when there are no more left
+		if (list_empty(&owner->capture_list))
+			return -EACCES;			
+
+		// Get the head of the capture queue
+		capture_item = list_entry(owner->capture_list.next, struct qot_capture_item, list);
+
+		// TODO: PROJECT THIS CAPTURE EVENT INTO THE GLOBAL TIMELINE AND COPY TO msg.capture
+
+		// Copy to the return message
+		memcpy(&msg.capture,&capture_item->data,sizeof(struct qot_capture));
+
+		// Free the memory used by this capture event
+		list_del(&capture_item->list);
+		kfree(capture_item);
+
+		// Send back the data structure with the new binding and clock info
+		if (copy_to_user((struct qot_message*)arg, &msg, sizeof(struct qot_message)))
+			return -EACCES;
+
+		break;
+
+	case QOT_SET_COMPARE:
+		
+		// Get the parameters passed into the ioctl
+		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
+			return -EACCES;
+
+		// Check that we have a volid driver implmentation
+		if (driver->compare)
+		{
+			// TODO: PROJECT THIS COMPARE EVENT INTO THE GLOBAL TIMELINE
+
+			// Check that the driver is willing to action this request
+			if (driver->compare(msg.compare.name, msg.compare.enable, msg.compare.start, 
+				msg.compare.high, msg.compare.low, msg.compare.repeat)) 
+				return -EACCES;
+		}
+
+		break;
+
+	case QOT_GET_EVENT:
+
+		// Get the owner associated with this ioctl channel
+		owner = qot_owner_search(&owner_root, f);
+		if (!owner)
+			return -EACCES;
+
+		// We need to signal the user-space to stop pulling captures when there are no more left
+		if (list_empty(&owner->event_list))
+			return -EACCES;			
+
+		// Get the head of the capture queue
+		event_item = list_entry(owner->event_list.next, struct qot_event_item, list);
+
+		// TODO: PROJECT THIS CAPTURE EVENT INTO THE GLOBAL TIMELINE AND COPY TO msg.capture
+
+		// Copy to the return message
+		memcpy(&msg.event,&event_item->data,sizeof(struct qot_event));
+
+		// Free the memory used by this capture event
+		list_del(&event_item->list);
+		kfree(event_item);
+
+		// Send back the data structure with the new binding and clock info
+		if (copy_to_user((struct qot_message*)arg, &msg, sizeof(struct qot_message)))
+			return -EACCES;
+
+		break;
+
 	default:
 
 		return -EINVAL;
@@ -241,8 +335,16 @@ static unsigned int qot_poll(struct file *f, poll_table *wait)
 	if (owner)
 	{
 		poll_wait(f, &owner->wq, wait);
-		if (owner->flag) 
-			mask |= (POLLIN | POLLRDNORM);
+		if (owner->flag)
+		{
+			// Check if some capture data is available...
+			if (!list_empty(&owner->capture_list))
+				mask |= (POLLIN | POLLRDNORM);
+
+			// Check if some event data is available...
+			if (!list_empty(&owner->event_list))
+				mask |= (POLLOUT | POLLWRNORM);
+		}
 	}
 	return mask;
 }
@@ -259,74 +361,95 @@ static struct file_operations qot_fops = {
 // EXPORTED FUNCTIONALITY ////////////////////////////////////////////////////////
 
 // Register a clock source as the primary driver of time
-int qot_register(struct clocksource *clksrc_in)
+int qot_register(struct qot_driver *d)
 {
-	if (!clksrc_in)
-	{
-		clksrc = clksrc_in;
-		return 0;
-	}	
-	return -1;
+	if (driver)
+		return 1;
+	driver = d;
+	return 0;
 }
 EXPORT_SYMBOL(qot_register);
 
-// Register the existence of a timer pin
-int qot_event_capture(int id, struct qot_capture_event *event)
+// Pass a capture event from the paltform driver to the QoT core
+int qot_push_capture(const char *name, int64_t epoch)
 {
-	// TO BE IMPLEMENTED
+	struct rb_node *node;
+	struct qot_capture_item *capevent;
+	struct qot_owner *owner;
+
+	// We must add the capture event to each qpplication listener queue
+  	for (node = rb_first(&owner_root); node; node = rb_next(node))
+  	{
+  		// Get the owner container of this red-black tree node
+  		owner = container_of(node, struct qot_owner, node);
+
+  		// Allocate the memory to store the event for this owner
+		capevent = kzalloc(sizeof(struct qot_capture_item), GFP_KERNEL);
+		if (!capevent)
+			return -ENOMEM;
+
+		// Copy over the name and data
+		strcpy(capevent->data.name, name);
+		capevent->data.edge = epoch;
+
+		// Add it to the binding queue for  the owner
+		list_add_tail(&owner->capture_list, &capevent->list);
+
+		// Poll the owner to show that there is some new capture data
+		owner->flag = 1;
+		wake_up_interruptible(&owner->wq);
+  	}
 	return 0;
 }
-EXPORT_SYMBOL(qot_event_capture);
+EXPORT_SYMBOL(qot_push_capture);
 
-// Called by driver when a capture event occurs
-int qot_event_compare(int id, struct qot_compare_event *event)
+// Pass a capture event from the paltform driver to the QoT core
+int qot_push_event(const char *uuid, const char* name, int64_t type)
 {
-	// TO BE IMPLEMENTED
+	struct rb_node *node;
+	struct qot_event_item *event_item;
+	struct qot_owner *owner;
+
+	// We must add the event to all appropriate bindings
+  	for (node = rb_first(&owner_root); node; node = rb_next(node))
+  	{
+  		// Get the owner container of this red-black tree node
+  		owner = container_of(node, struct qot_owner, node);
+
+  		// If the UUID matches the timeline of this fd/owner/binding
+  		if (strcmp(uuid,qot_timeline_uuid(owner->bid))==0)
+  		{
+	  		// Allocate the memory to store the event for this owner
+			event_item = kzalloc(sizeof(struct qot_event_item), GFP_KERNEL);
+			if (!event_item)
+				return -ENOMEM;
+
+			// Copy over the name and data
+			strcpy(event_item->data.name, name);
+			event_item->data.edge = epoch;
+
+			// Add it to the binding queue for  the owner
+			list_add_tail(&owner->capture_list, &event_item->list);
+
+			// Poll the owner to show that there is some new capture data
+			owner->flag = 1;
+			wake_up_interruptible(&owner->wq);
+		}
+  	}
+
 	return 0;
 }
-EXPORT_SYMBOL(qot_event_compare);
-
-// Remap the read query from a cycle counter to a clocksource
-cycle_t qot_read_remap(const struct cyclecounter *cc)
-{
-	if (clksrc)
-		return clksrc->read(clksrc);
-	return 0;
-}
-
-// Copy over the read() function and initial mult/shift for projection
-int qot_cyclecounter_init(struct cyclecounter *cc)
-{
-	// If we have a clock source set
-	if (clksrc)
-	{
-		// Copy over the cycle counter info from the clocksource
-		cc->read  = qot_read_remap;
-		cc->mask  = clksrc->mask;
-		cc->mult  = clksrc->mult;
-		cc->shift = clksrc->shift;
-
-		// Success
-		return 0;
-	}
-
-	// Failure
-	return -1;
-}
-EXPORT_SYMBOL(qot_cyclecounter_init);
+EXPORT_SYMBOL(qot_push_event);
 
 // Unregister the clock source
 int qot_unregister(void)
 {
-	if (clksrc)
-	{
-		clksrc = NULL;
-		return 0;
-	}	
-	return -1;
+	if (!driver)
+		return 1;
+	driver = NULL;
+	return 0;
 }
 EXPORT_SYMBOL(qot_unregister);
-
 
 // MODULE LOAD AND UNLOAD ////////////////////////////////////////////////////////
 
@@ -373,6 +496,8 @@ void qot_cleanup(void)
     class_destroy(cl);
     cdev_del(&c_dev);
     unregister_chrdev_region(dev, MINOR_CNT);
+
+    // Remove the red black tree nodes and capture/event lists
 
 	// Shutdown the TIMELINE subsystem
     qot_timeline_cleanup();

@@ -50,16 +50,9 @@ qot_am335x {
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-#include <linux/clocksource.h>
 #include <linux/workqueue.h>
-
-// Module information
-#define MODULE_NAME "qot_am335x"
-
-// This is a fixed offset added to the dual timer sync to account for the fact that
-// the actual instructions used to read/write to the counter take a few cycles to 
-// execute on the microcontroller. It was derivide empirically.
-#define KLUDGE_FACTOR 13
+#include <linux/timecounter.h>
+#include <linux/rbtree.h>
 
 // DMTimer Code specific to the AM335x
 #include "../../thirdparty/Kronux/arch/arm/plat-omap/include/plat/dmtimer.h"
@@ -70,27 +63,72 @@ qot_am335x {
 
 // FORWARD DELCLARATIONS /////////////////////////////////////////////////////////
 
+// Module information
+#define MODULE_NAME 			"qot_am335x"
+#define AM335X_TYPE_CAPTURE 	(0)
+#define AM335X_TYPE_COMPARE 	(1)
+#define AM335X_PIN_MAXLEN 		(128)
+#define AM335X_OVERFLOW_PERIOD 	(8*HZ)
+#define AM335X_KLUDGE_FACTOR 	13
+
+// Basic information about a platform timer
+struct qot_am335x_timer {
+	char name[AM335X_PIN_MAXLEN];		// Human-readable name, like "core", or "timer4"
+	struct omap_dm_timer *dmtimer;		// Pointer to the OMAP dual-mode timer
+	uint8_t type;						// Type of pin (0 = capture, 1 = compare, 2 = sys)
+	uint8_t enable;				 	    // COMPARE: [0] = disable, [1] = enabled
+	uint64_t next;						// COMPARE: Time of next event (clock ticks)
+	uint32_t cycles_high;				// COMPARE: High cycle time (clock ticks)
+	uint32_t cycles_low;				// COMPARE: Low cycle time (clock ticks)
+	uint32_t limit;						// COMPARE: Number of repetition (0 = infinite)
+    struct rb_node node;				// Red-black tree is used to store timers on name
+};
+
 // Platform data -- specific to the AM335x
 struct qot_am335x_data {
-	struct clocksource clksrc;
-	struct omap_dm_timer *core;
-	struct omap_dm_timer *timer4;
-	struct omap_dm_timer *timer5;
-	struct omap_dm_timer *timer6;
-	struct omap_dm_timer *timer7;
+	struct omap_dm_timer *core;			// CORE: timer
+	struct timecounter tc;				// CORE: time counter
+	struct cyclecounter cc;				// CORE: cycle counter
+	struct delayed_work overflow_work;	// CORE: scheduled work
 };
 
 // Allow compilation on x86 type systems
 extern struct device_node *of_find_node_by_phandle(phandle handle);
 
+// A hash table designed to quickly find a timeline based on its UUID
+static struct rb_root timer_root = RB_ROOT;
+
 // Lock to protect asynchronous IRQ events from colliding
 static DEFINE_SPINLOCK(qot_am335x_lock);
 
+//////////////////////////////// DATA STRUCTURE FUNCTIONS ////////////////////////////////////
+
+// Search our data structure for a given timer
+static struct qot_am335x_timer *qot_am335x_timer_search(struct rb_root *root, const char *name)
+{
+	int result;
+	struct qot_am335x_timer *timeline;
+	struct rb_node *node = root->rb_node;
+	while (node)
+	{
+		timeline = container_of(node, struct qot_am335x_timer, node);
+		result = strcmp(name, timeline->name);
+		if (result < 0)
+			node = node->rb_left;
+		else if (result > 0)
+			node = node->rb_right;
+		else
+			return timeline;
+	}
+	return NULL;
+}
+
 // REGISTER SETUP FOR TIMERS ////////////////////////////////////////////////////////
 
+// Setup a timer pin to be in capture mode
 static void omap_dm_timer_setup_capture(struct omap_dm_timer *timer, int timer_irqcfg)
 {
-	u32 ctrl;
+	uint32_t ctrl;
 
   	// Set the timer source
 	omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
@@ -119,9 +157,10 @@ static void omap_dm_timer_setup_capture(struct omap_dm_timer *timer, int timer_i
 	timer->context.tcrr = 0;
 }
 
+// Set a timer pin to be in compare mode
 static void omap_dm_timer_setup_compare(struct omap_dm_timer *timer)
 {
-	u32 ctrl;
+	uint32_t ctrl;
 
   	// Set the timer source
 	omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
@@ -155,14 +194,124 @@ static void omap_dm_timer_setup_compare(struct omap_dm_timer *timer)
 	omap_dm_timer_start(timer);
 }
 
+// Event scheduler that implements PWM
+static void qot_am335x_compare_scheduler(struct qot_am335x_timer *core, struct qot_am335x_timer *pin, int type)
+{
+	uint32_t h, l;
+	uint32_t load, match, value;
+
+	// Don't bother checking compare timer that's disabled
+	if (pin->type != AM335X_TYPE_COMPARE)
+		return;
+
+	// If compare mode is disabled, zero the load and match registers
+	if (pin->enable == 0)
+	{
+		__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG,  0, pin->timer->posted);
+		__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, 0, pin->timer->posted);
+		pin->timer->context.tmar = 0;
+		pin->timer->context.tldr = 0;
+		return;
+	}
+
+	// If a match has just been fired
+	switch (type)
+	{
+
+	// Both the initialization and the capture overflow cases do the same thing.
+	// The objective is to check whether we need to schedule a load / match in
+	// the current 32bit timer period. We use the OMAP_TIMER_INT_CAPTURE flag in
+	// place of a custom INIT value :) 
+	case OMAP_TIMER_INT_CAPTURE: 
+
+		if (timer->)
+
+		// We need to increment this to get expected behaviour
+		if (pin->limit > 0) 
+			pin->limit++;
+
+		// NOTE THAT THERE IS NO BREAK HERE BY DESIGN...
+
+	case OMAP_TIMER_INT_OVERFLOW:
+
+		// Find the high and low bits of the timer
+		h = (pin.next >> 32);
+		l = (pin.next);
+
+		// If the event must occur in the current overflow
+		if (h == pin->overflow)
+		{	
+			// Set load and match
+			load  = -(pin->cycles_high + pin->cycles_low);
+			match = -(pin->cycles_low);
+			value = __omap_dm_timer_read(core->timer->, OMAP_TIMER_COUNTER_REG, core->timer->posted) - l + AM335X_KLUDGE_FACTOR;
+			__omap_dm_timer_write(pin->timer, OMAP_TIMER_COUNTER_REG, value, pin->timer->posted);
+			__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG, load, pin->timer->posted);
+			__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, match, pin->timer->posted);
+			pdata->compare_timer->context.tcrr = value;
+			pdata->compare_timer->context.tmar = match;
+			pdata->compare_timer->context.tldr = load;		
+		}
+
+		break;
+
+	// If a match has just been fired, it means that we have transitioned from a high to
+	// a low PWM cycle. We need to check how many cycles were requested by the user. If 
+	// we have reached that number, we need to turn disable the timer to prevent
+	case OMAP_TIMER_INT_MATCH:
+
+		// A pdata->comp.limit = zero indicates an infinite loop. So, we need to 
+		// disable the PWM. We do this by setting enable = 0.
+		if (pin->limit > 1)
+			pin->limit--;
+		else if (pin->limit == 1)
+		{
+			// Reset load and match to stop toggles
+			load  = 0;
+			match = 0;
+			__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG,  load,  pin->timer->posted);
+			__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, match, pin->timer->posted);
+			pin->timer->context.tmar = match;
+			pin->timer->context.tldr = load;
+			omap_dm_timer_trigger(pin->timer);
+			pin->enable = 0;
+		}
+
+		break;
+	}
+}
+
+// Setup the compare pin - start/high/low are in core time units. The first task is to map them
+// to the cycle counts using the mult/shift paramaters in the timecounter.
+static int qot_am335x_setup_compare(const char *name, uint8_t enable, 
+	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
+{
+	// Search for the timer with the supplied name
+	struct qot_am335x_timer *timer = qot_am335x_timer_search(timer_root, name);
+	if (!timer)
+		return -1;
+
+
+
+	return 0;
+}
+
+////////////////////////// INTERRUPT HANDLING ////////////////////////////////////////////////
+
 // Interrupt handler for compare timers
 static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 {
 	unsigned long flags;
 	unsigned int irq_status;
 	struct omap_dm_timer *timer = data;
+	struct qot_am335x_timer *pin = container_of(data, struct qot_am335x_timer, timer);
+	// Extract the platform data from the pin
+	struct qot_am335x_data *pdata
+	struct list_head *ptr = &pin->list;
+	while (ptr->prev) ptr = ptr->prev;
+	pdata = container_of(ptr, struct qot_am335x_data, pin_head.next);
 
-	spin_lock_irqsave(&qot_am335x_lock, flags);
+	spin_lock_irqsave(&qot_am335x_lock, flags);	
 
 	// If the OMAP_TIMER_INT_CAPTURE flag in the IRQ status is set
 	irq_status = omap_dm_timer_read_status(timer);
@@ -170,31 +319,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was a capture event
 	if (irq_status & OMAP_TIMER_INT_CAPTURE)
 	{
-		/*
-		// Alloate work memeory
-		capture = (struct qot_am335x_capture*) 
-			kmalloc(sizeof(struct qot_am335x_capture), GFP_KERNEL)
-		
-		// Initialize the work
-		INIT_WORK(&capture->work, qot_am335x_capture_work);
-
-		// Write the capture data and set the status
-		capture->id = timer->id;
-		capture->count_at_interrupt = omap_dm_timer_read_counter(timer);
-		capture->count_at_capture   = __omap_dm_timer_read(timer, 
-			OMAP_TIMER_CAPTURE_REG, timer->posted);
+		// Clear interrupt
 		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_CAPTURE);
-
-		// Enqueue the work for processing by the top half
-		queue_work(queue_capture, &capture->work);
-		*/
-	}
-
-	// If this was an overflow event
-	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
-	{
-		// TODO: deal with overflows
-		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_OVERFLOW);
 	}
 
 	// if this was a match event
@@ -202,6 +328,13 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	{
 		// TODO: deal with matches
 		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_MATCH);
+	}
+
+	// If this was an overflow event
+	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
+	{
+		// TODO: deal with overflows
+		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_OVERFLOW);
 	}
 
 	spin_unlock_irqrestore(&qot_am335x_lock, flags);
@@ -260,38 +393,19 @@ static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am3
 
 // EXPORTED SYMBOLS ///////////////////////////////////////////////////////////
 
-// Read the OMAP cycle counter
-static cycle_t qot_am335x_read_cycles(struct clocksource *src)
+// Read the CORE timer hardware count
+static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 {
-	struct qot_am335x_data *pdata = container_of(src, struct qot_am335x_data, clksrc);
+	struct qot_am335x_data *pdata = container_of(cc, struct qot_am335x_data, cc);
 	return (cycle_t) __omap_dm_timer_read_counter(pdata->core, pdata->core->posted);
 }
 
-// Initialize a clock source
-static void qot_am335x_clocksource_init(struct clocksource *clksrc, struct omap_dm_timer *timer)
+// Periodic check of core time to keep track of overflows
+static void qot_am335x_overflow_check(struct work_struct *work)
 {
-	// Extract the nominal frequency
-	struct clk *gt_fclk;
-	uint32_t f0;
-	gt_fclk = omap_dm_timer_get_fclk(timer);
-	f0 = clk_get_rate(gt_fclk);
-
-	// Set up the clock source
-	clksrc->name   = "core";
-	clksrc->rating = 299;
-	clksrc->read   = qot_am335x_read_cycles;
-	clksrc->mask   = CLOCKSOURCE_MASK(32);
-	clksrc->flags  = CLOCK_SOURCE_IS_CONTINUOUS;
-	if (clocksource_register_hz(clksrc, f0))
-		pr_err("qot_am335x: Could not register clocksource %s\n", clksrc->name);
-	else
-		pr_info("qot_am335x: clocksource: %s at %u Hz\n", clksrc->name, f0);
-}
-
-// Cleanup a clocksource
-static void qot_am335x_clocksource_cleanup(struct clocksource *clksrc)
-{
-	clocksource_unregister(clksrc);
+	struct qot_am335x_data *pdata = container_of(work, struct qot_am335x_data, overflow_work.work);
+	timecounter_read(&pdata->tc);
+	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
 }
 
 // Enable the IRQ on a given timer
@@ -305,6 +419,7 @@ static void qot_am335x_enable_irq(struct omap_dm_timer *timer, unsigned int inte
 // Parse the device tree to setup the timers
 static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 {
+	struct qot_am335x_timer *pin;
 	struct qot_am335x_data *pdata;
 	struct device_node *np = pdev->dev.of_node;
 	struct device_node *timer_node;
@@ -312,12 +427,15 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	struct omap_dm_timer *timer;
 	const __be32 *phandle;
 	char name[128];
-	int i, timer_irqcfg, timer_source, compare;
+	int i, timer_irqcfg, timer_source, type;
 
   	// Allocate memory for the platform data
 	pdata = devm_kzalloc(&pdev->dev, sizeof(struct qot_am335x_data), GFP_KERNEL);
 	if (!pdata)
 		return NULL;
+
+	// Setup the list for timer pins
+	INIT_LIST_HEAD(&pdata->pin_head);
 
 	// Setup the core timer
 	phandle = of_get_property(np, "core", NULL);
@@ -332,7 +450,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		return NULL;
 	}
 	timer_node = of_find_node_by_phandle(be32_to_cpup(phandle));
-	if (qot_am335x_timer_init(pdata->core, timer_node))
+	if (qot_am335x_timer_init(timer, timer_node))
 	{
 		pr_err("qot_am335x: could create the core timer\n");
 		return NULL;
@@ -346,16 +464,25 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
 	}
 
-	// Setup core timer and clock source
-	omap_dm_timer_use_clk(pdata->core, timer_source);
-	qot_am335x_clocksource_init(&pdata->clksrc, pdata->core);
-	qot_am335x_enable_irq(pdata->core, OMAP_TIMER_INT_OVERFLOW);
+	// Setup the clock source, enable IRQ and put the node back into the device tree
+	omap_dm_timer_use_clk(timer, timer_source);
+	qot_am335x_enable_irq(timer, OMAP_TIMER_INT_OVERFLOW);
 	of_node_put(timer_node);
 
-	// Register the clocksource with the QoT HAL
-	qot_register(&pdata->clksrc);
+	// Add the timer to the pin list and store is as a core reference
+	list_add_tail(&pdata->pin_head, &pin->list);
+	pdata->core = timer;
 
-	// Setup the secondary timers (for interrupt processing and generation)
+	// Set up a timecounter to keep track of time and take care of overflows
+	pdata->cc.read = qot_am335x_core_timer_read;
+	pdata->cc.mask = CLOCKSOURCE_MASK(32);
+	pdata->cc.mult = 0x80000000;
+	pdata->cc.shift = 29;
+	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
+	INIT_DELAYED_WORK(&pdata->overflow_work, qot_am335x_overflow_check);
+	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
+
+	// Setup each timer pin in the device tree (for interrupt processing and generation)
 	for (i = 4; i <= 7; i++)
 	{
 		sprintf(name,"timer%d",i);
@@ -376,43 +503,70 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 			pr_err("qot_am335x: could create timer%d",i);
 			continue;
 		}
-		compare = 0;
+		type = AM335X_TYPE_CAPTURE;
 		switch (timer_args.args[0])
 		{
 		default:
 			pr_err("qot_am335x: %d is not a valid timer%d config",timer_args.args[0],i);
-		case 0: compare = 1; break;
+		case 0: type = AM335X_TYPE_COMPARE; break;
 		case 1: timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH; break;
 		case 2: timer_irqcfg = OMAP_TIMER_CTRL_TCM_HIGHTOLOW; break;
 		case 3: timer_irqcfg = OMAP_TIMER_CTRL_TCM_BOTHEDGES; break;
 		}
-		if (compare)
+
+		// Setup the timer based on the type
+		switch(type)
 		{
+		case AM335X_TYPE_COMPARE:
 			omap_dm_timer_setup_compare(timer);
 			omap_dm_timer_use_clk(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
-		}
-		else
-		{
+			break;
+		case AM335X_TYPE_CAPTURE:
 			omap_dm_timer_setup_capture(timer, timer_irqcfg);
 			omap_dm_timer_use_clk(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
+			break;
 		}
+
+		// Align the hardware count of this timer as best as possible to the core timer. Since they
+		// are clocked by the same oscillator, there should be no relative drift.
+		__omap_dm_timer_write(timer, OMAP_TIMER_COUNTER_REG, __omap_dm_timer_read(pdata->core, 
+			OMAP_TIMER_COUNTER_REG, pdata->core->posted) + AM335X_KLUDGE_FACTOR, timer->posted);
+		
+		// Allocate memory for the pin
+		pin = kzalloc(sizeof(struct qot_am335x_timer), GFP_KERNEL);
+		if (pin == NULL)
+			return NULL;
+		pin->type = type;
+		pin->timer = timer;
 		switch(i)
 		{
-			case 4: pdata->timer4 = timer; break;
-			case 5: pdata->timer5 = timer; break;
-			case 6: pdata->timer6 = timer; break;
-			case 7: pdata->timer7 = timer; break;
-			default:
-				pr_err("qot_am335x: %d is not a recognised timer id\n",i);
+		case 4: strcpy(pin->name,"timer4"); break;
+		case 5: strcpy(pin->name,"timer5"); break;
+		case 6: strcpy(pin->name,"timer6"); break;
+		case 7: strcpy(pin->name,"timer7"); break;
+		default:
+			pr_err("qot_am335x: %d is not a recognised timer id\n",i);
 		}
+
+		// Add the pin to the list
+		list_add_tail(&pdata->pin_head, &pin->list);
+
+		// Put the device tree node back
 		of_node_put(timer_node);
 	}
 
 	// Return th platform data
 	return pdata;
 }
+
+// MODULE INITIALIZATION //////////////////////////////////////////////////////
+
+static struct qot_driver qot_driver_ops = {
+    .owner    = THIS_MODULE,
+    .compare  = qot_am335x_compare_event,
+};
 
 // MODULE INITIALIZATION //////////////////////////////////////////////////////
 
@@ -458,6 +612,8 @@ static int qot_am335x_remove(struct platform_device *pdev)
 {
 	unsigned long flags;
 	struct qot_am335x_data *pdata;
+	struct qot_am335x_timer *pin;
+	struct list_head *pos, *q;
 	
 	// Don't allow interrupts during timer destruction
 	spin_lock_irqsave(&qot_am335x_lock, flags);
@@ -466,23 +622,21 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	pdata = pdev->dev.platform_data;
 	if (pdata)
 	{
-		// Unregister the clock source with the HAL
-		qot_unregister();
+		// Clean up the individual pins
+		list_for_each_safe(pos, q, &pdata->pin_head)
+		{
+			// Extract the pin from the list
+			 pin = list_entry(pos, struct qot_am335x_timer, list);
+			 
+			 // Remove from the list
+			 list_del(pos);
 
-		// Clean up the core timer
-		qot_am335x_clocksource_cleanup(&pdata->clksrc);
-		if (pdata->core)
-			qot_am335x_timer_cleanup(pdata->core, pdata);
+			 // Free the timer
+			 qot_am335x_timer_cleanup(pin->timer, pdata);
 
-		// Clean up the individual timers
-		if (pdata->timer4) 
-			qot_am335x_timer_cleanup(pdata->timer4, pdata);
-		if (pdata->timer5) 
-			qot_am335x_timer_cleanup(pdata->timer5, pdata);
-		if (pdata->timer6) 
-			qot_am335x_timer_cleanup(pdata->timer6, pdata);
-		if (pdata->timer7) 
-			qot_am335x_timer_cleanup(pdata->timer7, pdata);
+			 // Free the pin memory
+			 kfree(pin);
+		}
 
 		// Free the platform data
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);

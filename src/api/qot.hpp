@@ -40,6 +40,14 @@
 namespace qot
 {
 	/**
+	 * @brief Timeline events
+	 */
+	typedef enum {
+		EVENT_BIND,
+		EVENT_UNBIND
+	} TimelineEventType;
+
+	/**
 	 * @brief Convenience decalaration
 	 */
 	typedef std::function<void(const std::string &pname, int64_t val)> CaptureCallbackType;
