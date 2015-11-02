@@ -15,6 +15,8 @@ clean:
 install:
 	sudo cp -v *.ko /export/rootfs/lib/modules/4.1.12-bone-rt-r16/kernel/drivers
 	sudo cp -v *.dtbo /export/rootfs/lib/firmware
+	sudo cp 80-qot.rules /export/rootfs/etc/udev/rules.d/
 
-depmod:
-	ssh root@10.42.0.36 depmod
+reload:
+	ssh root@10.42.0.108 depmod
+	ssh root@10.42.0.108 ldconfig
