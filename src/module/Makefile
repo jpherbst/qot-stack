@@ -6,10 +6,15 @@ CROSSCOMP ?= ../dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-l
 
 all:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" modules
+	dtc -O dtb -o ROSELINE-QOT-00A0.dtbo -b 0 -@ ROSELINE-QOT-00A0.dts
 
 clean:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" clean
+	rm *.dtbo
 
 install:
-	sudo cp -v *.ko $(KERNELDIR)/kernel/drivers
-	sudo depmod
+	sudo cp -v *.ko /export/rootfs/lib/modules/4.1.12-bone-rt-r16/kernel/drivers
+	sudo cp -v *.dtbo /export/rootfs/lib/firmware
+
+depmod:
+	ssh root@10.42.0.36 depmod

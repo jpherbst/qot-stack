@@ -1,0 +1,47 @@
+/dts-v1/;
+/plugin/;
+ 
+/ {
+    /* what boards are we compatible with */
+    compatible = "ti,beaglebone", "ti,beaglebone-black";
+ 
+    /* identification */
+    part-number = "ROSELINE-QOT";
+ 
+    /* special version ignores EEPROM */
+    version = "00A0";
+ 
+    /* pin multiplexing */
+    fragment@0 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            qot_pins: qot_pins {
+                pinctrl-single,pins = <
+                  0x150 0x30 /* spi0_sclk, INPUT_PULLUP | MODE0 */
+                  0x154 0x30 /* spi0_d0, INPUT_PULLUP | MODE0 */
+                  0x158 0x10 /* spi0_d1, OUTPUT_PULLUP | MODE0 */
+                  0x15c 0x10 /* spi0_cs0, OUTPUT_PULLUP | MODE0 */
+                >;
+            };
+        };
+    };
+ 
+    /* define the basic driverset for pinmuxing timers and initializing the qot kernel */
+    fragment@1 {
+        target-path="/";
+        __overlay__ {
+            qot {
+                compatible = "qot_am335x";
+                status = "okay";
+                core   = <&timer3 0>; // (0=CLK-SYS-24MHz, 1=CLK-SYS-32kHz, 2=TCLKLIN)
+                timer4 = <&timer4 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
+                timer5 = <&timer5 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
+                timer6 = <&timer6 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
+                timer7 = <&timer7 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
+                pinctrl-names = "default";
+                pinctrl-0 = <&qot_pins>;
+            };
+        };
+
+    };
+};
