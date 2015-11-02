@@ -228,6 +228,59 @@ static int qot_binding_insert(struct rb_root *root, struct qot_binding *data)
 	return 1;
 }
 
+static int qot_binding_remove(struct qot_binding *binding)
+{
+	// Failure
+	if (!binding)
+		return 1;
+
+	// Delete the binding fromt the timeline list
+	list_del(&binding->res_list);
+	list_del(&binding->acc_list);
+
+	// If we have removed the last binding from a timeline, then the lists
+	// associated with the timeline should both be empty
+	if (	list_empty(&binding->timeline->head_acc) 
+		&&  list_empty(&binding->timeline->head_res))
+	{
+		// Unregister the QoT clock
+		device_destroy(qot_clock_class, binding->timeline->devid);
+
+		// Unregister clock
+		posix_clock_unregister(&binding->timeline->clock);
+
+		// Remove the binding ID form the list
+		idr_remove(&idr_clocks, binding->timeline->index);
+
+		// Remove the timeline node from the red-black tree
+		rb_erase(&binding->timeline->node, &timeline_root);
+
+		// Free the timeline entry memory
+		kfree(binding->timeline);
+	}
+
+	// Remove the timeline node from the red-black tree
+	rb_erase(&binding->node, &binding_root);
+
+	// Delete the binding
+	kfree(binding);
+
+	// Success
+	return 0;
+}
+
+static void qot_binding_remove_all(void)
+{
+	struct rb_node *node;
+	struct qot_binding *binding;
+  	for (node = rb_first(&binding_root); node; node = rb_next(node))
+  	{
+  		binding = container_of(node, struct qot_binding, node);
+  		qot_binding_remove(binding);
+  	}
+}
+
+
 // CLOCK OPERATIONS //////////////////////////////////////////////////////////////////
 
 static int qot_adjfreq(struct qot_timeline *timeline, int32_t ppb)
@@ -558,33 +611,9 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		if (copy_from_user(&msg, (struct qot_message*)arg, sizeof(struct qot_message)))
 			return -EACCES;
 
-		// Remove the entries from the sort tables (ordering will be updated)
-		list_del(&binding->res_list);
-		list_del(&binding->acc_list);
-
-		// If we have removed the last binding from a timeline, then the lists
-		// associated with the timeline should both be empty
-		if (	list_empty(&binding->timeline->head_acc) 
-			&&  list_empty(&binding->timeline->head_res))
-		{
-			// Unregister the QoT clock
-			device_destroy(qot_clock_class, binding->timeline->devid);
-
-			// Unregister clock
-			posix_clock_unregister(&binding->timeline->clock);
-
-			// Remove the binding ID form the list
-			idr_remove(&idr_clocks, binding->timeline->index);
-
-			// Remove the timeline node from the red-black tree
-			rb_erase(&binding->timeline->node, &timeline_root);
-
-			// Free the timeline entry memory
-			kfree(binding->timeline);
-
-			// Return success
-			return 0;
-		}
+		// Try and remove this binding
+		if (qot_binding_remove(binding))
+			return -EACCES;
 
 		break;
 
@@ -798,10 +827,18 @@ EXPORT_SYMBOL(qot_push_capture);
 
 // Unregister the clock source
 int qot_unregister(void)
-{
+{	
+	// You cant unregister from something that is not already registered
 	if (!driver)
 		return 1;
+
+	// Remove all bindings and timelines
+	qot_binding_remove_all();
+
+	// Reset the driver
 	driver = NULL;
+	
+	// Success!
 	return 0;
 }
 EXPORT_SYMBOL(qot_unregister);
@@ -860,6 +897,9 @@ void qot_cleanup(void)
 	// Remove the clock class
     class_destroy(qot_clock_class);
 	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
+
+	// Remove all bindings
+	qot_binding_remove_all();
 
 	// Allocates clock ids
 	idr_destroy(&idr_clocks);

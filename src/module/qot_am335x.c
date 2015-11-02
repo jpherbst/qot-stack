@@ -24,21 +24,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-IMPORTANT : To use this driver you will need to add the following snippet to your
-            default device tree, or to an overlay (if supported). This will cause
-            the module to be loaded on boot, and make use of the QoT stack.
-
-qot_am335x {
-	compatible = "qot_am335x";
-	status = "okay";
-	core   = <&timer3 0>; (0=CLK-SYS-24MHz, 1=CLK-SYS-32kHz, 2=TCLKLIN)
-	timer4 = <&timer4 0>; (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
-	timer5 = <&timer5 0>; (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
-	timer6 = <&timer6 0>; (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
-	timer7 = <&timer7 0>; (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
-	pinctrl-names = "default";
-	pinctrl-0 = <&timer_pins>;
-};
+IMPORTANT : To use this driver you will need to use a special device tree overlay
+            that sets up the pinmux correctly and injects the kernel module into
+            the running system (see ROSELINE-QOT-00A0.dts) and Makefile. You will
+            need to have run ./dtc-overlay.sh in thirdpart/bb.org-overlays first.
 
 */
 
@@ -703,7 +692,6 @@ static int qot_am335x_probe(struct platform_device *pdev)
 // Remove the kernel module
 static int qot_am335x_remove(struct platform_device *pdev)
 {
-	unsigned long flags;
 	struct qot_am335x_pin *pin;
 	struct rb_node *node;
 
@@ -713,12 +701,12 @@ static int qot_am335x_remove(struct platform_device *pdev)
 		// Unregister with the QoT core, to prevent being interrupted
 		qot_unregister();
 
-		// Don't allow interrupts during destruction
-		spin_lock_irqsave(&pdata->lock, flags);
-
 		// Flush all tasks from the workque
 		flush_workqueue(pdata->cap_wq);
 	  	destroy_workqueue(pdata->cap_wq);
+
+		// Free the core timer
+		qot_am335x_timer_cleanup(pdata->timer, pdata);
 
 		// We must add the capture event to each qpplication listener queue
 		for (node = rb_first(&pdata->pin_root); node; node = rb_next(node))
@@ -733,14 +721,11 @@ static int qot_am335x_remove(struct platform_device *pdev)
 			kfree(pin);
 
 			// Delete the rb-node
-			rb_erase(node,&pdata->pin_root);
+			rb_erase(node, &pdata->pin_root);
 		}
 
 		// Free the platform data
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);
-
-		// Restore IRQs
-		spin_unlock_irqrestore(&pdata->lock, flags);
 
 		// Set the pointers to NULL
 		pdata = pdev->dev.platform_data = NULL;
