@@ -153,6 +153,34 @@ static int qot_am335x_pin_insert(struct rb_root *root, struct qot_am335x_pin *da
 
 // TIMER FUNCTIONS THAT SHOULD BE IN DMTIMER BUT ARE NOT /////////////////////////////
 
+// Setup a timer pin to be core
+static void omap_dm_timer_setup_core(struct omap_dm_timer *timer)
+{
+	uint32_t ctrl;
+
+  	// Set the timer source
+	omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
+	omap_dm_timer_enable(timer);
+
+  	// Read the control register
+	ctrl = __omap_dm_timer_read(timer, OMAP_TIMER_CTRL_REG, timer->posted);
+
+  	// Disable prescaler
+	ctrl &= ~(OMAP_TIMER_CTRL_PRE | (0x07 << 2));
+
+  	// Autoreload
+	ctrl |= OMAP_TIMER_CTRL_AR;
+	__omap_dm_timer_write(timer, OMAP_TIMER_LOAD_REG, 0, timer->posted);
+
+  	// Start timer
+	ctrl |= OMAP_TIMER_CTRL_ST;
+
+	// Save the context
+	timer->context.tclr = ctrl;
+	timer->context.tldr = 0;
+	timer->context.tcrr = 0;
+}
+
 // Setup a timer pin to be in capture mode
 static void omap_dm_timer_setup_capture(struct omap_dm_timer *timer, int timer_irqcfg)
 {
@@ -364,31 +392,6 @@ static void omap_dm_timer_use_clk(struct omap_dm_timer *timer, int clk)
 	}
 }
 
-// Initialise a timer
-static int qot_am335x_timer_init(struct omap_dm_timer *timer, struct device_node *node)
-{
-	// Used to check for successful device tree read
-	const char *tmp = NULL;
-	of_property_read_string_index(node, "ti,hwmods", 0, &tmp);
-	if (!tmp)
-	{
-		pr_err("qot_am335x: ti,hwmods property missing?\n");
-		return -ENODEV;
-	}
-	timer = omap_dm_timer_request_by_node(node);
-	if (!timer)
-	{
-		pr_err("qot_am335x: request_by_node failed\n");
-		return -ENODEV;
-	}
-	if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, timer))
-	{
-		pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
-		return -EIO;
-	}
-	return 0;
-}
-
 // Cleanup a timer
 static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am335x_data *pdata)
 {
@@ -436,6 +439,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	struct device_node *timer_node;
 	struct of_phandle_args timer_args;
 	struct omap_dm_timer *timer;
+	const char *tmp = NULL;
 	const __be32 *phandle;
 	char name[128];
 	int i, timer_irqcfg, timer_source, type;
@@ -445,11 +449,13 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	if (!pdata)
 		return NULL;
 
+	pr_info("am335x: Setting up core timer...");
+
 	// Setup the core timer
 	phandle = of_get_property(np, "core", NULL);
 	if (!phandle)
 	{
-		pr_err("qot_am335x: cannot find phandle for core");
+		pr_err("qot_am335x: could not find phandle for core");
 		return NULL;
 	} 
 	if (of_parse_phandle_with_fixed_args(np, "core", 1, 0, &timer_args) < 0)
@@ -458,11 +464,29 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		return NULL;
 	}
 	timer_node = of_find_node_by_phandle(be32_to_cpup(phandle));
-	if (qot_am335x_timer_init(timer, timer_node))
+	if (!timer_node)
 	{
-		pr_err("qot_am335x: could create the core timer\n");
+		pr_err("qot_am335x: could not find the timer node\n");
 		return NULL;
 	}
+	of_property_read_string_index(timer_node, "ti,hwmods", 0, &tmp);
+	if (!tmp)
+	{
+		pr_err("qot_am335x: ti,hwmods property missing?\n");
+		return NULL;
+	}
+	timer = omap_dm_timer_request_by_node(timer_node);
+	if (!timer)
+	{
+		pr_err("qot_am335x: request_by_node failed\n");
+		return NULL;
+	}
+	if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, timer))
+	{
+		pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
+		return NULL;
+	}
+
 	switch (timer_args.args[0])
 	{
 	default:
@@ -482,6 +506,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	spin_lock_irqsave(&pdata->lock, flags);
 
 	// Setup the clock source, enable IRQ and put the node back into the device tree
+	omap_dm_timer_setup_core(timer);
 	omap_dm_timer_use_clk(timer, timer_source);
 	qot_am335x_enable_irq(timer, OMAP_TIMER_INT_OVERFLOW);
 	of_node_put(timer_node);
@@ -495,9 +520,11 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
 	INIT_DELAYED_WORK(&pdata->overflow_work, qot_am335x_overflow_check);
 	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
-
+	
 	// Setup the red-black tree root
 	pdata->pin_root = RB_ROOT;
+
+	pr_info("am335x: Setting up pins...");
 
 	// Setup each timer pin in the device tree (for interrupt processing and generation)
 	for (i = 4; i <= 7; i++)
@@ -515,11 +542,26 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 			continue;
 		}
 		timer_node = of_find_node_by_phandle(be32_to_cpup(phandle));
-		if (qot_am335x_timer_init(timer, timer_node))
+		
+		tmp = NULL;
+		of_property_read_string_index(timer_node, "ti,hwmods", 0, &tmp);
+		if (!tmp)
 		{
-			pr_err("qot_am335x: could create timer%d",i);
+			pr_err("qot_am335x: ti,hwmods property missing?\n");
 			continue;
 		}
+		timer = omap_dm_timer_request_by_node(timer_node);
+		if (!timer)
+		{
+			pr_err("qot_am335x: request_by_node failed\n");
+			continue;
+		}
+		if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, timer))
+		{
+			pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
+			continue;
+		}
+
 		type = AM335X_TYPE_CAPTURE;
 		switch (timer_args.args[0])
 		{
