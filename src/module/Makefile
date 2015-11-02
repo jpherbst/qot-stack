@@ -1,6 +1,5 @@
-obj-m += qot.o
-qot-objs += qot_core.o qot_timeline.o qot_clock.o
-#obj-m += qot_am335x.o
+obj-m += qot_core.o
+obj-m += qot_am335x.o
 
 KERNELDIR ?= ../../thirdparty/bb-kernel/KERNEL
 CROSSCOMP ?= ../dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-

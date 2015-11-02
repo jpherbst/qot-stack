@@ -67,38 +67,30 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 
 	// Package up a request	to send over ioctl
 	struct qot_message msg;
-	msg.bid = 0;
 	msg.tid = 0;
 	msg.request.acc = acc;
 	msg.request.res = res;
 	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_NAMELEN);
 
 	// Add this clock to the qot clock list through scheduler
-	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg) == 0)
-	{
-		// Special case: problematic binding id
-		if (msg.bid < 0)
-			throw CannotBindToTimelineException();
+	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg))
+		throw CannotBindToTimelineException();
 
-		// Save the binding id
-		this->bid = msg.bid;
+	// Construct the file handle tot he poix clock /dev/timelineX
+	std::ostringstream oss("/dev/");
+	oss << QOT_IOCTL_TIMELINE;
+	oss << msg.tid;
+	
+	// Open the clock
+	this->fd_clk = open(oss.str().c_str(), O_RDWR);
+	if (this->fd_clk < 0)
+		throw CannotOpenPOSIXClockException();
 
-		// Construct the file handle tot he poix clock /dev/timelineX
-		std::ostringstream oss("/dev/");
-		oss << QOT_IOCTL_TIMELINE;
-		oss << msg.tid;
-		
-		// Open the clock
-		this->fd_clk = open(oss.str().c_str(), O_RDWR);
-		if (this->fd_clk < 0)
-			throw CannotOpenPOSIXClockException();
+	// Convert the file descriptor to a clock handle
+	this->clk = ((~(clockid_t) (this->fd_clk) << 3) | 3);
 
-		// Convert the file descriptor to a clock handle
-		this->clk = ((~(clockid_t) (this->fd_clk) << 3) | 3);
-
-		// We can now start polling, because the timeline is setup
-    	this->cv.notify_one();
-	}
+	// We can now start polling, because the timeline is setup
+	this->cv.notify_one();
 }
 
 // Unbind from a timeline
@@ -118,7 +110,6 @@ int Timeline::SetAccuracy(uint64_t acc)
 	// Package up a rewuest
 	struct qot_message msg;
 	msg.request.acc = acc;
-	msg.bid = this->bid;
 	
 	// Update this clock
 	if (ioctl(this->fd_qot, QOT_SET_ACCURACY, &msg) == 0)
@@ -134,7 +125,6 @@ int Timeline::SetResolution(uint64_t res)
 	// Package up a rewuest
 	struct qot_message msg;
 	msg.request.res = res;
-	msg.bid = this->bid;
 	
 	// Update this clock
 	if (ioctl(this->fd_qot, QOT_SET_RESOLUTION, &msg) == 0)
@@ -194,7 +184,6 @@ int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
 
 	// Package up a request
 	struct qot_message msg;
-	msg.bid = this->bid;
 	msg.compare.enable = enable;
 	msg.compare.start = start;
 	msg.compare.high = high;
@@ -259,7 +248,6 @@ void Timeline::CaptureThread()
 			{
 				// Keep querying for capture events until there are none left
 				qot_message msg;
-				msg.bid = this->bid;
 				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
 					if (cb_capture) 
 						this->cb_capture(msg.capture.name, msg.capture.edge);
@@ -270,7 +258,6 @@ void Timeline::CaptureThread()
 			{
 				// Keep querying for capture events until there are none left
 				qot_message msg;
-				msg.bid = this->bid;
 				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
 					if (cb_event) 
 						this->cb_event(msg.event.name, msg.event.type);

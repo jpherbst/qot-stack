@@ -1,6 +1,6 @@
 /*
  * @file qot_core.h
- * @brief Linux 4.1.6 kernel module for creation and destruction of QoT timelines
+ * @brief Linux 4.1.x kernel module for creation and destruction of QoT timelines
  * @author Andrew Symington and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -38,7 +38,7 @@
 struct qot_driver {
 	int64_t (*read)(void);
 	int (*compare)(const char *name, uint8_t enable, 
-		int64_t start, uint64_t high, uint64_t low, uint32_t repeat);
+		int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
 };	
 
 // Register a given clocksource as the primary driver for time
@@ -46,9 +46,6 @@ int qot_register(struct qot_driver *driver);
 
 // Send a compare action to the QoT stack (from the driver)
 int qot_push_capture(const char *name, int64_t epoch);
-
-// Send an event action to the QoT stack (incoming from the POSIX clock)
-int qot_push_event(const char *uuid, const char* name, int64_t type);
 
 // Unregister the  clock source, oscillators and pins
 int qot_unregister(void);

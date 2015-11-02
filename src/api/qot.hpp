@@ -206,7 +206,6 @@ namespace qot
 		private: std::string name;					// Unique ID for this application
 		private: int fd_qot;						// Descriptor for qot ioctl
 		private: int fd_clk;						// Descriptor for timeline
-		private: int bid;							// Binding ID
 		private: clockid_t clk;						// POSIX clock ID
 		private: std::thread thread;				// Worker thread for capture
 		private: CaptureCallbackType cb_capture;	// Callback for captures

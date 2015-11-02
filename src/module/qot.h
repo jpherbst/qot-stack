@@ -71,7 +71,6 @@ struct qot_compare {
 struct qot_message {
 	char uuid[QOT_MAX_NAMELEN];			// UUID of reference timeline shared among all collaborating entities
 	struct qot_metric request;			// Request metrics			
-	int bid;				   			// Binding id 
 	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
 	struct qot_capture capture;			// Capture information
 	struct qot_compare compare;			// Compare information
