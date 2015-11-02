@@ -13,3 +13,4 @@
 [submodule "thirdparty/bb.org-overlays"]
 	path = thirdparty/bb.org-overlays
 	url = https://github.com/asymingt/bb.org-overlays.git
+	ignore = all
