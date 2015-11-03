@@ -36,7 +36,7 @@
  * @compare:            action a pin interrupt for the given period
  */
 struct qot_driver {
-	int64_t (*read)(void);
+	uint64_t (*read)(void);
 	int (*compare)(const char *name, uint8_t enable, 
 		int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
 };	

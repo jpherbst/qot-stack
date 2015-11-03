@@ -37,6 +37,7 @@
 #include <linux/poll.h>
 #include <linux/rbtree.h>
 #include <linux/idr.h>
+#include <linux/timecounter.h>
 
 // This file includes
 #include "qot.h"
@@ -270,6 +271,7 @@ static int qot_adjfreq(struct qot_timeline *timeline, int32_t ppb)
 	uint64_t adj;
 	uint32_t diff, mult;
 	int32_t neg_adj = 0;
+	pr_info("qot_core: adjfreq called\n");
 	if (ppb < 0)
 	{
 		neg_adj = 1;
@@ -292,9 +294,7 @@ static int qot_adjtime(struct qot_timeline *timeline, int64_t delta)
 
 static int qot_gettime(struct qot_timeline *timeline, struct timespec64 *ts)
 {
-	int64_t core = 0;// = driver->read();
-	//ns = timecounter_read(&binding->tc);
-	*ts = ns_to_timespec64(core);
+	*ts = ns_to_timespec64(driver->read());
 	return 0;
 }
 

@@ -164,7 +164,8 @@ static void omap_dm_timer_setup_core(struct omap_dm_timer *timer)
 
   	// Start timer
 	ctrl |= OMAP_TIMER_CTRL_ST;
-
+	__omap_dm_timer_load_start(timer, ctrl, 0, timer->posted);
+	
 	// Save the context
 	timer->context.tclr = ctrl;
 	timer->context.tldr = 0;
@@ -311,8 +312,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was a capture event
 	if (irq_status & OMAP_TIMER_INT_CAPTURE)
 	{
-		pr_info("IRQ: capture\n");
-
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
    		if (pin->type == AM335X_TYPE_CAPTURE)
    		{
@@ -339,8 +338,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// if this was a match event
 	if (irq_status & OMAP_TIMER_INT_MATCH)
 	{
-		pr_info("IRQ: compare\n");
-
 		// Don't bother checking  if this is not a compare timer
    		if (pin->type == AM335X_TYPE_COMPARE)
    		{
@@ -360,8 +357,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was an overflow event
 	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
 	{
-		pr_info("IRQ: overflow\n");
-
 		// Check if we need to setup a compare for this overflow cycle
 		if (pin->type == AM335X_TYPE_COMPARE)
 			qot_am335x_compare_start(pin);
@@ -394,6 +389,7 @@ static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am3
 static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 {
 	struct qot_am335x_data *pdata = container_of(cc, struct qot_am335x_data, cc);
+	pr_info("qot_am335x: reading core: %u\n", __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted));
 	return (cycle_t) __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted);
 }
 
@@ -417,7 +413,6 @@ static void qot_am335x_enable_irq(struct omap_dm_timer *timer, unsigned int inte
 // Parse the device tree to setup the timers
 static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 {
-	unsigned long flags;
 	struct qot_am335x_pin *pin;
 	struct qot_am335x_data *pdata;
 	struct device_node *np = pdev->dev.of_node;
@@ -434,7 +429,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	if (!pdata)
 		return NULL;
 
-	pr_info("am335x: Setting up core timer...");
+	pr_info("qot_am335x: Setting up core timer...");
 
 	// Setup the core timer
 	phandle = of_get_property(np, "core", NULL);
@@ -505,7 +500,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
 	pdata->cc.mult = 0x80000000;
 	pdata->cc.shift = 29;
-	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
+	timecounter_init(&pdata->tc, &pdata->cc, 0);
 	INIT_DELAYED_WORK(&pdata->overflow_work, qot_am335x_overflow_check);
 	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
 	
@@ -641,9 +636,9 @@ int qot_am335x_setup_compare(const char *name, uint8_t enable,
 }
 
 // Read the clock
-int64_t qot_am335x_read(void)
+uint64_t qot_am335x_read(void)
 {
-	return (int64_t) timecounter_read(&pdata->tc);
+	return timecounter_read(&pdata->tc);
 }
 
 static struct qot_driver qot_driver_ops = {
