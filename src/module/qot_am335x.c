@@ -63,6 +63,7 @@ IMPORTANT : To use this driver you will need to use a special device tree overla
 
 // Platform data
 struct qot_am335x_data {
+	int ready;							// Prevents interrupts from blocking initialization
 	struct omap_dm_timer *timer;		// CORE: pointer to the dmtimer object
 	struct timecounter tc;				// CORE: keeps track of time
 	struct cyclecounter cc;				// CORE: counts short periods by scaling cycles
@@ -310,6 +311,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was a capture event
 	if (irq_status & OMAP_TIMER_INT_CAPTURE)
 	{
+		pr_info("IRQ: capture\n");
+
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
    		if (pin->type == AM335X_TYPE_CAPTURE)
    		{
@@ -336,6 +339,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// if this was a match event
 	if (irq_status & OMAP_TIMER_INT_MATCH)
 	{
+		pr_info("IRQ: compare\n");
+
 		// Don't bother checking  if this is not a compare timer
    		if (pin->type == AM335X_TYPE_COMPARE)
    		{
@@ -355,6 +360,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	// If this was an overflow event
 	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
 	{
+		pr_info("IRQ: overflow\n");
+
 		// Check if we need to setup a compare for this overflow cycle
 		if (pin->type == AM335X_TYPE_COMPARE)
 			qot_am335x_compare_start(pin);
@@ -375,7 +382,7 @@ static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am3
     omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
     omap_dm_timer_set_int_disable(timer, 
     	OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
-    free_irq(timer->irq, pdata);
+    free_irq(timer->irq, timer);
     omap_dm_timer_stop(timer);
     omap_dm_timer_free(timer);
     timer = NULL;
@@ -394,6 +401,7 @@ static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 static void qot_am335x_overflow_check(struct work_struct *work)
 {
 	struct qot_am335x_data *pdata = container_of(work, struct qot_am335x_data, overflow_work.work);
+ 	pr_info("qot_am335x: Performing overflow check on core timer\n");
 	timecounter_read(&pdata->tc);
 	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
 }
@@ -478,9 +486,6 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 	// Intialize a spin lock to protect IRQs from interrupting critical sections
 	spin_lock_init(&pdata->lock);
-
-	// Don't allow interrupts during creation of timers
-	spin_lock_irqsave(&pdata->lock, flags);
 
 	// Setup the clock source, enable IRQ and put the node back into the device tree
 	switch (timer_source)
@@ -598,10 +603,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		// Put the device tree node back
 		of_node_put(timer_node);
 	}
-
-	// Don't allow interrupts during creation of timers
-	spin_unlock_irqrestore(&pdata->lock, flags);
-
+	
 	// Return th platform data
 	return pdata;
 }
@@ -692,14 +694,14 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	// Get the platform data
 	if (pdata)
 	{
-		// Flush all tasks from the workque
+		// Flush all tasks from the work queue
 		flush_workqueue(pdata->cap_wq);
 	  	destroy_workqueue(pdata->cap_wq);
 
 		// Unregister with the QoT core, to prevent being interrupted
 		qot_unregister();
 
-		// We must add the capture event to each qpplication listener queue
+		// Now clean up all timers
 		for (node = rb_first(&pdata->pin_root); node; node = rb_next(node))
 		{
 			// Get the binding container of this red-black tree node
@@ -714,6 +716,9 @@ static int qot_am335x_remove(struct platform_device *pdev)
 			// Delete the rb-node
 			rb_erase(node, &pdata->pin_root);
 		}
+
+	  	// Stop the overflow timer
+		cancel_delayed_work_sync(&pdata->overflow_work);
 
 		// Free the core timer
 		qot_am335x_timer_cleanup(pdata->timer, pdata);

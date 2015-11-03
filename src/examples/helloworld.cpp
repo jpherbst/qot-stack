@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 			int64_t tval = timeline.GetTime();
 			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
 			std::cout << "WAITING FOR " << OFFSET_MSEC << "ms AT " << tval << std::endl;
-			timeline.WaitUntil(tval + OFFSET_MSEC * 1e6);
+			timeline.Sleep(OFFSET_MSEC * 1e6);
 			std::cout << "RESUMED AT " << timeline.GetTime() << std::endl;
 		}
 	}

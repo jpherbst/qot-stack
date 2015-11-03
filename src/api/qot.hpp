@@ -189,6 +189,13 @@ namespace qot
 		public: int64_t WaitUntil(int64_t val);
 
 		/**
+		 * @brief Sleep for a given number of nanoseconds relative to the call time
+		 * @param val Number of nanoseconds
+		 * @return Predicted error 
+		 **/
+		public: int64_t Sleep(uint64_t val);
+
+		/**
 		 * @brief Blocking poll on fd for capture events
 		 **/
 		private: void CaptureThread();
@@ -207,7 +214,7 @@ namespace qot
 		private: int fd_qot;						// Descriptor for qot ioctl
 		private: int fd_clk;						// Descriptor for timeline
 		private: clockid_t clk;						// POSIX clock ID
-		private: std::thread thread;				// Worker thread for capture
+		// /private: std::thread thread;				// Worker thread for capture
 		private: CaptureCallbackType cb_capture;	// Callback for captures
 		private: EventCallbackType cb_event;		// Callback for devices
 		private: std::mutex m;						// Mutex

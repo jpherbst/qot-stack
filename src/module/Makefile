@@ -1,7 +1,11 @@
+SHELL := /bin/bash
+
 obj-m += qot_core.o
 obj-m += qot_am335x.o
+obj-m += pwm_test.o
 
 KERNELDIR ?= ../../thirdparty/bb-kernel/KERNEL
+KERNELVER ?= 4.1.12-bone-rt-r16
 CROSSCOMP ?= ../dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
 
 all:
@@ -13,11 +17,11 @@ clean:
 	rm *.dtbo
 
 install:
-	sudo cp -v *.ko /export/rootfs/lib/modules/4.1.12-bone-rt-r16/kernel/drivers
+	sudo cp -v *.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers
 	sudo cp -v *.dtbo /export/rootfs/lib/firmware
 	sudo cp 80-qot.rules /export/rootfs/etc/udev/rules.d/
 	sudo cp capes /export/rootfs/usr/bin/
-	sudo chmod 755 /export/rootfs/usr/bin/capes.sh
+	sudo chmod 755 /export/rootfs/usr/bin/capes
 
 reload:
 	ssh root@10.42.0.108 depmod

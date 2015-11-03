@@ -56,8 +56,8 @@ using namespace qot;
 
 // Bind to a timeline
 Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
-	: name(RandomString(32)), fd_qot(-1), lk(this->m), 
-		thread(std::bind(&Timeline::CaptureThread, this))
+	: name(RandomString(32)), fd_qot(-1), lk(this->m)
+//	, 		thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
 	if (DEBUG) std::cout << "Opening IOCTL to qot_core" << std::endl;
@@ -112,7 +112,7 @@ Timeline::~Timeline()
 		close(fd_qot);
 
 	// Threads must now exit
-    thread.join();
+    //thread.join();
 }
 
 // Set the binding accuracy
@@ -213,17 +213,28 @@ int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
 // Wait until some global time
 int64_t Timeline::WaitUntil(int64_t val)
 {
-	// TODO:
-	// Make a nanosleep-like system call to the QoT code, which passes a binding
-	// ID and  the absolute wake-up time to the scheduler. The scheduler can then
-	// perfom a busy wait until the global time is reached. To do this the 
-	// scheduler periodically back-projects the global time to a local time. When
-	// the current local time is sufficiently close to the desired wake up time, 
-	// then the scheduler starts a high resolution timer to fire at the event. 
-	// eg. qot_absolute_nanosleep(this->bid, val);
+	// TODO: Adwait to improve this
+	int64_t cur = this->GetTime();
+	if (cur < val)
+		return -1;
+	uint64_t dif = (uint64_t)(val - cur);
 	struct timespec ts, ret;
-	ts.tv_sec = 0;
-	ts.tv_nsec = val;
+	ts.tv_sec  = dif / 1e9;
+	ts.tv_nsec = dif - ((uint64_t)1e9 * ts.tv_sec);
+	nanosleep(&ts, &ret);
+	return 0;
+}
+/**
+ * @brief Sleep for a given number of nanoseconds relative to the call time
+ * @param val Number of nanoseconds
+ * @return Predicted error 
+ **/
+int64_t Timeline::Sleep(uint64_t val)
+{
+	// TODO: Adwait to improve this
+	struct timespec ts, ret;
+	ts.tv_sec  = val / 1e9;
+	ts.tv_nsec = val - ((uint64_t)1e9 * ts.tv_sec);
 	nanosleep(&ts, &ret);
 	return 0;
 }
@@ -246,6 +257,8 @@ void Timeline::CaptureThread()
     while (fd_qot < 0) 
     	this->cv.wait(this->lk);
 
+    if (DEBUG) std::cout << "Polling for activity" << std::endl;
+
     // Start polling
     while (this->fd_qot > 0)
     {
@@ -253,14 +266,21 @@ void Timeline::CaptureThread()
 		struct pollfd pfd[1];
 		memset(pfd,0,sizeof(pfd));
 		pfd[0].fd = this->fd_qot;
-		pfd[0].events = POLLIN;
+		pfd[0].events = QOT_ACTION_CAPTURE | QOT_ACTION_EVENT;
+
+		if (DEBUG) std::cout << "Polling..." << std::endl;
 
 		// Wait until an asynchronous data push from the kernel module
-		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS) && (this->fd_qot > 0))
+		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
 		{
+			if (this->fd_qot < 0)
+				break;
+
 			// We have received notification of a capture event
 			if (pfd[0].revents & QOT_ACTION_CAPTURE)
 			{
+				if (DEBUG) std::cout << "Capture..." << std::endl;
+
 				// Keep querying for capture events until there are none left
 				qot_message msg;
 				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
@@ -271,6 +291,8 @@ void Timeline::CaptureThread()
 			// We have received notification of a device bind/unbind
 			if (pfd[0].revents & QOT_ACTION_EVENT)
 			{
+				if (DEBUG) std::cout << "Event..." << std::endl;
+
 				// Keep querying for capture events until there are none left
 				qot_message msg;
 				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
