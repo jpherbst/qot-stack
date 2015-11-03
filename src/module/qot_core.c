@@ -96,7 +96,8 @@ struct qot_binding {
     struct qot_timeline* timeline;		// Parent timeline
 	struct file *fileobject;			// File object 	 
 	wait_queue_head_t wq;				// wait queue 	 
-	int flag;							// Data ready flag 
+	int capture_flag;					// Data ready flag (captures)
+	int event_flag;						// Data ready flag (events)
 	struct list_head capture_list;		// Pointer to capture data
 	struct list_head event_list;		// Pointer to event data
 };
@@ -366,10 +367,10 @@ static long qot_clock_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned l
 			event_item->data.type = event.type;
 
 			// Add it to the binding queue for the binding
-			list_add_tail(&binding->capture_list, &event_item->list);
+			list_add_tail(&event_item->list, &binding->event_list);
 
 			// Poll the binding to show that there is some new capture data
-			binding->flag = 1;
+			binding->event_flag = 1;
 			wake_up_interruptible(&binding->wq);
 		}
 
@@ -478,7 +479,8 @@ static int qot_ioctl_open(struct inode *i, struct file *f)
 	// INitialize polling data structures
 	init_waitqueue_head(&binding->wq);
 	binding->fileobject = f;
-	binding->flag = 0;
+	binding->capture_flag = 0;
+	binding->event_flag = 0;
 
 	// Insert the binding into the red-black tree
 	if (qot_binding_insert(&binding_root, binding))
@@ -682,7 +684,10 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// We need to signal the user-space to stop pulling captures when there are no more left
 		if (list_empty(&binding->capture_list))
+		{
+			binding->capture_flag = 0;
 			return -EACCES;			
+		}
 
 		// Get the head of the capture queue
 		capture_item = list_entry(binding->capture_list.next, struct qot_capture_item, list);
@@ -710,7 +715,10 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// We need to signal the user-space to stop pulling captures when there are no more left
 		if (list_empty(&binding->event_list))
+		{
+			binding->event_flag = 0;
 			return -EACCES;			
+		}
 
 		// Get the head of the capture queue
 		event_item = list_entry(binding->event_list.next, struct qot_event_item, list);
@@ -747,16 +755,10 @@ static unsigned int qot_poll(struct file *f, poll_table *wait)
 	if (binding)
 	{
 		poll_wait(f, &binding->wq, wait);
-		if (binding->flag)
-		{
-			// Check if some capture data is available...
-			if (!list_empty(&binding->capture_list))
-				mask |= (POLLIN | POLLRDNORM);
-
-			// Check if some event data is available...
-			if (!list_empty(&binding->event_list))
-				mask |= (POLLOUT | POLLWRNORM);
-		}
+		if (binding->capture_flag && !list_empty(&binding->capture_list))
+			mask |= (POLLIN | POLLRDNORM);
+		if (binding->event_flag && !list_empty(&binding->event_list))
+			mask |= (POLLOUT | POLLWRNORM);
 	}
 	return mask;
 }
@@ -794,23 +796,34 @@ int qot_push_capture(const char *name, int64_t epoch)
   	{
   		// Get the binding container of this red-black tree node
   		binding = container_of(node, struct qot_binding, node);
+  		if (!binding)
+  		{
+  			pr_info("qot_core: Cannot find binding\n");
+  			continue;
+  		}
 
   		// Allocate the memory to store the event for this binding
 		capevent = kzalloc(sizeof(struct qot_capture_item), GFP_KERNEL);
 		if (!capevent)
+		{
+			pr_info("qot_core: Cannot allocate memory\n");
 			return -ENOMEM;
+		}
 
 		// Copy over the name and data
-		strcpy(capevent->data.name, name);
+		strncpy(capevent->data.name, name, QOT_MAX_NAMELEN);
 		capevent->data.edge = epoch;
 
 		// Add it to the binding queue
-		list_add_tail(&binding->capture_list, &capevent->list);
+		list_add_tail(&capevent->list, &binding->capture_list);
 
 		// Poll the binding to show that there is some new capture data
-		binding->flag = 1;
+		binding->capture_flag = 1;
 		wake_up_interruptible(&binding->wq);
+
+		pr_info("qot_core: CAPTURE on %s of %lld\n",name, epoch);
   	}
+
 	return 0;
 }
 EXPORT_SYMBOL(qot_push_capture);

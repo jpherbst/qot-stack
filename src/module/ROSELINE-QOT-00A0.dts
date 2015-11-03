@@ -18,9 +18,9 @@
             qot_pins: qot_pins {
                 pinctrl-single,pins = <
                     0x90  0x22      /* P8.7   MODE2 TIMER4 - CAPTURE   */
-                    0x98  0x02      /* P8.10  MODE2 TIMER5 - INTERRUPT */
-                    0x9C  0x22      /* P8.9   MODE2 TIMER6 - CAPTURE  */
-                    0x94  0x02      /* P8.8   MODE2 TIMER7 - INTERRUPT */
+                    0x9C  0x22      /* P8.9   MODE2 TIMER5 - CAPTURE  */
+                    0x98  0x22      /* P8.10  MODE2 TIMER6 - CAPTURE */
+                    0x94  0x22      /* P8.8   MODE2 TIMER7 - CAPTURE */
                 >;
             };
         };

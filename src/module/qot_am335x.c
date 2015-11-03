@@ -165,7 +165,7 @@ static void omap_dm_timer_setup_core(struct omap_dm_timer *timer)
   	// Start timer
 	ctrl |= OMAP_TIMER_CTRL_ST;
 	__omap_dm_timer_load_start(timer, ctrl, 0, timer->posted);
-	
+
 	// Save the context
 	timer->context.tclr = ctrl;
 	timer->context.tldr = 0;
@@ -281,17 +281,15 @@ static void qot_am335x_compare_stop(struct qot_am335x_pin *pin)
 // Deferred work resulting from a capture event
 static void qot_am335x_capture(struct work_struct *work)
 {
-	uint64_t val;
-	
 	// Get the work data
-	struct qot_am335x_capwork *capwork = container_of(
-		work, struct qot_am335x_capwork, work);
-	
-	// Convert from a cycle count to a time
-	val = timecounter_cyc2time(&pdata->tc, capwork->val);
+	struct qot_am335x_capwork *capwork = (struct qot_am335x_capwork *) work;
 	
 	// Push this capture event to the QoT core
-	qot_push_capture(capwork->pin->name, val);
+	qot_push_capture(capwork->pin->name, 
+		timecounter_cyc2time(&pdata->tc, capwork->val));
+
+	// Delete the capture work
+	kfree(capwork);
 }
 
 // Interrupt handler for compare timers
@@ -299,22 +297,22 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 {
 	unsigned long flags;
 	unsigned int irq_status;
-	struct omap_dm_timer *timer = data;
-	struct qot_am335x_pin *pin = container_of(data, struct qot_am335x_pin, timer);
 	struct qot_am335x_capwork *capwork;
+	struct qot_am335x_pin *pin = data;
 
 	// Prevent IRQs in other processes from blocking
 	spin_lock_irqsave(&pdata->lock, flags);	
 
 	// If the OMAP_TIMER_INT_CAPTURE flag in the IRQ status is set
-	irq_status = omap_dm_timer_read_status(timer);
+	irq_status = omap_dm_timer_read_status(pin->timer);
 
 	// If this was a capture event
 	if (irq_status & OMAP_TIMER_INT_CAPTURE)
 	{
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
-   		if (pin->type == AM335X_TYPE_CAPTURE)
+   		if (pin && pin->type == AM335X_TYPE_CAPTURE)
    		{
+   			pr_info("Capture on %s\n",pin->name);
 			// We shouldn't process this capture data immediately, as this
 			// is a bit costly. Since the measurement itself it resilient 
 			// to latency we can add this to a workqueue to be processed
@@ -325,22 +323,24 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 			{
 				INIT_WORK(&capwork->work, qot_am335x_capture);
 				capwork->pin = pin;
-				capwork->val = __omap_dm_timer_read(timer, 
-					OMAP_TIMER_CAPTURE_REG, timer->posted);
-				queue_work(pdata->cap_wq, &capwork->work);
+				capwork->val = __omap_dm_timer_read(pin->timer, 
+					OMAP_TIMER_CAPTURE_REG, pin->timer->posted);
+				queue_work(pdata->cap_wq, (struct work_struct *) capwork);
 			}
       	}
 
 		// Clear interrupt
-		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_CAPTURE);
+		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_CAPTURE);
 	}
 
 	// if this was a match event
 	if (irq_status & OMAP_TIMER_INT_MATCH)
 	{
 		// Don't bother checking  if this is not a compare timer
-   		if (pin->type == AM335X_TYPE_COMPARE)
+   		if (pin && pin->type == AM335X_TYPE_COMPARE)
    		{
+   			pr_info("Match on %s\n",pin->name);
+
 			// If we have reached the final cycle, stop 
 			if (pin->repeat == 1)
 				qot_am335x_compare_stop(pin);
@@ -351,36 +351,29 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
    		}
 
 		// TODO: deal with matches
-		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_MATCH);
+		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_MATCH);
 	}
 
 	// If this was an overflow event
 	if (irq_status & OMAP_TIMER_INT_OVERFLOW)
 	{
 		// Check if we need to setup a compare for this overflow cycle
-		if (pin->type == AM335X_TYPE_COMPARE)
+		if (pin && pin->type == AM335X_TYPE_COMPARE)
+		{
+			pr_info("Overflow on %s\n",pin->name);
+
+			// See if we need to start the PWM cycle
 			qot_am335x_compare_start(pin);
+		}
 
 		// TODO: deal with overflows
-		__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_OVERFLOW);
+		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_OVERFLOW);
 	}
 
 	// Enable interrupts again
 	spin_unlock_irqrestore(&pdata->lock, flags);
 
 	return IRQ_HANDLED;
-}
-
-// Cleanup a timer
-static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am335x_data *pdata)
-{
-    omap_dm_timer_set_source(timer, OMAP_TIMER_SRC_SYS_CLK);
-    omap_dm_timer_set_int_disable(timer, 
-    	OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
-    free_irq(timer->irq, timer);
-    omap_dm_timer_stop(timer);
-    omap_dm_timer_free(timer);
-    timer = NULL;
 }
 
 // EXPORTED SYMBOLS ///////////////////////////////////////////////////////////
@@ -422,7 +415,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	const char *tmp = NULL;
 	const __be32 *phandle;
 	char name[128];
-	int i, timer_irqcfg, timer_source, type;
+	int i, timer_irqcfg, timer_source;
 
   	// Allocate memory for the platform data
 	pdata = devm_kzalloc(&pdev->dev, sizeof(struct qot_am335x_data), GFP_KERNEL);
@@ -461,12 +454,8 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		pr_err("qot_am335x: request_by_node failed\n");
 		return NULL;
 	}
-	if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, timer))
-	{
-		pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
-		return NULL;
-	}
 
+	// Decide which oscilaltor to clock from
 	switch (timer_args.args[0])
 	{
 	default:
@@ -491,7 +480,6 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	}
 	omap_dm_timer_setup_core(timer);
 	omap_dm_timer_set_source(timer, timer_source);
-	qot_am335x_enable_irq(timer, OMAP_TIMER_INT_OVERFLOW);
 	of_node_put(timer_node);
 
 	// Copy over the timer reference and setup periodic overflow checking
@@ -539,48 +527,13 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 			pr_err("qot_am335x: request_by_node failed\n");
 			continue;
 		}
-		if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, timer))
-		{
-			pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
-			continue;
-		}
 
-		type = AM335X_TYPE_CAPTURE;
-		switch (timer_args.args[0])
-		{
-		default:
-			pr_err("qot_am335x: Setting %d is not a valid Timer %d config",timer_args.args[0],i);
-		case 0: timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH; pr_info("qot_am335x: Timer %d set to capture on rising edge\n",i); break;
-		case 1: timer_irqcfg = OMAP_TIMER_CTRL_TCM_HIGHTOLOW; pr_info("qot_am335x: Timer %d set to capture on falling edge\n",i); break;
-		case 2: timer_irqcfg = OMAP_TIMER_CTRL_TCM_BOTHEDGES; pr_info("qot_am335x: Timer %d set to capture on any edge\n",i); break;
-		case 3: type = AM335X_TYPE_COMPARE; pr_info("qot_am335x: Timer %d set to compare (output mode)\n",i);  break;
-		}
-
-		// Setup the timer based on the type
-		switch(type)
-		{
-		case AM335X_TYPE_COMPARE:
-			omap_dm_timer_setup_compare(timer);
-			omap_dm_timer_set_source(timer, timer_source);
-			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
-			break;
-		case AM335X_TYPE_CAPTURE:
-			omap_dm_timer_setup_capture(timer, timer_irqcfg);
-			omap_dm_timer_set_source(timer, timer_source);
-			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
-			break;
-		}
-
-		// Align the hardware count of this timer as best as possible to the core timer. Since they
-		// are clocked by the same oscillator, there should be no relative drift.
-		__omap_dm_timer_write(timer, OMAP_TIMER_COUNTER_REG, __omap_dm_timer_read(pdata->timer, 
-			OMAP_TIMER_COUNTER_REG, pdata->timer->posted) + AM335X_KLUDGE_FACTOR, timer->posted);
-		
 		// Allocate memory for the pin
 		pin = kzalloc(sizeof(struct qot_am335x_pin), GFP_KERNEL);
 		if (!pin)
 			continue;
-		pin->type = type;
+
+		// Set pin type and timer
 		pin->timer = timer;
 		switch(i)
 		{
@@ -591,6 +544,47 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		default:
 			pr_err("qot_am335x: %d is not a recognised timer id\n",i);
 		}
+
+		// Request an IRQ for this timer, passing the pin into the ISR
+		if (request_irq(timer->irq, qot_am335x_interrupt, IRQF_TIMER, MODULE_NAME, pin))
+		{
+			pr_err("qot_am335x: cannot register IRQ %d\n", timer->irq);
+			kfree(pin);
+			continue;
+		}
+
+		// Set the pin type
+		pin->type = AM335X_TYPE_CAPTURE;
+		
+		// Set the interrupt typw
+		timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH;
+		switch (timer_args.args[0])
+		{
+		case 0: timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH; pr_info("qot_am335x: Timer %d set to capture on rising edge\n",i); break;
+		case 1: timer_irqcfg = OMAP_TIMER_CTRL_TCM_HIGHTOLOW; pr_info("qot_am335x: Timer %d set to capture on falling edge\n",i); break;
+		case 2: timer_irqcfg = OMAP_TIMER_CTRL_TCM_BOTHEDGES; pr_info("qot_am335x: Timer %d set to capture on any edge\n",i); break;
+		case 3: pin->type = AM335X_TYPE_COMPARE; pr_info("qot_am335x: Timer %d set to compare (output mode)\n",i);  break;
+		}
+
+		// Setup the timer based on the type
+		switch(pin->type)
+		{
+		case AM335X_TYPE_COMPARE:
+			omap_dm_timer_setup_compare(timer);
+			omap_dm_timer_set_source(timer, timer_source);
+			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
+			break;
+		case AM335X_TYPE_CAPTURE:
+			omap_dm_timer_setup_capture(timer, timer_irqcfg);
+			omap_dm_timer_set_source(timer, timer_source);
+			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE);
+			break;
+		}
+
+		// Align the hardware count of this timer as best as possible to the core timer. Since they
+		// are clocked by the same oscillator, there should be no relative drift.
+		__omap_dm_timer_write(timer, OMAP_TIMER_COUNTER_REG, __omap_dm_timer_read(pdata->timer, 
+			OMAP_TIMER_COUNTER_REG, pdata->timer->posted) + AM335X_KLUDGE_FACTOR, timer->posted);
 
 		// Add the pin to the list
 		qot_am335x_pin_insert(&pdata->pin_root, pin);
@@ -702,8 +696,14 @@ static int qot_am335x_remove(struct platform_device *pdev)
 			// Get the binding container of this red-black tree node
 			pin = container_of(node, struct qot_am335x_pin, node);
 
-			// Free the timer
-			qot_am335x_timer_cleanup(pin->timer, pdata);
+			// Cleanup a pin timer
+			omap_dm_timer_set_source(pin->timer, OMAP_TIMER_SRC_SYS_CLK);
+			omap_dm_timer_set_int_disable(pin->timer, 
+				OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
+			free_irq(pin->timer->irq, pin);
+			omap_dm_timer_stop(pin->timer);
+			omap_dm_timer_free(pin->timer);
+			pin->timer = NULL;
 
 			// Free the pin memory
 			kfree(pin);
@@ -716,7 +716,10 @@ static int qot_am335x_remove(struct platform_device *pdev)
 		cancel_delayed_work_sync(&pdata->overflow_work);
 
 		// Free the core timer
-		qot_am335x_timer_cleanup(pdata->timer, pdata);
+		omap_dm_timer_set_source(pdata->timer, OMAP_TIMER_SRC_SYS_CLK);
+		omap_dm_timer_stop(pdata->timer);
+		omap_dm_timer_free(pdata->timer);
+		pdata->timer = NULL;
 
 		// Free the platform data
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);

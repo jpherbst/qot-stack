@@ -211,10 +211,11 @@ namespace qot
 		 * @brief Internal data structures
 		 **/
 		private: std::string name;					// Unique ID for this application
+		private: bool kill;							// Kill flag for thread
 		private: int fd_qot;						// Descriptor for qot ioctl
 		private: int fd_clk;						// Descriptor for timeline
 		private: clockid_t clk;						// POSIX clock ID
-		// /private: std::thread thread;				// Worker thread for capture
+		private: std::thread thread;				// Worker thread for capture
 		private: CaptureCallbackType cb_capture;	// Callback for captures
 		private: EventCallbackType cb_event;		// Callback for devices
 		private: std::mutex m;						// Mutex

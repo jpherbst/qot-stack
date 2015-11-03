@@ -56,8 +56,8 @@ using namespace qot;
 
 // Bind to a timeline
 Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
-	: name(RandomString(32)), fd_qot(-1), lk(this->m)
-//	, 		thread(std::bind(&Timeline::CaptureThread, this))
+	: name(RandomString(32)), fd_qot(-1), lk(this->m), kill(false),
+		thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
 	if (DEBUG) std::cout << "Opening IOCTL to qot_core" << std::endl;
@@ -105,14 +105,17 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 // Unbind from a timeline
 Timeline::~Timeline()
 {
+	// Kill the thread
+	this->kill = true;
+
+	// Threads must now exit
+    this->thread.join();
+
 	// Close the clock and timeline
 	if (this->fd_clk) 
 		close(fd_clk);
 	if (this->fd_qot) 
 		close(fd_qot);
-
-	// Threads must now exit
-    //thread.join();
 }
 
 // Set the binding accuracy
@@ -224,11 +227,8 @@ int64_t Timeline::WaitUntil(int64_t val)
 	nanosleep(&ts, &ret);
 	return 0;
 }
-/**
- * @brief Sleep for a given number of nanoseconds relative to the call time
- * @param val Number of nanoseconds
- * @return Predicted error 
- **/
+
+// Sleep for a given number of nanoseconds
 int64_t Timeline::Sleep(uint64_t val)
 {
 	// TODO: Adwait to improve this
@@ -260,7 +260,7 @@ void Timeline::CaptureThread()
     if (DEBUG) std::cout << "Polling for activity" << std::endl;
 
     // Start polling
-    while (this->fd_qot > 0)
+    while (!kill)
     {
     	// Initialize the polling struct
 		struct pollfd pfd[1];
@@ -273,9 +273,6 @@ void Timeline::CaptureThread()
 		// Wait until an asynchronous data push from the kernel module
 		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
 		{
-			if (this->fd_qot < 0)
-				break;
-
 			// We have received notification of a capture event
 			if (pfd[0].revents & QOT_ACTION_CAPTURE)
 			{
