@@ -31,6 +31,7 @@
 // C++ includes
 #include <exception>
 #include <sstream>
+#include <iostream>
 
 // Private functionality
 extern "C"
@@ -49,6 +50,8 @@ extern "C"
 	#include "../module/qot.h"
 }
 
+#define DEBUG true
+
 using namespace qot;
 
 // Bind to a timeline
@@ -57,6 +60,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 		thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
+	if (DEBUG) std::cout << "Opening IOCTL to qot_core" << std::endl;
 	this->fd_qot = open("/dev/qot", O_RDWR);
 	if (this->fd_qot < 0)
 		throw CannotCommunicateWithCoreException();
@@ -73,21 +77,26 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_NAMELEN);
 
 	// Add this clock to the qot clock list through scheduler
+	if (DEBUG) std::cout << "Binding to timeline " << uuid << std::endl;
 	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg))
 		throw CannotBindToTimelineException();
 
 	// Construct the file handle tot he poix clock /dev/timelineX
-	std::ostringstream oss("/dev/");
+	std::ostringstream oss;
+	oss << "/dev/";
 	oss << QOT_IOCTL_TIMELINE;
 	oss << msg.tid;
 	
 	// Open the clock
+	if (DEBUG) std::cout << "Opening clock " << oss.str() << std::endl;
 	this->fd_clk = open(oss.str().c_str(), O_RDWR);
 	if (this->fd_clk < 0)
 		throw CannotOpenPOSIXClockException();
 
 	// Convert the file descriptor to a clock handle
 	this->clk = ((~(clockid_t) (this->fd_clk) << 3) | 3);
+
+	if (DEBUG) std::cout << "Start polling " << std::endl;
 
 	// We can now start polling, because the timeline is setup
 	this->cv.notify_one();
@@ -96,12 +105,14 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 // Unbind from a timeline
 Timeline::~Timeline()
 {
-	// Join the thread
-    thread.join();
-
 	// Close the clock and timeline
-	if (this->fd_clk) close(fd_clk);
-	if (this->fd_qot) close(fd_qot);
+	if (this->fd_clk) 
+		close(fd_clk);
+	if (this->fd_qot) 
+		close(fd_qot);
+
+	// Threads must now exit
+    thread.join();
 }
 
 // Set the binding accuracy
@@ -210,6 +221,10 @@ int64_t Timeline::WaitUntil(int64_t val)
 	// the current local time is sufficiently close to the desired wake up time, 
 	// then the scheduler starts a high resolution timer to fire at the event. 
 	// eg. qot_absolute_nanosleep(this->bid, val);
+	struct timespec ts, ret;
+	ts.tv_sec = 0;
+	ts.tv_nsec = val;
+	nanosleep(&ts, &ret);
 	return 0;
 }
 
@@ -241,7 +256,7 @@ void Timeline::CaptureThread()
 		pfd[0].events = POLLIN;
 
 		// Wait until an asynchronous data push from the kernel module
-		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
+		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS) && (this->fd_qot > 0))
 		{
 			// We have received notification of a capture event
 			if (pfd[0].revents & QOT_ACTION_CAPTURE)

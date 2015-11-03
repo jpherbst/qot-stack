@@ -259,27 +259,9 @@ static int qot_binding_remove(struct qot_binding *binding)
 		kfree(binding->timeline);
 	}
 
-	// Remove the timeline node from the red-black tree
-	rb_erase(&binding->node, &binding_root);
-
-	// Delete the binding
-	kfree(binding);
-
 	// Success
 	return 0;
 }
-
-static void qot_binding_remove_all(void)
-{
-	struct rb_node *node;
-	struct qot_binding *binding;
-  	for (node = rb_first(&binding_root); node; node = rb_next(node))
-  	{
-  		binding = container_of(node, struct qot_binding, node);
-  		qot_binding_remove(binding);
-  	}
-}
-
 
 // CLOCK OPERATIONS //////////////////////////////////////////////////////////////////
 
@@ -483,7 +465,9 @@ static void qot_clock_delete(struct posix_clock *pc)
 
 static int qot_ioctl_open(struct inode *i, struct file *f)
 {
-	struct qot_binding *binding = kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
+	struct qot_binding *binding;
+	pr_info("qot_core: qot_ioctl_open called\n");
+	binding =kzalloc(sizeof(struct qot_binding), GFP_KERNEL);
 	if (!binding)
 		return -ENOMEM;
 	
@@ -507,9 +491,12 @@ static int qot_ioctl_open(struct inode *i, struct file *f)
 
 static int qot_ioctl_close(struct inode *i, struct file *f)
 {
-	struct qot_binding *binding = qot_binding_search(&binding_root, f);
+	struct qot_binding *binding;
+	pr_info("qot_core: qot_ioctl_close called\n");
+	binding = qot_binding_search(&binding_root, f);
 	if (!binding)
 		return -ENOMEM;
+	qot_binding_remove(binding);
 	rb_erase(&binding->node, &binding_root);
 	kfree(binding);
     return 0;
@@ -521,15 +508,22 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_binding *binding;
 	struct qot_capture_item *capture_item;
 	struct qot_event_item *event_item;
+	pr_info("qot_core: qot_ioctl_access called\n");
 
-	// Find the binding associated with this file
+	// Check that a hardware driver has registered itself with the QoT core
 	binding = qot_binding_search(&binding_root, f);
 	if (!binding)
+	{
+		pr_err("qot_core: qot_ioctl_access: binding not found\n");
 		return -EACCES;
+	}
 
 	// Check that a hardware driver has registered itself with the QoT core
 	if (!driver)
+	{
+		pr_err("qot_core: qot_ioctl_access: driver not found\n");
 		return -EACCES;
+	}
 
 	// Check what message was sent
 	switch (cmd)
@@ -553,6 +547,8 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// If the timeline does not exist, we need to create it
 		if (!binding->timeline)
 		{
+			pr_info("Timeline not found!\n");
+
 			// If we get to this point, there is no corresponding UUID
 			binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
 			
@@ -586,6 +582,10 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 			// Add the timeline
 			qot_timeline_insert(&timeline_root, binding->timeline);
+		}
+		else
+		{
+			pr_info("Timeline found!\n");
 		}
 
 		// In both cases, we must insert and sort the two linked lists
@@ -680,11 +680,6 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 	case QOT_GET_CAPTURE:
 
-		// Get the owner associated with this ioctl channel
-		binding = qot_binding_search(&binding_root, f);
-		if (!binding)
-			return -EACCES;
-
 		// We need to signal the user-space to stop pulling captures when there are no more left
 		if (list_empty(&binding->capture_list))
 			return -EACCES;			
@@ -712,11 +707,6 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	//////////////////////////////////////////////////////////////////////////////////
 
 	case QOT_GET_EVENT:
-
-		// Get the owner associated with this ioctl channel
-		binding = qot_binding_search(&binding_root, f);
-		if (!binding)
-			return -EACCES;
 
 		// We need to signal the user-space to stop pulling captures when there are no more left
 		if (list_empty(&binding->event_list))
@@ -832,9 +822,6 @@ int qot_unregister(void)
 	if (!driver)
 		return 1;
 
-	// Remove all bindings and timelines
-	qot_binding_remove_all();
-
 	// Reset the driver
 	driver = NULL;
 	
@@ -897,9 +884,6 @@ void qot_cleanup(void)
 	// Remove the clock class
     class_destroy(qot_clock_class);
 	unregister_chrdev_region(qot_clock_devt, MINORMASK + 1);
-
-	// Remove all bindings
-	qot_binding_remove_all();
 
 	// Allocates clock ids
 	idr_destroy(&idr_clocks);

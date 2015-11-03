@@ -369,18 +369,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-// Set the source of a timer to a given clock
-static void omap_dm_timer_use_clk(struct omap_dm_timer *timer, int clk)
-{
-	omap_dm_timer_set_source(timer, clk);
-	switch (clk)
-	{
-	case OMAP_TIMER_SRC_SYS_CLK: pr_info("qot_am335x: Timer %d SYS\n", timer->id); break;
-	case OMAP_TIMER_SRC_32_KHZ:  pr_info("qot_am335x: Timer %d RTC\n", timer->id); break;
-	case OMAP_TIMER_SRC_EXT_CLK: pr_info("qot_am335x: Timer %d EXT\n", timer->id); break;
-	}
-}
-
 // Cleanup a timer
 static void qot_am335x_timer_cleanup(struct omap_dm_timer *timer, struct qot_am335x_data *pdata)
 {
@@ -495,8 +483,14 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	spin_lock_irqsave(&pdata->lock, flags);
 
 	// Setup the clock source, enable IRQ and put the node back into the device tree
+	switch (timer_source)
+	{
+	case OMAP_TIMER_SRC_SYS_CLK: pr_info("qot_am335x: Core timer initialized and set to SYS\n"); break;
+	case OMAP_TIMER_SRC_32_KHZ:  pr_info("qot_am335x: Core timer initialized and set to RTC\n"); break;
+	case OMAP_TIMER_SRC_EXT_CLK: pr_info("qot_am335x: Core timer initialized and set to EXT\n"); break;
+	}
 	omap_dm_timer_setup_core(timer);
-	omap_dm_timer_use_clk(timer, timer_source);
+	omap_dm_timer_set_source(timer, timer_source);
 	qot_am335x_enable_irq(timer, OMAP_TIMER_INT_OVERFLOW);
 	of_node_put(timer_node);
 
@@ -513,7 +507,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	// Setup the red-black tree root
 	pdata->pin_root = RB_ROOT;
 
-	pr_info("am335x: Setting up pins...");
+	pr_info("qot_am335x: Setting up pins...");
 
 	// Setup each timer pin in the device tree (for interrupt processing and generation)
 	for (i = 4; i <= 7; i++)
@@ -555,11 +549,11 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		switch (timer_args.args[0])
 		{
 		default:
-			pr_err("qot_am335x: %d is not a valid timer%d config",timer_args.args[0],i);
-		case 0: type = AM335X_TYPE_COMPARE; break;
-		case 1: timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH; break;
-		case 2: timer_irqcfg = OMAP_TIMER_CTRL_TCM_HIGHTOLOW; break;
-		case 3: timer_irqcfg = OMAP_TIMER_CTRL_TCM_BOTHEDGES; break;
+			pr_err("qot_am335x: Setting %d is not a valid Timer %d config",timer_args.args[0],i);
+		case 0: timer_irqcfg = OMAP_TIMER_CTRL_TCM_LOWTOHIGH; pr_info("qot_am335x: Timer %d set to capture on rising edge\n",i); break;
+		case 1: timer_irqcfg = OMAP_TIMER_CTRL_TCM_HIGHTOLOW; pr_info("qot_am335x: Timer %d set to capture on falling edge\n",i); break;
+		case 2: timer_irqcfg = OMAP_TIMER_CTRL_TCM_BOTHEDGES; pr_info("qot_am335x: Timer %d set to capture on any edge\n",i); break;
+		case 3: type = AM335X_TYPE_COMPARE; pr_info("qot_am335x: Timer %d set to compare (output mode)\n",i);  break;
 		}
 
 		// Setup the timer based on the type
@@ -567,12 +561,12 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		{
 		case AM335X_TYPE_COMPARE:
 			omap_dm_timer_setup_compare(timer);
-			omap_dm_timer_use_clk(timer, timer_source);
+			omap_dm_timer_set_source(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
 			break;
 		case AM335X_TYPE_CAPTURE:
 			omap_dm_timer_setup_capture(timer, timer_irqcfg);
-			omap_dm_timer_use_clk(timer, timer_source);
+			omap_dm_timer_set_source(timer, timer_source);
 			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
 			break;
 		}
@@ -698,15 +692,12 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	// Get the platform data
 	if (pdata)
 	{
-		// Unregister with the QoT core, to prevent being interrupted
-		qot_unregister();
-
 		// Flush all tasks from the workque
 		flush_workqueue(pdata->cap_wq);
 	  	destroy_workqueue(pdata->cap_wq);
 
-		// Free the core timer
-		qot_am335x_timer_cleanup(pdata->timer, pdata);
+		// Unregister with the QoT core, to prevent being interrupted
+		qot_unregister();
 
 		// We must add the capture event to each qpplication listener queue
 		for (node = rb_first(&pdata->pin_root); node; node = rb_next(node))
@@ -723,6 +714,9 @@ static int qot_am335x_remove(struct platform_device *pdev)
 			// Delete the rb-node
 			rb_erase(node, &pdata->pin_root);
 		}
+
+		// Free the core timer
+		qot_am335x_timer_cleanup(pdata->timer, pdata);
 
 		// Free the platform data
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);
