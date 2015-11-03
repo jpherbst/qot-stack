@@ -34,6 +34,7 @@
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
+#define APPLICATION_NAME "default"
 #define WAIT_TIME_SECS   1
 #define NUM_ITERATIONS   10
 #define OFFSET_MSEC      1000
@@ -49,13 +50,28 @@ void callback(const std::string &name, int8_t event)
 // Main entry point of application
 int main(int argc, char *argv[])
 {
+	// Allow this to go on for a while
+	int n = NUM_ITERATIONS;
+	if (argc > 1)
+		n = atoi(argv[1]);
+
+	// Grab the timeline
+	char *u = TIMELINE_UUID;
+	if (argc > 2)
+		u = argv[2];
+
+	// Grab the timeline
+	char *m = APPLICATION_NAME;
+	if (argc > 3)
+		m = argv[3];
+
 	// Bind to a timeline
 	try
 	{
-		qot::Timeline timeline("my_test_timeline", 1e6, 1e3);	
-		timeline.SetName("HelloWorld");
+		qot::Timeline timeline(u, 1e6, 1e3);	
 		timeline.SetEventCallback(callback);
-		for (int i = 0; i < NUM_ITERATIONS; i++)
+		timeline.SetName(m);
+		for (int i = 0; i < n; i++)
 		{
 			int64_t tval = timeline.GetTime();
 			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
