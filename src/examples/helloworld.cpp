@@ -56,12 +56,12 @@ int main(int argc, char *argv[])
 		n = atoi(argv[1]);
 
 	// Grab the timeline
-	char *u = TIMELINE_UUID;
+	const char *u = TIMELINE_UUID;
 	if (argc > 2)
 		u = argv[2];
 
 	// Grab the timeline
-	char *m = APPLICATION_NAME;
+	const char *m = APPLICATION_NAME;
 	if (argc > 3)
 		m = argv[3];
 

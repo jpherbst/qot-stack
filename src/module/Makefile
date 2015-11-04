@@ -17,12 +17,12 @@ clean:
 	rm *.dtbo
 
 install:
-	sudo cp -v *.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers
+	sudo cp -v *.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v *.dtbo /export/rootfs/lib/firmware
 	sudo cp 80-qot.rules /export/rootfs/etc/udev/rules.d/
 	sudo cp capes /export/rootfs/usr/bin/
 	sudo chmod 755 /export/rootfs/usr/bin/capes
 
 reload:
-	ssh root@10.42.0.108 depmod
-	ssh root@10.42.0.108 ldconfig
+	ssh root@10.42.0.36 depmod
+	ssh root@10.42.0.36 ldconfig
