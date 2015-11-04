@@ -317,6 +317,30 @@ static int qot_settime(struct qot_timeline *timeline, const struct timespec64 *t
 	return 0;
 }
 
+static int qot_loc2rem(struct qot_timeline *timeline, int period, int64_t *val)
+{
+	if (period)
+		*val += (*val * timeline->mult);
+	else
+	{
+		*val -= (int64_t) timeline->last;
+		*val  = timeline->nsec + *val + *val * timeline->mult;
+	}
+	return 0;
+}
+
+static int qot_rem2loc(struct qot_timeline *timeline, int period, int64_t *val)
+{
+	if (period)
+		*val += (*val * timeline->mult);
+	else
+	{
+		*val -= (int64_t) timeline->last;
+		*val  = timeline->nsec + *val + *val * timeline->mult;
+	}
+	return 0;
+}
+
 // POSIX CLOCK MANAGEMENT //////////////////////////////////////////////////////
 
 static int qot_clock_open(struct posix_clock *pc, fmode_t fmode)
@@ -677,7 +701,10 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// Check that we have a volid driver implmentation
 		if (driver->compare)
 		{
-			// TODO: PROJECT THIS COMPARE EVENT INTO THE GLOBAL TIMELINE
+			// Convert from a core (ns) to time (ns) along a timeline
+			qot_rem2loc(binding->timeline, 0, &msg.compare.start);
+			qot_rem2loc(binding->timeline, 1, &msg.compare.high);
+			qot_rem2loc(binding->timeline, 1, &msg.compare.low);
 
 			// Check that the driver is willing to action this request
 			if (driver->compare(msg.compare.name, msg.compare.enable, msg.compare.start, 
@@ -703,10 +730,11 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// Get the head of the capture queue
 		capture_item = list_entry(binding->capture_list.next, struct qot_capture_item, list);
 
-		// TODO: PROJECT THIS CAPTURE EVENT INTO THE GLOBAL TIMELINE AND COPY TO msg.capture
-
 		// Copy to the return message
 		memcpy(&msg.capture,&capture_item->data,sizeof(struct qot_capture));
+
+		// Convert from a core (ns) to time (ns) along a timeline
+		qot_loc2rem(binding->timeline, 0, &msg.capture.edge);
 
 		// Free the memory used by this capture event
 		list_del(&capture_item->list);
@@ -733,8 +761,6 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// Get the head of the capture queue
 		event_item = list_entry(binding->event_list.next, struct qot_event_item, list);
-
-		// TODO: PROJECT THIS CAPTURE EVENT INTO THE GLOBAL TIMELINE AND COPY TO msg.capture
 
 		// Copy to the return message
 		memcpy(&msg.event,&event_item->data,sizeof(struct qot_event));

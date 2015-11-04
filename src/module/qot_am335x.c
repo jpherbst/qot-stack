@@ -312,7 +312,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
    		if (pin && pin->type == AM335X_TYPE_CAPTURE)
    		{
-   			pr_info("Capture on %s\n",pin->name);
 			// We shouldn't process this capture data immediately, as this
 			// is a bit costly. Since the measurement itself it resilient 
 			// to latency we can add this to a workqueue to be processed
@@ -339,8 +338,6 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 		// Don't bother checking  if this is not a compare timer
    		if (pin && pin->type == AM335X_TYPE_COMPARE)
    		{
-   			pr_info("Match on %s\n",pin->name);
-
 			// If we have reached the final cycle, stop 
 			if (pin->repeat == 1)
 				qot_am335x_compare_stop(pin);
@@ -359,12 +356,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	{
 		// Check if we need to setup a compare for this overflow cycle
 		if (pin && pin->type == AM335X_TYPE_COMPARE)
-		{
-			pr_info("Overflow on %s\n",pin->name);
-
-			// See if we need to start the PWM cycle
 			qot_am335x_compare_start(pin);
-		}
 
 		// TODO: deal with overflows
 		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_OVERFLOW);
@@ -394,7 +386,6 @@ static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 static void qot_am335x_overflow_check(struct work_struct *work)
 {
 	struct qot_am335x_data *pdata = container_of(work, struct qot_am335x_data, overflow_work.work);
- 	pr_info("qot_am335x: Performing overflow check on core timer\n");
 	timecounter_read(&pdata->tc);
 	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
 }
