@@ -50,7 +50,7 @@ extern "C"
 	#include "../module/qot.h"
 }
 
-#define DEBUG true
+#define DEBUG false
 
 using namespace qot;
 

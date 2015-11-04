@@ -34,7 +34,6 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define WAIT_TIME_SECS   10
-#define OFFSET_MSEC      10000
 
 // This function is called by the QoT API when a capture event occus
 void callback(const std::string &pname, int64_t epoch)
@@ -45,13 +44,18 @@ void callback(const std::string &pname, int64_t epoch)
 // Main entry point of application
 int main(int argc, char *argv[])
 {
+	// Allow this to go on for a while
+	int n = WAIT_TIME_SECS;
+	if (argc > 1)
+		n = atoi(argv[1]);
+
 	// Bind to a timeline
 	try
 	{
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
 		timeline.SetCaptureCallback(callback);
-		std::cout << "WAITING FOR " << WAIT_TIME_SECS << "s FOR CAPTURE" << std::endl;
-		timeline.Sleep(OFFSET_MSEC * 1e6);
+		std::cout << "WAITING FOR " << n << "s FOR CAPTURE" << std::endl;
+		timeline.Sleep(n*1e9);
 	}
 	catch (std::exception &e)
 	{

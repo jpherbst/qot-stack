@@ -545,7 +545,6 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_binding *binding;
 	struct qot_capture_item *capture_item;
 	struct qot_event_item *event_item;
-	pr_info("qot_core: qot_ioctl_access called\n");
 
 	// Check that a hardware driver has registered itself with the QoT core
 	binding = qot_binding_search(&binding_root, f);
@@ -584,7 +583,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// If the timeline does not exist, we need to create it
 		if (!binding->timeline)
 		{
-			pr_info("Timeline not found!\n");
+			pr_info("Timeline not found! Creating...\n");
 
 			// If we get to this point, there is no corresponding UUID
 			binding->timeline = kzalloc(sizeof(struct qot_timeline), GFP_KERNEL);
@@ -857,8 +856,6 @@ int qot_push_capture(const char *name, int64_t epoch)
 		// Poll the binding to show that there is some new capture data
 		binding->capture_flag = 1;
 		wake_up_interruptible(&binding->wq);
-
-		pr_info("qot_core: CAPTURE on %s of %lld\n",name, epoch);
   	}
 
 	return 0;
