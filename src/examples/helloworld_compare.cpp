@@ -33,7 +33,7 @@
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
-#define CAPTURE_PIN_UUID "timer4"
+#define CAPTURE_PIN_UUID "timer6"
 #define OFFSET_MSEC      10000
 #define START_NSEC   	 10e6
 #define HIGH_NSEC        10e6
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 	{
 		// Bind to the timeline
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
-		timeline.GenerateInterrupt("timer6", 1, timeline.GetTime() + START_NSEC, HIGH_NSEC, LOW_NSEC, CYCLE_LIMIT);
+		timeline.GenerateInterrupt(CAPTURE_PIN_UUID, 1, timeline.GetTime() + START_NSEC, HIGH_NSEC, LOW_NSEC, CYCLE_LIMIT);
 		std::cout << "WAITING FOR " << OFFSET_MSEC << "ms FOR COMPARE" << std::endl;
 		timeline.Sleep(OFFSET_MSEC * 1e6);
 	}
