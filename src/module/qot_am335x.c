@@ -378,12 +378,16 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 
 // EXPORTED SYMBOLS ///////////////////////////////////////////////////////////
 
-// Read the CORE timer hardware count
+// Read the CORE timer hardware count, protecting time registers
 static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 {
+	unsigned long flags;
+	cycle_t val;
 	struct qot_am335x_data *pdata = container_of(cc, struct qot_am335x_data, cc);
-	pr_info("qot_am335x: reading core: %u\n", __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted));
-	return (cycle_t) __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted);
+	spin_lock_irqsave(&pdata->lock, flags);
+	val =  __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted);
+	spin_unlock_irqrestore(&pdata->lock, flags);
+	return val;
 }
 
 // Periodic check of core time to keep track of overflows

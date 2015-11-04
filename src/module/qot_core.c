@@ -69,9 +69,9 @@ struct qot_timeline {
 	struct device *dev;					// clock: device pointer
 	int32_t dialed_frequency; 			// Discipline: dialed frequency
 	uint32_t cc_mult; 					// Discipline: mult carry
-	uint32_t mult; 						// Discipline: mult
-	uint32_t shift; 					// Discipline: shift
-	int64_t offset; 					// Discipline: offset
+	uint64_t last; 						// Discipline: last cycle count of discipline
+	int64_t mult; 						// Discipline: ppb multiplier for errors
+	int64_t nsec; 						// Discipline: global time offset
 };
 
 // Data structure for storing captures
@@ -267,42 +267,53 @@ static int qot_binding_remove(struct qot_binding *binding)
 
 // CLOCK OPERATIONS //////////////////////////////////////////////////////////////////
 
+/* 
+	In the first instance we'll represent the relationship between the slave clock 
+   	and the master clock in a linear way. If we had really high precision floating
+   	point math then we could do something like this:
+						
+							    1.0 + error
+    master time at last discipline  |
+			    |					|	      core ns elapsed since last disciplined
+		________|_________   _______|______	  _________________|________________
+   		T = timeline->nsec + timeline->skew * (driver->read() - timeline->last);
+
+	We'll reduce this to the following...
+
+		T = timeline->nsec 
+		  + 				  (driver->read() - timeline->last) // Number of ns
+		  + timeline->mult  * (driver->read() - timeline->last)	// PPB correction 
+
+*/
+
 static int qot_adjfreq(struct qot_timeline *timeline, int32_t ppb)
 {
-	uint64_t adj;
-	uint32_t diff, mult;
-	int32_t neg_adj = 0;
-	pr_info("qot_core: adjfreq called\n");
-	if (ppb < 0)
-	{
-		neg_adj = 1;
-		ppb = -ppb;
-	}
-	mult = timeline->cc_mult;
-	adj = mult;
-	adj *= ppb;
-	diff = div_u64(adj, 1000000000ULL);
-	//timecounter_read(&clk->tc);
-	//timeline-> = neg_adj ? mult - diff : mult + diff;
+	int64_t core_t, core_n;
+	core_t = driver->read();
+	core_n = core_t - timeline->last;
+	timeline->nsec += (core_n + timeline->mult * core_n);
+	timeline->mult += ppb;
+	timeline->last = core_t;
 	return 0;
 }
 
 static int qot_adjtime(struct qot_timeline *timeline, int64_t delta)
 {
-	//timecounter_adjtime(&clk->tc, delta);
+	timeline->nsec += delta;
 	return 0;
 }
 
 static int qot_gettime(struct qot_timeline *timeline, struct timespec64 *ts)
 {
-	*ts = ns_to_timespec64(driver->read());
+	int64_t core_n = driver->read() - timeline->last;
+	*ts = ns_to_timespec64(timeline->nsec + core_n + timeline->mult * core_n);
 	return 0;
 }
 
 static int qot_settime(struct qot_timeline *timeline, const struct timespec64 *ts)
 {
-	//int64_t core = timespec64_to_ns(ts);	
-	//timecounter_init(&clk->tc, &clk->cc, ns);
+	timeline->last = driver->read();
+	timeline->nsec = timespec64_to_ns(ts);
 	return 0;
 }
 

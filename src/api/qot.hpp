@@ -43,8 +43,10 @@ namespace qot
 	 * @brief Timeline events
 	 */
 	typedef enum {
-		EVENT_BIND,
-		EVENT_UNBIND
+		EVENT_BIND,		/* Some peer bound to a timeline 		*/
+		EVENT_UNBIND,	/* Some peer unbount from a timeline 	*/
+		EVENT_READY,	/* The timeline is ready for use 		*/
+		EVENT_SYNC		/* A synchronization event just occured */
 	} TimelineEventType;
 
 	/**
