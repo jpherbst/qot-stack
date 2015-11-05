@@ -305,7 +305,7 @@ static int qot_adjtime(struct qot_timeline *timeline, int64_t delta)
 
 static int qot_gettime(struct qot_timeline *timeline, struct timespec64 *ts)
 {
-	int64_t core_n = driver->read() - timeline->last;
+	uint64_t core_n = driver->read() - timeline->last;
 	*ts = ns_to_timespec64(timeline->nsec + core_n + timeline->mult * core_n);
 	return 0;
 }
@@ -324,20 +324,14 @@ static int qot_loc2rem(struct qot_timeline *timeline, int period, int64_t *val)
 	else
 	{
 		*val -= (int64_t) timeline->last;
-		*val  = timeline->nsec + *val + *val * timeline->mult;
+		*val  = timeline->nsec + (*val) + (*val) * timeline->mult;
 	}
 	return 0;
 }
 
 static int qot_rem2loc(struct qot_timeline *timeline, int period, int64_t *val)
 {
-	if (period)
-		*val += (*val * timeline->mult);
-	else
-	{
-		*val -= (int64_t) timeline->last;
-		*val  = timeline->nsec + *val + *val * timeline->mult;
-	}
+	// TODO : NEEDED FOR CAPTURE
 	return 0;
 }
 

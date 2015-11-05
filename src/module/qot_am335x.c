@@ -68,7 +68,6 @@ struct qot_am335x_data {
 	struct timecounter tc;				// CORE: keeps track of time
 	struct cyclecounter cc;				// CORE: counts short periods by scaling cycles
 	struct delayed_work overflow_work;	// CORE: scheduled work for overflow housekeeping
-	struct workqueue_struct *cap_wq;	// Work queue for capture events
 	struct rb_root pin_root;			// Red-black tree of pins
 	spinlock_t lock;					// Spinlock
 };
@@ -84,13 +83,6 @@ struct qot_am335x_pin {
 	uint32_t low;				   		// COMPARE: Low cycle time (clock ticks)
 	uint32_t repeat;					// COMPARE: Number of repetition (0 = infinite)
     struct rb_node node;				// Red-black tree is used to store timers based on id
-};
-
-// Capture work deferred to bottom-half of kernel
-struct qot_am335x_capwork {
-	struct work_struct work;			// Scheduled work
-	struct qot_am335x_pin *pin;			// Pin that the capture arrived on
-	uint32_t val;						// Counter value at interrupt
 };
 
 // We need to store a reference to the platform data to service incoming calls from QoT cotre
@@ -278,31 +270,15 @@ static void qot_am335x_compare_stop(struct qot_am335x_pin *pin)
 
 ////////////////////////// INTERRUPT HANDLING ////////////////////////////////////////////////
 
-// Deferred work resulting from a capture event
-static void qot_am335x_capture(struct work_struct *work)
-{
-	// Get the work data
-	struct qot_am335x_capwork *capwork = (struct qot_am335x_capwork *) work;
-	
-	// Push this capture event to the QoT core
-	qot_push_capture(capwork->pin->name, 
-		timecounter_cyc2time(&pdata->tc, capwork->val));
-
-	// Delete the capture work
-	kfree(capwork);
-}
-
 // Interrupt handler for compare timers
 static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 {
 	unsigned long flags;
 	unsigned int irq_status;
-	struct qot_am335x_capwork *capwork;
 	struct qot_am335x_pin *pin = data;
 
-	// Prevent IRQs in other processes from blocking
 	spin_lock_irqsave(&pdata->lock, flags);	
-
+	
 	// If the OMAP_TIMER_INT_CAPTURE flag in the IRQ status is set
 	irq_status = omap_dm_timer_read_status(pin->timer);
 
@@ -311,22 +287,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	{
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
    		if (pin && pin->type == AM335X_TYPE_CAPTURE)
-   		{
-			// We shouldn't process this capture data immediately, as this
-			// is a bit costly. Since the measurement itself it resilient 
-			// to latency we can add this to a workqueue to be processed
-			// by the bottom-half of the kernel some time later...
-			capwork = (struct qot_am335x_capwork*) 
-				kzalloc(sizeof(struct qot_am335x_capwork), GFP_KERNEL);
-			if (capwork)
-			{
-				INIT_WORK(&capwork->work, qot_am335x_capture);
-				capwork->pin = pin;
-				capwork->val = __omap_dm_timer_read(pin->timer, 
-					OMAP_TIMER_CAPTURE_REG, pin->timer->posted);
-				queue_work(pdata->cap_wq, (struct work_struct *) capwork);
-			}
-      	}
+			qot_push_capture(pin->name, timecounter_cyc2time(&pdata->tc, 
+				__omap_dm_timer_read(pin->timer, OMAP_TIMER_CAPTURE_REG, pin->timer->posted)));
 
 		// Clear interrupt
 		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_CAPTURE);
@@ -362,9 +324,8 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_OVERFLOW);
 	}
 
-	// Enable interrupts again
 	spin_unlock_irqrestore(&pdata->lock, flags);
-
+	
 	return IRQ_HANDLED;
 }
 
@@ -373,12 +334,9 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 // Read the CORE timer hardware count, protecting time registers
 static cycle_t qot_am335x_core_timer_read(const struct cyclecounter *cc)
 {
-	unsigned long flags;
 	cycle_t val;
 	struct qot_am335x_data *pdata = container_of(cc, struct qot_am335x_data, cc);
-	spin_lock_irqsave(&pdata->lock, flags);
 	val =  __omap_dm_timer_read_counter(pdata->timer, pdata->timer->posted);
-	spin_unlock_irqrestore(&pdata->lock, flags);
 	return val;
 }
 
@@ -459,9 +417,6 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	case 1: timer_source = OMAP_TIMER_SRC_32_KHZ; 	break;
 	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
 	}
-
-	// Set up a work queue for processing capture events in bottom-half of kernel
-	pdata->cap_wq = create_workqueue("capture");
 
 	// Intialize a spin lock to protect IRQs from interrupting critical sections
 	spin_lock_init(&pdata->lock);
@@ -678,10 +633,6 @@ static int qot_am335x_remove(struct platform_device *pdev)
 	// Get the platform data
 	if (pdata)
 	{
-		// Flush all tasks from the work queue
-		flush_workqueue(pdata->cap_wq);
-	  	destroy_workqueue(pdata->cap_wq);
-
 		// Unregister with the QoT core, to prevent being interrupted
 		qot_unregister();
 
