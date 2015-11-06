@@ -38,7 +38,7 @@
 struct qot_driver {
 	uint64_t (*read)(void);
 	int (*compare)(const char *name, uint8_t enable, 
-		int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
+		uint64_t start, uint32_t high, uint32_t low, uint64_t repeat);
 };	
 
 // Register a given clocksource as the primary driver for time

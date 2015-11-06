@@ -78,10 +78,10 @@ struct qot_am335x_pin {
 	struct omap_dm_timer *timer;		// Pointer to the OMAP dual-mode timer
 	uint8_t type;						// Type of pin (0 = capture, 1 = compare, 2 = sys)
 	uint8_t enable;				 	    // COMPARE: [0] = disable, [1] = enabled
-	int64_t start;						// COMPARE: Time of next event (clock ticks)
+	uint64_t start;						// COMPARE: Time of next event (clock ticks)
 	uint32_t high;						// COMPARE: High cycle time (clock ticks)
 	uint32_t low;				   		// COMPARE: Low cycle time (clock ticks)
-	uint32_t repeat;					// COMPARE: Number of repetition (0 = infinite)
+	uint64_t repeat;					// COMPARE: Number of repetition (0 = infinite)
     struct rb_node node;				// Red-black tree is used to store timers based on id
 };
 
@@ -235,16 +235,45 @@ static void omap_dm_timer_setup_compare(struct omap_dm_timer *timer)
 
 // COMPARE PIN MANAGEMENT ////////////////////////////////////////////////////////////////////
 
-// We might have a capture request scheduled beyond the next interrupt. So, we have to check on
-// each timer overflow that 
+// The capture is scheduled along core time, and it is the responsibility of QoT core to start
+// the process "close" to when it needs to occur. If you schedule a capture to occur at some
+// global time in the extreme future, your local clock will drift and the edge wont occu when
+// you want it to. The driver simply assumes that you are doing this management in core already.
 static void qot_am335x_compare_start(struct qot_am335x_pin *pin)
 {
-	uint32_t l = 0; 
+	uint64_t mintime, maxtime, c_cycle, f_cycle, m_cycle;
 	uint32_t load, match, value;
+
+	// First, using pdata->tc and pdata->cc, determine if the starting edge (pdata->start) is
+	// expires some time between now and the end of this overflow period 0xFFFFFFFF. Then, if
+	// true, calculate the exact poiny (cycle) that corresponds to the starting edge.
+	/*
+	mintime = timecounter_read(&pdata->tc);
+	maxtime = mintime + (((cycle_t) 0xFFFFFFFF) * pdata->tc.cc->mult) >> pdata->tc.cc->shift;	
+	pr_info("qot_am335x: MINTIME %llu\n",mintime);
+	pr_info("qot_am335x: MAXTIME %llu\n",maxtime);
+	pr_info("qot_am335x: START   %llu\n",pin->start);
+	if (pin->start < mintime || pin->start > maxtime)
+	{
+		pr_info("qot_am335x: PWM deferred");	
+		return;
+	}
+	pr_info("qot_am335x: PWM triggered");
+	*/
+
+	// Get the cycle at which the PWM must be triggered
+	c_cycle = (uint64_t) pdata->cc.read(&pdata->cc);
+	f_cycle = (uint64_t) div_u64((pin->start - pdata->tc.nsec) << pdata->tc.cc->shift, pdata->tc.cc->mult) + pdata->tc.cycle_last;
+	m_cycle = (uint64_t) f_cycle & 0xFFFFFFFF;
+	pr_info("qot_am335x: LASTC %llu\n",c_cycle);
+	pr_info("qot_am335x: CYCLE %llu\n",f_cycle);
+	pr_info("qot_am335x:   MOD %llu\n",m_cycle);
+
+	// Configure PWM
 	load  = -(pin->high + pin->low);
 	match = -(pin->low);
 	value = __omap_dm_timer_read(pdata->timer, OMAP_TIMER_COUNTER_REG, 
-		pdata->timer->posted) - l + AM335X_KLUDGE_FACTOR;
+		pdata->timer->posted) - (uint32_t) m_cycle + AM335X_KLUDGE_FACTOR;
 	__omap_dm_timer_write(pin->timer, OMAP_TIMER_COUNTER_REG, value, pin->timer->posted);
 	__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG, load, pin->timer->posted);
 	__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, match, pin->timer->posted);
@@ -257,13 +286,10 @@ static void qot_am335x_compare_start(struct qot_am335x_pin *pin)
 // each timer overflow that 
 static void qot_am335x_compare_stop(struct qot_am335x_pin *pin)
 {
-	uint32_t load, match;
-	load  = 0;
-	match = 0;
-	__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG,  load,  pin->timer->posted);
-	__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, match, pin->timer->posted);
-	pin->timer->context.tmar = match;
-	pin->timer->context.tldr = load;
+	__omap_dm_timer_write(pin->timer, OMAP_TIMER_LOAD_REG,  0,  pin->timer->posted);
+	__omap_dm_timer_write(pin->timer, OMAP_TIMER_MATCH_REG, 0, pin->timer->posted);
+	pin->timer->context.tmar = 0;
+	pin->timer->context.tldr = 0;
 	omap_dm_timer_trigger(pin->timer);
 	pin->enable = 0;
 }
@@ -522,12 +548,10 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		case AM335X_TYPE_COMPARE:
 			omap_dm_timer_setup_compare(timer);
 			omap_dm_timer_set_source(timer, timer_source);
-			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
 			break;
 		case AM335X_TYPE_CAPTURE:
 			omap_dm_timer_setup_capture(timer, timer_irqcfg);
 			omap_dm_timer_set_source(timer, timer_source);
-			qot_am335x_enable_irq(timer, OMAP_TIMER_INT_CAPTURE);
 			break;
 		}
 
@@ -551,7 +575,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 // Setup the compare pin
 int qot_am335x_setup_compare(const char *name, uint8_t enable, 
-	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
+	uint64_t start, uint32_t high, uint32_t low, uint64_t repeat)
 {
 	// Search for the timer with the supplied name
 	struct qot_am335x_pin *pin = qot_am335x_pin_search(&pdata->pin_root, name);
@@ -562,7 +586,7 @@ int qot_am335x_setup_compare(const char *name, uint8_t enable,
 	if (pin->type != AM335X_TYPE_COMPARE)
 		return -2;
 
-	// First, stop the current action
+	// Stop the current action immediately
 	qot_am335x_compare_stop(pin);
 
 	// Now change the parameters
@@ -602,6 +626,8 @@ MODULE_DEVICE_TABLE(of, qot_am335x_dt_ids);
 // INsert the kernel module
 static int qot_am335x_probe(struct platform_device *pdev)
 {
+	struct qot_am335x_pin *pin;
+	struct rb_node *node;
 	const struct of_device_id *match = 
 		 of_match_device(qot_am335x_dt_ids, &pdev->dev);
 	if (match)
@@ -612,6 +638,22 @@ static int qot_am335x_probe(struct platform_device *pdev)
 		// Return error if no platform data was allocated
 		if (!pdata)
 			return -ENODEV;
+
+		// Only enable IRQs after EVERYTING has initialized
+		for (node = rb_first(&pdata->pin_root); node; node = rb_next(node))
+		{
+			// Get the binding container of this red-black tree node
+			pin = container_of(node, struct qot_am335x_pin, node);
+			switch(pin->type)
+			{
+			case AM335X_TYPE_COMPARE:
+				qot_am335x_enable_irq(pin->timer, OMAP_TIMER_INT_MATCH | OMAP_TIMER_INT_OVERFLOW);
+				break;
+			case AM335X_TYPE_CAPTURE:
+				qot_am335x_enable_irq(pin->timer, OMAP_TIMER_INT_CAPTURE);
+				break;
+			}
+		}
 
 		// Register with the QoT core
 		qot_register(&qot_driver_ops);

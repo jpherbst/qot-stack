@@ -33,19 +33,12 @@
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
-#define CAPTURE_PIN_UUID "timer6"
-#define OFFSET_MSEC      10000
-#define START_NSEC   	 10e6
-#define HIGH_NSEC        10e6
-#define LOW_NSEC   		 90e6
-#define CYCLE_LIMIT   	 1000
-
-
-// This function is called by the QoT API when a capture event occus
-void callback(const char *pname, int64_t epoch)
-{
-	std::cout << "Event captured at time " << epoch << std::endl;
-}
+#define CAPTURE_PIN_UUID "timer7"
+#define OFFSET_NSEC      10e9
+#define START_NSEC   	 1e9
+#define HIGH_NSEC        1e6
+#define LOW_NSEC   		 1e6
+#define CYCLE_LIMIT   	 5
 
 // Main entry point of application
 int main(int argc, char *argv[])
@@ -56,8 +49,8 @@ int main(int argc, char *argv[])
 		// Bind to the timeline
 		qot::Timeline timeline(TIMELINE_UUID, 1e6, 1e3);
 		timeline.GenerateInterrupt(CAPTURE_PIN_UUID, 1, timeline.GetTime() + START_NSEC, HIGH_NSEC, LOW_NSEC, CYCLE_LIMIT);
-		std::cout << "WAITING FOR " << OFFSET_MSEC << "ms FOR COMPARE" << std::endl;
-		timeline.Sleep(OFFSET_MSEC * 1e6);
+		std::cout << "WAITING FOR " << OFFSET_NSEC << "ns FOR COMPARE" << std::endl;
+		timeline.Sleep(OFFSET_NSEC);
 	}
 	catch (std::exception &e)
 	{

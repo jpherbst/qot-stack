@@ -20,7 +20,7 @@
                     0x90  0x22      /* P8.7   MODE2 TIMER4 - CAPTURE */
                     0x9C  0x22      /* P8.9   MODE2 TIMER5 - CAPTURE */
                     0x98  0x22      /* P8.10  MODE2 TIMER6 - CAPTURE */
-                    0x94  0x22      /* P8.8   MODE2 TIMER7 - CAPTURE */
+                    0x94  0x02      /* P8.8   MODE2 TIMER7 - CAPTURE */
                 >;
             };
         };
@@ -37,7 +37,7 @@
                 timer4 = <&timer4 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
                 timer5 = <&timer5 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
                 timer6 = <&timer6 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
-                timer7 = <&timer7 0>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
+                timer7 = <&timer7 3>; // (0=CAP-RISING, 1=CAP-FALLING, 2=CAP-BOTH, 3=COMPARE)
                 pinctrl-names = "default";
                 pinctrl-0 = <&qot_pins>;
             };
