@@ -45,10 +45,12 @@ IF (CROSS_COMPILE)
 	SET(CMAKE_SYSTEM_NAME Linux)
 	SET(CMAKE_SYSTEM_PROCESSOR arm) 
 	SET(CMAKE_SYSTEM_VERSION 1)
+	SET(CMAKE_SYSROOT "${CROSS_COMPILE_ROOTFS}")
 
 	# Specify the cross compiler
-	SET(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
-	SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
+	SET(CROSS_COMPILER "${PROJECT_SOURCE_DIR}/thirdparty/bb-kernel/dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin")
+	SET(CMAKE_C_COMPILER "${CROSS_COMPILER}/arm-linux-gnueabihf-gcc")
+	SET(CMAKE_CXX_COMPILER "${CROSS_COMPILER}/arm-linux-gnueabihf-g++")
 
 	# Where is the target environment 
 	SET(CMAKE_FIND_ROOT_PATH ${CROSS_COMPILE_ROOTFS})
