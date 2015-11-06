@@ -11,6 +11,8 @@ CROSSCOMP ?= ../dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-l
 all:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" modules
 	dtc -O dtb -o ROSELINE-QOT-00A0.dtbo -b 0 -@ ROSELINE-QOT-00A0.dts
+	dtc -O dtb -o ROSELINE-QOT-ATMEL-00A0.dtbo -b 0 -@ ROSELINE-QOT-ATMEL-00A0.dts
+	dtc -O dtb -o ROSELINE-QOT-DECAWAVE-00A0.dtbo -b 0 -@ ROSELINE-QOT-DECAWAVE-00A0.dts
 
 clean:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" clean
