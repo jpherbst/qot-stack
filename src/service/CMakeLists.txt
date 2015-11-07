@@ -69,7 +69,6 @@ ENDFOREACH(idl)
 
 #################################################################################################
 
-
 ADD_EXECUTABLE(qotdaemon 
 	Coordination.cpp
 	Coordination.cpp
