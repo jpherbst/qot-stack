@@ -1,6 +1,3 @@
-# We need C++11 for thread support
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
 # Threading is needed for polling
 FIND_PACKAGE(Threads REQUIRED)
 
