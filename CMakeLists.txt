@@ -30,58 +30,43 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
 PROJECT(qot-stack VERSION 0.1.0.0)
 
 # Basic options
-OPTION(CROSS_COMPILE "Cross-compile for arm-linux-gnueabihf" OFF)
-
-# Set to debug by default
-SET(CMAKE_BUILD_TYPE Debug)
+OPTION(CROSS_COMPILE "Cross-compile for arm-linux-gnueabihf" ON)
 
 # Configure cross compilation
 IF (CROSS_COMPILE)
 
 	# User-definable root filesystem location
 	SET(CROSS_COMPILE_ROOTFS "/export/rootfs" CACHE STRING "Path to ROOTFS")
-	
+
+	# User-definable root filesystem location
+	SET(CMAKE_INSTALL_PREFIX "${CROSS_COMPILE_ROOTFS}")
+
 	# System, architecture and version
 	SET(CMAKE_SYSTEM_NAME Linux)
 	SET(CMAKE_SYSTEM_PROCESSOR arm) 
 	SET(CMAKE_SYSTEM_VERSION 1)
-	SET(CMAKE_SYSROOT "${CROSS_COMPILE_ROOTFS}")
+	#SET(CMAKE_SYSROOT "${CROSS_COMPILE_ROOTFS}")
 
 	# Specify the cross compiler
-	SET(CROSS_COMPILER "${PROJECT_SOURCE_DIR}/thirdparty/bb-kernel/dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin")
-	SET(CMAKE_C_COMPILER "${CROSS_COMPILER}/arm-linux-gnueabihf-gcc")
-	SET(CMAKE_CXX_COMPILER "${CROSS_COMPILER}/arm-linux-gnueabihf-g++")
+	SET(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
+	SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
+
+	# Location of boost libraries
+	LINK_DIRECTORIES(
+		"/usr/arm-linux-gnueabihf/lib"
+	)
 
 	# Where is the target environment 
 	SET(CMAKE_FIND_ROOT_PATH ${CROSS_COMPILE_ROOTFS})
-
-	# Search for programs in the build host directories
 	SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-
-	# Search for libraries and headers in the target directories
 	SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 	SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-	
-	# Hints for finding boost
-	SET(BOOST_ROOT "${CROSS_COMPILE_ROOTFS}")
-	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
-	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf")
+	SET(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-	# Where to find header files
-	INCLUDE_DIRECTORIES(
-		"${CROSS_COMPILE_ROOTFS}/usr/include/arm-linux-gnueabihf" 
-		"${CROSS_COMPILE_ROOTFS}/usr/include"
-	)
-	
-	# Where to find libraries
-	LINK_DIRECTORIES(
-		"${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf" 
-		"${CROSS_COMPILE_ROOTFS}/lib/arm-linux-gnueabihf"
-	)
 
 ENDIF (CROSS_COMPILE)
-
-# We'll be using C++11 functionality in this project
+	
+# Platform-wide C and C++ standard
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 
