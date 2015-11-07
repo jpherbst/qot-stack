@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 		("conf,c", 		boost::program_options::value<std::string>()
 			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
 		("dir,d", 		boost::program_options::value<std::string>()
-			->default_value("/dev/timeline"), "devfs directory for timelines") 
+			->default_value("/dev"), "devfs directory for timelines") 
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(

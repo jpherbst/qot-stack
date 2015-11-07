@@ -34,7 +34,7 @@
 using namespace qot;
 
 Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
-	: asio(io)
+	: asio(io), basedir(dir)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier at directory " << dir;
 
@@ -53,23 +53,13 @@ Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
 	        if (!entry)
 	            break;
 
-	        // Check to see if this is a character device, and add it
-	        if (entry->d_type & DT_DIR)
-	        {
-	        	// DO NOTHING
-	        }
-	        else
-	        {
-				// Append the directory to the name 
-				std::ostringstream oss("");
-				oss << dir;
-				oss << "/";
-				oss << entry->d_name;
-
-				// Add the directory
-				this->add(oss.str());
-	        }
-	     }
+			// If this event is the creation or delation of a character device
+			char str[8]; 
+			int ret, val;	
+			ret = sscanf(entry->d_name, "%8s%d", str, &val);
+	        if ((ret==2) && (strcmp(str,"timeline")==0))
+    			this->add(entry->d_name);
+  	     }
     }
     
     /* After going through all the entries, close the directory. */
@@ -86,20 +76,24 @@ Notifier::~Notifier()
 	thread.join();
 }
 
-void Notifier::add(const std::string &path)
+void Notifier::add(const char *name)
 {
-	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << path;
-	std::map<std::string,Timeline>::iterator it = timelines.find(path);
+	std::ostringstream oss("");
+	oss << basedir << "/" << name;
+	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << oss.str();
+	std::map<std::string,Timeline>::iterator it = timelines.find(oss.str());
 	if (it == timelines.end())
-		timelines.insert(std::map<std::string,Timeline>::value_type(path,Timeline(asio, path)));
+		timelines.insert(std::map<std::string,Timeline>::value_type(oss.str(),Timeline(asio, oss.str())));
 	else
 		BOOST_LOG_TRIVIAL(warning) << "The timeline has already been added";
 }
 
-void Notifier::del(const std::string &path)
+void Notifier::del(const char *name)
 {
-	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " << path;
-	std::map<std::string,Timeline>::iterator it = timelines.find(path);
+	std::ostringstream oss("");
+	oss << basedir << "/" << name;
+	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " << oss.str();
+	std::map<std::string,Timeline>::iterator it = timelines.find(oss.str());
 	if (it != timelines.end())
 		timelines.erase(it);
 	else
@@ -151,28 +145,19 @@ void Notifier::watch(const char* dir)
 			{     
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];    
 
-				// Append the directory to the name 
-				std::ostringstream oss("");
-				oss << dir;
-				oss << "/";
-				oss << event->name;
-				    
-				if (event->len)
+				// If this event is the creation or delation of a character device
+				char str[8]; 
+				int ret, val;	
+				ret = sscanf(event->name, "%8s%d", str, &val);
+				if (event->len && (ret==2) && (strcmp(str,"timeline")==0))
 				{
+					// Creation
 					if (event->mask & IN_CREATE)
-					{
-						if (event->mask & IN_ISDIR)
-							BOOST_LOG_TRIVIAL(warning) << "Warning: unexpected creation of directory " << oss.str();
-						else
-							this->add(oss.str());
-					}
-					else if (event->mask & IN_DELETE)
-					{
-						if (event->mask & IN_ISDIR) 
-							BOOST_LOG_TRIVIAL(warning) << "Warning: unexpected deletion of directory " << oss.str();
-						else
-							this->del(oss.str());
-					}
+						this->add(event->name);
+
+					// Deletion
+					if (event->mask & IN_DELETE) 
+						this->del(event->name);
 				}
 
 				// Append size to determine when one should end

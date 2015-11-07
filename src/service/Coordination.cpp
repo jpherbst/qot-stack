@@ -34,13 +34,13 @@
 using namespace qot;
 
 Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
-	: asio(io), dp(0), topic(dp, dir), pub(dp), dw(pub, topic)
+	: asio(io) //, dp(0), topic(dp, dir), pub(dp), dw(pub, topic)
 {
   /* Instantiate the timeline */
   
 
   /* Publish info about the timeline */
-  dw.write(timeline);
+  //dw.write(timeline);
 }
 
 Coordination::~Coordination()

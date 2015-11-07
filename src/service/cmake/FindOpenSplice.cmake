@@ -52,10 +52,9 @@ FIND_LIBRARY(DCPSCPP_LIBRARY
 )
 
 SET(OpenSplice_LIBRARIES
-            ${KERNEL_LIBRARY}
-            ${DCPSISOCPP_LIBRARY}
-            ${DCPSCPP_LIBRARY}
-
+    ${KERNEL_LIBRARY}
+    ${DCPSISOCPP_LIBRARY}
+    ${DCPSCPP_LIBRARY}
 )
 
 # Binary for the IDL compiler 

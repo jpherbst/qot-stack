@@ -66,14 +66,15 @@ namespace qot
 	public: ~Notifier();
 
 	// Private methods
-	private: void add(const std::string &path);
-	private: void del(const std::string &path);
+	private: void add(const char *name);
+	private: void del(const char *name);
 	private: void watch(const char* dir);
 
 	// Private variables
 	private: boost::asio::io_service *asio;
 	private: boost::thread thread;
 	private: std::map<std::string,Timeline> timelines;
+	private: std::string basedir;
 	};
 }
 

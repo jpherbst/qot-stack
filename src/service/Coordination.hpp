@@ -31,7 +31,7 @@
 #include <boost/asio.hpp>
 
 /* IDL messages */
-#include "msg/QoT_DCPS.hpp"
+//#include "msg/QoT_DCPS.hpp"
 
 namespace qot
 {
@@ -46,11 +46,11 @@ namespace qot
 	private: boost::asio::io_service *asio;
 
 	// DDS private variables
-	private: dds::domain::DomainParticipant dp;
-	private: dds::topic::Topic<QoT::Timeline> topic;
-	private: dds::pub::Publisher pub;
-	private: dds::pub::DataWriter<QoT::Timeline> dw;
-	private: QoT::Timeline timeline;
+	//private: dds::domain::DomainParticipant dp;
+	//private: dds::topic::Topic<QoT::Timeline> topic;
+	//private: dds::pub::Publisher pub;
+	//private: dds::pub::DataWriter<QoT::Timeline> dw;
+	// private: QoT::Timeline timeline;
 
 	};
 }
