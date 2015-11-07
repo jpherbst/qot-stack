@@ -1,6 +1,8 @@
 # Add some helper CMake scripts
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+#################################################################################################
+
 # Required for cross-compiling
 SET(Boost_USE_STATIC_LIBS        ON)
 SET(Boost_USE_STATIC_RUNTIME     OFF)
@@ -30,38 +32,35 @@ LINK_DIRECTORIES(
 	${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf
 )
 
-MESSAGE(${Boost_LIBRARIES})
+#################################################################################################
 
-# # Include the OpenSplice macros (IDL message compilation)
-# INCLUDE(MacroOpenSplice)
-# 
-# # Hint for finding opensplice
-# IF (CROSS_COMPILE)
-# 	SET(ENV{OSPL_HOME} "/export/rootfs/opt/opensplice")
-# ELSE (CROSS_COMPILE)
-# 	SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
-# ENDIF (CROSS_COMPILE)
-# FIND_PACKAGE(OpenSplice REQUIRED)
-# 
-# # Location of header files for the entire project
-# INCLUDE_DIRECTORIES(
-# 	${Boost_INCLUDE_DIR} 
-# 	${OpenSplice_INCLUDE_DIRS}
-# 	${CMAKE_CURRENT_SOURCE_DIR} 
-# 	${CMAKE_CURRENT_BINARY_DIR} 
-# )
-# 
-# 
-# # IDL MESSAGE COMPILATION
-# SET(idls msg/QoT.idl)
-# FOREACH(idl ${idls})
-# 	OpenSplice_IDLGEN (${idl})
-# 	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
-# ENDFOREACH(idl)
-# 
-# ADD_LIBRARY(datamodel SHARED 
-# 	${OpenSplice_DATAMODEL}
-# )
+# Hint for finding opensplice
+SET(ENV{OSPL_HOME} "${CROSS_COMPILE_ROOTFS}/opt/opensplice")
+SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
+
+# Include the OpenSplice macros (IDL message compilation)
+INCLUDE(MacroOpenSplice)
+
+# Find the OpenSplice package
+FIND_PACKAGE(OpenSplice REQUIRED)
+
+# Location of header files for the entire project
+INCLUDE_DIRECTORIES(
+	${OpenSplice_INCLUDE_DIRS} 
+)
+
+# IDL MESSAGE COMPILATION
+SET(idls msg/QoT.idl)
+FOREACH(idl ${idls})
+	OpenSplice_IDLGEN (${idl})
+	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
+ENDFOREACH(idl)
+
+#################################################################################################
+
+ADD_LIBRARY(datamodel SHARED 
+	${OpenSplice_DATAMODEL}
+)
 
 ADD_EXECUTABLE(qotdaemon 
 	Coordination.cpp
@@ -74,8 +73,7 @@ ADD_EXECUTABLE(qotdaemon
 	Notifier.hpp
 	main.cpp
 )
-#TARGET_LINK_LIBRARIES(qotdaemon datamodel ${Boost_LIBRARIES} ${OpenSplice_LIBRARIES})
-TARGET_LINK_LIBRARIES(qotdaemon ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon datamodel ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 # Install the qot library to the given prefix
 INSTALL(
