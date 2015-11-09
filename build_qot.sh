@@ -4,7 +4,8 @@
 ROOTFS=/export/rootfs
 TFTPFS=/export/tftp
 NETWAN=wlan0
-NETLAN=wpan0
+NETLAN=eth0
+BEAGLE=10.42.0.100
 
 # Check out the submodules needed for QoT stack
 git submodule init

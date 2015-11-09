@@ -61,7 +61,7 @@ INCLUDE_DIRECTORIES(
 )
 
 # IDL MESSAGE COMPILATION
-SET(idls msg/QoT.idl msg/TempControl.idl)
+SET(idls msg/QoT.idl)
 FOREACH(idl ${idls})
 	OpenSplice_IDLGEN (${idl})
 	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
@@ -70,10 +70,8 @@ ENDFOREACH(idl)
 #################################################################################################
 
 ADD_EXECUTABLE(qotdaemon 
-	Coordination.cpp
-	Coordination.cpp
-	Synchronization.cpp
-	Synchronization.hpp
+	Coordinator.hpp
+	Coordinator.cpp
 	Timeline.cpp
 	Timeline.hpp
 	Notifier.cpp
