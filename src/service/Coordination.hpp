@@ -29,12 +29,43 @@
 
 /* Boost includes */
 #include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 /* IDL messages */
 #include "msg/QoT_DCPS.hpp"
+#include "msg/TempControl_DCPS.hpp"
+
+/* Convenience */
+std::ostream& operator<< (std::ostream& os, const tutorial::TempSensorType& ts);
 
 namespace qot
 {
+	////////////////////////////////////////////////////////////////////////////////////////////
+
+	class TempSensorListener : public dds::sub::NoOpDataReaderListener<tutorial::TempSensorType> {
+	public:
+	virtual void 
+	on_data_available(dds::sub::DataReader<tutorial::TempSensorType>& dr) 
+	{ 
+		std::cout << "----------on_data_available-----------" << std::endl;      
+		auto samples =  dr.read();
+		std::for_each(samples.begin(), samples.end(), [](const dds::sub::Sample<tutorial::TempSensorType>& s) {
+			std::cout << s.data() << std::endl;
+		});
+	}
+
+	virtual void 
+	on_liveliness_changed(dds::sub::DataReader<tutorial::TempSensorType>& dr, 
+		const dds::core::status::LivelinessChangedStatus& status) 
+		{
+			std::cout << "!!! Liveliness Changed !!!" << std::endl;
+		}
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////////////
+	
+	/* Performs coordination function across multiple entities in the network */
 	class Coordination
 	{
 
@@ -42,15 +73,22 @@ namespace qot
 	public: Coordination(boost::asio::io_service *io, const std::string &dir);
 	public: ~Coordination();
 	
+	// ASIO variables
+	private: void Heartbeat(const boost::system::error_code& /*e*/);
+
 	// Private variables
 	private: boost::asio::io_service *asio;
+	private: std::shared_ptr<boost::asio::deadline_timer> timer;
 
-	// DDS private variables
+	// DDS variables
+	private: tutorial::TempSensorType timeline;
 	private: dds::domain::DomainParticipant dp;
-	private: dds::topic::Topic<QoT::Timeline> topic;
+	private: dds::topic::Topic<tutorial::TempSensorType> topic;
 	private: dds::pub::Publisher pub;
-	private: dds::pub::DataWriter<QoT::Timeline> dw;
-	private: QoT::Timeline timeline;
+  	private: dds::sub::Subscriber sub;
+	private: dds::pub::DataWriter<tutorial::TempSensorType> dw;
+  	private: dds::sub::DataReader<tutorial::TempSensorType> dr;
+  	private: TempSensorListener listener;
 
 	};
 }

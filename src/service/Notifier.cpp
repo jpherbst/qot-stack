@@ -83,7 +83,7 @@ void Notifier::add(const char *name)
 	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << oss.str();
 	std::map<std::string,Timeline>::iterator it = timelines.find(oss.str());
 	if (it == timelines.end())
-		timelines.insert(std::map<std::string,Timeline>::value_type(oss.str(),Timeline(asio, oss.str())));
+		timelines.emplace(oss.str(),Timeline(asio, oss.str()));
 	else
 		BOOST_LOG_TRIVIAL(warning) << "The timeline has already been added";
 }

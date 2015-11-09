@@ -31,19 +31,52 @@
 /* Trivial logging */
 #include <boost/log/trivial.hpp>
 
+/* PAarameters */
+#define HEARTBEAT_MS 1000
+
 using namespace qot;
 
-Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
-	: asio(io), dp(0), topic(dp, dir), pub(dp), dw(pub, topic)
-{
-  /* Instantiate the timeline */
-  
+////////////////////////////////////////////////////////////////////////////////////////////
 
-  /* Publish info about the timeline */
-  dw.write(timeline);
+std::ostream& operator <<(std::ostream& os, const tutorial::TempSensorType& ts)
+{
+  os << "(id = " << ts.id()  
+     << ", temp = " << ts.temp()
+     << ", hum = " << ts.hum()
+     << ", scale = " << ts.scale()
+     << ")";
+  return os;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////
+
+Coordination::Coordination(boost::asio::io_service *io, const std::string &dir)
+	: asio(io), timer(std::make_shared<boost::asio::deadline_timer>(*io, boost::posix_time::milliseconds(HEARTBEAT_MS))),
+		dp(0), timeline(18, 0.1, 0.4, tutorial::CELSIUS), topic(dp, "TTempSensor"), pub(dp), sub(dp), dr(sub, topic), dw(pub, topic)
+{
+	/* Setup a data listener to be called with new data */
+  	dr.listener(boost::bind(&Coordination::listener, &this->listener), dds::core::status::StatusMask::data_available());
+  	
+	/* Setup a hearbeat timer */
+	timer->async_wait(boost::bind(&Coordination::Heartbeat, this, boost::asio::placeholders::error));
 }
 
 Coordination::~Coordination()
 {
+	BOOST_LOG_TRIVIAL(info) << "KILLED";
 
+	/* Destroy the listener */
+	dr.listener(nullptr, dds::core::status::StatusMask::none());
+}
+
+void Coordination::Heartbeat(const boost::system::error_code& /*e*/)
+{
+	BOOST_LOG_TRIVIAL(info) << "Heartbeat";
+	
+	/* Publish info about the timeline */
+	// dw.write(timeline);
+
+	/* Reset timer */
+   	timer->expires_at(timer->expires_at() + boost::posix_time::milliseconds(HEARTBEAT_MS));
+    timer->async_wait(boost::bind(&Coordination::Heartbeat, this, boost::asio::placeholders::error));
 }

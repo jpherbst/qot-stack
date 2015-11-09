@@ -88,8 +88,9 @@ int main(int argc, char **argv)
 
 	// Create an IO service
 	boost::asio::io_service io;
+	boost::asio::io_service::work work(io);
 
-	// Create a Timeline, passin
+	// Create the inotify monitoring dservice for /dev/timelineX
 	Notifier notifier(&io, vm["dir"].as<std::string>());
 	
 	// Runt the io service

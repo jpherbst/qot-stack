@@ -39,7 +39,7 @@ IF (CROSS_COMPILE)
 	SET(CROSS_COMPILE_ROOTFS "/export/rootfs" CACHE STRING "Path to ROOTFS")
 
 	# User-definable root filesystem location
-	SET(CMAKE_INSTALL_PREFIX "${CROSS_COMPILE_ROOTFS}")
+	SET(CMAKE_INSTALL_PREFIX "${CROSS_COMPILE_ROOTFS}/usr/local")
 
 	# System, architecture and version
 	SET(CMAKE_SYSTEM_NAME Linux)

@@ -61,7 +61,7 @@ INCLUDE_DIRECTORIES(
 )
 
 # IDL MESSAGE COMPILATION
-SET(idls msg/QoT.idl)
+SET(idls msg/QoT.idl msg/TempControl.idl)
 FOREACH(idl ${idls})
 	OpenSplice_IDLGEN (${idl})
 	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})

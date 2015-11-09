@@ -40,7 +40,7 @@ extern "C"
 using namespace qot;
 
 Timeline::Timeline(boost::asio::io_service *io, const std::string &file)
-	: asio(io), coordinator(io, "test")
+	: asio(io), coordinator(io, "timeline")
 {
 	// Try and open the file
 	fd = open(file.c_str(), O_RDWR);

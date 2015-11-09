@@ -35,8 +35,9 @@ MACRO (OpenSplice_IDLGEN idlfilename)
         OUTPUT ${outsources}
         COMMAND LD_LIBRARY_PATH=$ENV{OSPL_BASE}/lib PATH=$ENV{OSPL_BASE}/bin OSPL_TMPL_PATH=$ENV{OSPL_BASE}/etc/idlpp ${OpenSplice_IDLGEN_BINARY} 
         ARGS -l isocpp -d ${CMAKE_CURRENT_BINARY_DIR}/${dir} ${it}
-        DEPENDS ${it}
+        DEPENDS ${idlfilename}
     )
+    MESSAGE(${CMAKE_CURRENT_SOURCE_DIR}/${idlfilename})
     SET_SOURCE_FILES_PROPERTIES(${outsources} PROPERTIES OBJECT_DEPENDS ${it})
     SET_SOURCE_FILES_PROPERTIES(${outsources} PROPERTIES GENERATED TRUE)
 ENDMACRO (OpenSplice_IDLGEN)
