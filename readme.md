@@ -114,8 +114,10 @@ Note that whenever you run an OpenSplice-driven app you will need to set an envi
 There are some good C++ examples showing how to use OpenSplice DDS at ```https://github.com/PrismTech/dds-tutorial-cpp-ex```. When compiled, the ch1 example produces a tssub and tspub application. To ensure that these applications know how to configure the domain they use, they must be run in the following way:
 
 ```
-OSPL_URI=file:///path/to/opensplice/etc/ospl_sp_no_network.xml ./tspub 1
+OSPL_URI=file:///path/to/opensplice/etc/ospl.xml ./tspub 1
 ```
+
+Note that on devices with multiple network interface cards (eg. wlan0, eth0, etc.) you must explicitly state the IP address of the interface in ```<NetworkInterfaceAddress></NetworkInterfaceAddress>``` XML tag.
 
 Finally, build the qotdaemon application
 
