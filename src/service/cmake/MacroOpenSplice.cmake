@@ -23,7 +23,7 @@ MACRO (DEFINE_OpenSplice_SOURCES idlfilename)
       ${CMAKE_CURRENT_BINARY_DIR}/${dir}/${nfile}Dcps_impl.h
       ${CMAKE_CURRENT_BINARY_DIR}/${dir}/${nfile}SplDcps.cpp 
       ${CMAKE_CURRENT_BINARY_DIR}/${dir}/${nfile}SplDcps.h
-      ${CMAKE_CURRENT_BINARY_DIR}/${dir}/ccpp_${nfile}.h
+      ${CMAKE_CURRENT_BINARY_DIR}/${dir}/${nfile}_DCPS.hpp
     )
 ENDMACRO(DEFINE_OpenSplice_SOURCES)
 
@@ -37,7 +37,4 @@ MACRO (OpenSplice_IDLGEN idlfilename)
         ARGS -l isocpp -d ${CMAKE_CURRENT_BINARY_DIR}/${dir} ${it}
         DEPENDS ${idlfilename}
     )
-    MESSAGE(${CMAKE_CURRENT_SOURCE_DIR}/${idlfilename})
-    SET_SOURCE_FILES_PROPERTIES(${outsources} PROPERTIES OBJECT_DEPENDS ${it})
-    SET_SOURCE_FILES_PROPERTIES(${outsources} PROPERTIES GENERATED TRUE)
 ENDMACRO (OpenSplice_IDLGEN)

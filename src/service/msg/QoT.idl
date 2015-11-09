@@ -25,14 +25,14 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-module QoT
+module qot_msgs
 {
-	struct Timeline
+	struct TimelineType
 	{
-		short id;
+		string name;	
 		string uuid;
 		double resolution;
 		double accuracy;
 	};
-#pragma keylist Timeline id
+#pragma keylist TimelineType name
 };

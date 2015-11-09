@@ -25,10 +25,16 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _QOT_H_
-#define _QOT_H_
+#ifndef QOT_H
+#define QOT_H
 
-#include <linux/ioctl.h>
+// Cater for different C compilation pipelines
+#ifdef __KERNEL__
+	#include <linux/ioctl.h>
+#else
+	#include <stdint.h>
+	#include <sys/ioctl.h>
+#endif
 
 // Various system parameters
 #define QOT_MAX_NAMELEN 	(32)
@@ -38,44 +44,45 @@
 #define QOT_POLL_TIMEOUT_MS  (1000)
 #define QOT_ACTION_CAPTURE	POLLIN
 #define QOT_ACTION_EVENT	POLLOUT
+#define QOT_ACTION_TIMELINE POLLIN
 
 // QoT message type 
-struct qot_metric {
+typedef struct qot_metric {
 	uint64_t acc;	       				// Range of acceptable deviation from the reference timeline in nanosecond
 	uint64_t res;	    				// Required clock resolution
-};
+} qot_metric_t;
 
 // QoT capture information
-struct qot_event {
+typedef struct qot_event {
 	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
 	int64_t type;						// Event type code
-};
+} qot_event_t;
 
 // QoT capture information
-struct qot_capture {
+typedef struct qot_capture {
 	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
 	int64_t edge;						// Edge time in global coordinates
-};
+} qot_capture_t;
 
 // QoT compare information
-struct qot_compare {
+typedef struct qot_compare {
 	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
 	uint8_t enable;						// Turn on or off
 	int64_t start;						// Global time of first rising edge
 	uint64_t high;						// Duty cycle high time (in global time units)
 	uint64_t low;						// Duty cycle low time (in global time units)
 	uint64_t repeat;					// Number of repetitions (0 = repeat indefinitely)
-};
+} qot_compare_t;
 
 // QoT message type 
-struct qot_message {
+typedef struct qot_message {
 	char uuid[QOT_MAX_NAMELEN];			// UUID of reference timeline shared among all collaborating entities
 	struct qot_metric request;			// Request metrics			
 	int tid;				   			// Timeline id (ie. X in /dev/timelineX)
 	struct qot_capture capture;			// Capture information
 	struct qot_compare compare;			// Compare information
 	struct qot_event event;				// Event information
-};
+} qot_message_t;
 
 // Magic code specific to our ioctl code
 #define MAGIC_CODE 0xEF

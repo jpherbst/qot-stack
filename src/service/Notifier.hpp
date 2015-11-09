@@ -31,30 +31,12 @@
 #include <string>
 #include <map>
 
-/* System dependencies */
-extern "C"
-{
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <errno.h>
-	#include <poll.h>
-	#include <dirent.h>
-	#include <sys/types.h>
-	#include <sys/inotify.h>
-}
-
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
 
 // Project includes
 #include "Timeline.hpp"
-
-/* Convenience declarations */
-#define EVENT_SIZE  	(sizeof(struct inotify_event))
-#define EVENT_BUF_LEN   (1024*(EVENT_SIZE + 16))
-#define EVENT_MAXLEN 	(512)
-#define	EVENT_TIMEOUT	(1000)
 
 namespace qot
 {
@@ -73,7 +55,7 @@ namespace qot
 	// Private variables
 	private: boost::asio::io_service *asio;
 	private: boost::thread thread;
-	private: std::map<std::string,Timeline> timelines;
+	private: std::map<std::string,std::shared_ptr<Timeline>> timelines;
 	private: std::string basedir;
 	};
 }

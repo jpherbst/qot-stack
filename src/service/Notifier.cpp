@@ -31,8 +31,27 @@
 /* Trivial logging */
 #include <boost/log/trivial.hpp>
 
+/* System dependencies */
+extern "C"
+{
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <errno.h>
+	#include <poll.h>
+	#include <dirent.h>
+	#include <sys/types.h>
+	#include <sys/inotify.h>
+}
+
+/* Convenience declarations */
+#define EVENT_SIZE  	(sizeof(struct inotify_event))
+#define EVENT_BUF_LEN   (1024*(EVENT_SIZE + 16))
+#define EVENT_MAXLEN 	(512)
+#define	EVENT_TIMEOUT	(1000)
+
 using namespace qot;
 
+// Constructor
 Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
 	: asio(io), basedir(dir)
 {
@@ -81,9 +100,9 @@ void Notifier::add(const char *name)
 	std::ostringstream oss("");
 	oss << basedir << "/" << name;
 	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << oss.str();
-	std::map<std::string,Timeline>::iterator it = timelines.find(oss.str());
+	std::map<std::string,std::shared_ptr<Timeline>>::iterator it = timelines.find(oss.str());
 	if (it == timelines.end())
-		timelines.emplace(oss.str(),Timeline(asio, oss.str()));
+		timelines[oss.str()] = std::shared_ptr<Timeline>(new Timeline(asio, oss.str()));
 	else
 		BOOST_LOG_TRIVIAL(warning) << "The timeline has already been added";
 }
@@ -93,7 +112,7 @@ void Notifier::del(const char *name)
 	std::ostringstream oss("");
 	oss << basedir << "/" << name;
 	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " << oss.str();
-	std::map<std::string,Timeline>::iterator it = timelines.find(oss.str());
+	std::map<std::string,std::shared_ptr<Timeline>>::iterator it = timelines.find(oss.str());
 	if (it != timelines.end())
 		timelines.erase(it);
 	else

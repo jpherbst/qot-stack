@@ -25,6 +25,10 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+extern "C"
+{
+	#include <time.h>
+}
 
 // Basic printing
 #include <iostream>
@@ -39,7 +43,7 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 
-// Timeline management
+// Notification
 #include "Notifier.hpp"
 
 // Convenience
@@ -55,6 +59,8 @@ int main(int argc, char **argv)
 		("verbose,v",  	"print verbose debug messages")
 		("conf,c", 		boost::program_options::value<std::string>()
 			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
+		("name,n", 		boost::program_options::value<std::string>()
+			->default_value("default"), "name of this node") 
 		("dir,d", 		boost::program_options::value<std::string>()
 			->default_value("/dev"), "devfs directory for timelines") 
 	;
@@ -90,10 +96,10 @@ int main(int argc, char **argv)
 	boost::asio::io_service io;
 	boost::asio::io_service::work work(io);
 
-	// Create the inotify monitoring dservice for /dev/timelineX
-	Notifier notifier(&io, vm["dir"].as<std::string>());
-	
-	// Runt the io service
+	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
+	qot::Notifier notifier(&io, vm["dir"].as<std::string>());
+
+	// Run the io service
 	io.run();
 
 	// Everything OK

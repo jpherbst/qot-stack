@@ -27,10 +27,17 @@
 #ifndef TIMELINE_HPP
 #define TIMELINE_HPP
 
+// std includes
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
+// Boost includes
+#include <boost/log/trivial.hpp>
 #include <boost/asio.hpp>
 
-/* Networkcoordination c*/
-#include "Coordination.hpp"
+// Network coordination
+#include "Coordinator.hpp"
 
 namespace qot
 {
@@ -38,13 +45,26 @@ namespace qot
 	{
 
 	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &dir);
+	public: Timeline(boost::asio::io_service *io, const std::string &file);
 	public: ~Timeline();
 
-	// Private variables
-	private: Coordination coordinator;
+	// Heartbeat timer
+	private: void Update();						// Fetch parameters for timeline
+	private: void MonitorThread();				// Polling thread for params
+
+	// Asynchronous service
 	private: boost::asio::io_service *asio;
-	private: int fd;
+
+	// Communication with local timeline
+	private: int fd;							// IOCTL link
+	private: bool kill;							// Kill flag
+	private: std::thread thread;				// Worker thread for capture
+	private: std::mutex m;						// Mutex
+	private: std::condition_variable cv;		// Conditional variable
+	private: std::unique_lock<std::mutex> lk;	// Lock
+
+	// Network (DDS) coordinator
+	private: Coordinator coordinator;
 
 	};
 }
