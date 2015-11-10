@@ -301,7 +301,7 @@ $> popd
 
 After installing the kernel module you might need to run ```depmod``` on the node.
 
-## Build and install the user-space API, service and examples ##
+## STEP 6 : Build and install the user-space components ##
 
 The entire project is cmake-driven, and so the following should suffice:
 
