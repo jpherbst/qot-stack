@@ -1,4 +1,4 @@
-## Overview ##
+# Overview #
 
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
 
@@ -21,7 +21,7 @@ So, to summarize, you will end up having this on directory (/export) on your cen
 
 And, you will NFS mount this on each host. When you compile the kernel you should use the cross-compiler that is automatically downloaded by the kernel build script. However, when you compile applications you need to use the ```arm-linux-gnueabihf``` compiler in the Ubuntu. Also, it is really important that the version of this GCC compiler matches the version deployed on the slaves (currently 4.9.2). The reason for this is that different compilers have different libc versions, which causes linker errors that are very tricky to solve.
 
-## Controller preparation ##
+# Controller preparation #
 
 This section describes how to prepare your central controller. However, in order to do it must make some assumptionsm about your controller. In order to be used as a NAT router, your controller must have at least two interfaces. I'm going to assume the existence of these two adapters, and you will need to modify the instructions if they are different. You can use the network configuration manager in Ubuntu to configure them accordingly.
 
@@ -36,7 +36,7 @@ sudo apt-get install nfs-kernel-server tftpd-hpa isc-dhcp-server ufw
 
 EVERYTHING IN THIS SECTION MUST BE EXECUTED ON THE CONTROLLER.
 
-# STEP 1 : Install the root filesystem and kernel  #
+## STEP 1 : Install the root filesystem and kernel  ##
 
 First create two important directories:
 
@@ -45,26 +45,25 @@ $> sudo mkdir -p /export/rootfs
 $> sudo mkdir -p /export/tftp
 ```
 
-Now, download the rootfs and decompress it to the correct location
+Then, download the rootfs and decompress it to the correct location
 
 ```
 $> wget -O qotrootfs.tar.bz2  https://tinurl.com/qotrootfs
 $> sudo tar -xjpf qotrootfs.tar.bz2 -C /export/rootfs
 ```
 
-Then, checkout the kernel build script
+Finally, checkout, build and install the kernel:
 
 ```
 $> su -
 $> cd /export
-$> git clone https://github.com/RobertCNelson/bb-kernel.git -b 4.1.12-bone-rt-r16
-$> sudo tar -xjpf qotrootfs.tar.bz2 -C /export/rootfs
-ctrl+D
+$> git clone https://bitbucket.com/rose-line/bb-kernel.git
+$> cd bb-kernel
+$> ./build_kernel.sh
+$> ./install_netboot.sh
 ```
 
-We'll actually build the kernel later.
-
-# STEP 2 : Configure DHCP  #
+## STEP 2 : Configure DHCP  ##
 
 The Ubuntu host needs to act as a DHCP server, assigning IPs to slaves as they boot. I personally prefer to define each of my slaves in the configuration file so that they are assigned a constant network address that is preserved across booting. Edit the ```/etc/default/isc-dhcp-server``` file to add the interface on which you wish to serve DHCP requests:
 
@@ -127,7 +126,7 @@ You'll also need to add a rule that allows all traffic in on ```eth0``` so that 
 $> sudo ufw allow in on eth0
 ```
 
-# STEP 4 : Configure TFTP  #
+## STEP 4 : Configure TFTP  ##
 
 Then, edit the ```/etc/default/tftpd-hpa``` file to the following:
 
@@ -144,7 +143,7 @@ Then, restart the server:
 sudo service tftpd-hpa restart
 ```
 
-# STEP 5 : Configure NFS  #
+## STEP 5 : Configure NFS  ##
 
 Edit the NFS ```/etc/exports``` on the share the ```/export``` directory 
 
@@ -155,10 +154,56 @@ Edit the NFS ```/etc/exports``` on the share the ```/export``` directory
 Then, restart the server:
 
 ```
-sudo service nfs-kernel-server restart
+$> sudo service nfs-kernel-server restart
 ```
 
+## STEP 6 : Netboot a test slave  ##
+
+To boot the qot stack you'll need a well-formed microsd card. Please note that fdisk is a partitioning tool, and if you do not specify the correct device, you run the risk of formatting the incorrect drive. So, please use ```tail -f /var/log/syslog``` before inserting the card to see which device handle (/dev/sd?) is assigned by udev when the card is inserted into your PC.
+
+Then run the following:
+
+1. Start fdisk to partition the SD card: ```sudo fdisk /dev/sd?```
+1. Type ```o```. This will clear out any partitions on the drive.
+1. Type ```p``` to list partitions. There should be no partitions left.
+1. Type ```n```, then ```p``` for primary, ```1``` for the first partition on the drive, ```enter``` to accept the default first sector, then ```+64M``` to set the size to 64MB.
+1. Type ```t``` to change the partition type, then ```e``` to set it to W95 FAT16 (LBA).
+1. Type ```a```, then ```1``` to set the bootable flag on the first partition.
+1. Type ```n```, then ```p``` for primary, ```2``` for the second partition on the drive, and ```+2GB``` to set the size to 2GB.
+1. Type ```n```, then ```p``` for primary, ```3``` for the third partition on the drive, and ```enter``` to select the remaining bytes on the drive.
+1. Write the partition table and exit by typing ```w```.
+1. Initialise the filesystem for partition 1: ```mkfs.vfat -F 16 /dev/sd?1 -l boot```
+1. Initialise the filesystem for partition 2: ```mkfs.ext4 /dev/sd?2 -l rootfs```
+1. Initialise the filesystem for partition 3: ```mkfs.ext4 /dev/sd?3 -l user```
+
+Now, install the bootloader:
+
+```
+$> su -
+$> sudo mount /dev/sd?1
+$> cd /mnt
+$> wget -O MLO http://tinyurl.com/MLO
+$> wget -O u-boot.img http://tinyurl.com/u-boot.img
+$> wget -O uEnv.txt http://tinyurl.com/uEnv.txt
+$> cd /
+$> umount /mnt
+```
+
+Using this card you you should be able to net-boot a Rev C BeagleBone that is plugged into the same LAN as the controller. The four blue LEDs will light up sequentially until all are lit, and you should see the green LED on the Ethernet jack flicker as the kernel / device tree are downloaded from the controller. All four blue LEDS will then turn off for a few seconds while the kernel begins the boot process. They should then rapidly flick for a few more seconds before the classic heartbeat led begins. 
+
+To determine the IP address that the controller offered, or debug any errors check the system log:
+
+```
+$> tail -f /var/log/syslog
+```
+
+If you can't find anything useful there, use a FTDI cable to inspect the u-boot process of the slave.
+
+
 # Build instructions #
+
+Now that we have a working kernel
+
 
 ## Install system dependencies, checkout code and initialize submodules ##
 
