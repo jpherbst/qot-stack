@@ -338,7 +338,7 @@ This will install the QoT stack to your the NFS share located as ```/export/root
 
 After installing the user-space applications you might need to run ```ldconfig``` on the node.
 
-# Running the qot stack #
+# Running the QoT stack #
 
 Firstly, SSH into a node of choice:
 
@@ -350,9 +350,9 @@ root@arm:~# capes
  1: PF----  -1 
  2: PF----  -1 
  3: PF----  -1 
-````
+```
 
-When you installed the kernel module a DTBO file was copied to  ```/export/rootfs/lib/firmware```. This is a device tree overlay file that tells the BeagleBone how to multiplex its I/O pins, and which kernel module to load after it has done so. To apply the overlay use the ```capes```command.
+When you installed the kernel module a DTBO file was copied to  ```/export/rootfs/lib/firmware```. This is a device tree overlay file that tells the BeagleBone how to multiplex its I/O pins, and which kernel module to load after it has done so. To apply the overlay use the ```capes``` command.
 
 ```
 $> capes ROSELINE-QOT
