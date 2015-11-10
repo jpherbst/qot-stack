@@ -1,4 +1,4 @@
-<<toc>> 
+[TOC]
 
 # Overview #
 
@@ -33,7 +33,7 @@ This section describes how to prepare your central controller. However, in order
 Install the necessary system applications
 
 ```
-sudo apt-get install nfs-kernel-server tftpd-hpa isc-dhcp-server ufw
+sudo apt-get install build-essential git cmake nfs-kernel-server tftpd-hpa isc-dhcp-server ufw gawk flex bison perl doxygen u-boot-tools 
 ```
 
 EVERYTHING IN THIS SECTION MUST BE EXECUTED ON THE CONTROLLER.
@@ -204,89 +204,39 @@ If you can't find anything useful there, use a FTDI cable to inspect the u-boot 
 
 # Build instructions #
 
-Now that we have successfully built and net-booted the kernel, we can start 
+Assuming that you have successfully built and net-booted the kernel, you can now setup your host environment to cross-compile kernel modules and  applications for the BeagleBone.
 
-
-## Install system dependencies, checkout code and initialize submodules ##
-
-```
-$> sudo apt-get install gawk flex bison perl doxygen u-boot-tools 
-```
-
-Configure your system with a workaround for GCC 4.9.2 and Ubuntu 15.04:
+Start by checking out the qot-stack code
 
 ```
-$> sudo mkdir -p /usr/lib/bfd-plugins
-$> sudo ln -s /usr/lib/gcc/x86_64-linux-gnu/4.9.2/liblto_plugin.so /usr/lib/bfd-plugins/
-```
-
-Check out the qot-stack code
-
-```
-$> git clone https://bitbucket.org/asymingt/qot-stack.git
+$> git clone https://bitbucket.org/rose-line/qot-stack.git
 $> cd qot-stack
 ```
 
-Fetch third party code
+Intialize the third-party code (OpenSplice and the DTC compiler)
 
 ```
 $> git submodule init
 $> git submodule update
 ```
 
-This will take a while, as it checks out several large third party repos.
+## Update the device tree compiler ##
 
-Now, install and reload our udev rules.
-
-```
-$> sudo cp src/module/80-qot.rules /etc/udev/rules.d/
-$> sudo service udev restart
-```
-
-These rules force the ```/dev/qot``` and ```/dev/timelineX``` to RW permission for all users.
-
-## Build the kernel ##
-
-First, build a vanilla kernel...
+Then, install an overlay for the device tree compiler. This compiles a new version of ```dtc``` which you can use to build overlays for the BeagleBone Black.
 
 ```
-$> pushd thirdparty/bb-kernel
-$> git checkout 4.1.3-bone15 -b v4.1.3
-$> ./build_kernel.sh
-
-```
-
-This will take a long time, as it will compile an entire Linux-based system.
-
-Now, replace the KERNEL directory with a symbolic link to the Kronux kernel.
-
-```
-$> mv KERNEL KERNEL-DEFAULT
-$> ln -s ../Kronux KERNEL
-```
-
-Then, copy the kernel defconfig for the BeagleBoneBlack and rebuild
-
-```
-$> pushd ../Kronux
-$> cp arch/arm/configs/roseline_defconfig .config
+$> pushd thirdparty/bbb.org-overlays
+$> ./dtc-overlay.sh
 $> popd
 ```
 
-Finally, rebuild the kernel
-
-```
-$> ./tools/rebuild_kernel.sh
-```
-
-## Build the service ##
+## Build OpenSplice ##
 
 Switch to the OpenSplice directory and pull the third party repo for the C++ bindings
 
 ```
 $> pushd thirdparty/opensplice
-$> git submodule init
-$> git submodule update
+$> git checkout -b OSPL_V6_4_OSS_RELEASE OSPL_V6_4_OSS_RELEASE
 ```
 
 Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
@@ -312,54 +262,95 @@ $> make -f Makefile.Build_DCPS_ISO_Cpp_Lib
 $> popd
 ```
 
-You now have a working OpenSplice distribution with C++11 support. This basically provides a fully-distributed publish-subscribe messaging middleware with quality of service support. This mechanism will be used to advertise timelines across the network.
+You now have a working OpenSplice distribution with C++11 support. This basically provides a fully-distributed publish-subscribe messaging middleware with quality of service support. This mechanism will be used to advertise timelines across the network. The slaves have their own arm versions of Java, ROS and OpenSplice 6.4 in the ```/opt``` directory of the rootfs, and whenever you SSH into a slave the ```/etc/profile``` script initializes all three for you. 
 
-Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files.
+Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs it configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
 
-There are some good C++ examples showing how to use OpenSplice DDS at ```https://github.com/PrismTech/dds-tutorial-cpp-ex```. When compiled, the ch1 example produces a tssub and tspub application. To ensure that these applications know how to configure the domain they use, they must be run in the following way:
+## Build and install the kernel module ##
+
+The kernel modules are built and installed in the following way:
 
 ```
-OSPL_URI=file:///path/to/opensplice/etc/ospl.xml ./tspub 1
+$> pushd module
+$> ccmake ..
+$> make
+$> sudo make install
+$> popd
 ```
 
-Note that on devices with multiple network interface cards (eg. wlan0, eth0, etc.) you must explicitly state the IP address of the interface in ```<NetworkInterfaceAddress></NetworkInterfaceAddress>``` XML tag.
+After installing the kernel module you might need to run ```depmod``` on the node.
 
-Finally, build the qotdaemon application
+## Build and install the user-space API, service and examples ##
+
+The entire project is cmake-driven, and so the following should suffice:
 
 ```
 $> mkdir -p build
-$> cd build
-$> cmake ..
-$> make
+$> pushd build
+$> ccmake ..
 ```
 
+Make sure that CROSS_COMPILE is ON and that your INSTALL_PREFIX is ```/export/rootfs/usr/local```.
 
-## NOTES ##
+```
+$> make
+$> sudo make install
+$> popd
+```
 
-There are three 
+This will install the QoT stack to your the NFS share located as ```/export/rootfs```. It should be available instantly on the nodes.
 
-1. PTP-compliant NIC 			Performs filtered H/W timestamping
+After installing the user-space applications you might need to run ```ldconfig``` on the node.
 
-   a. With CLK
-   b. With SFD
-   c. With CLK and SFD	
-   d. Without CLK and SFD
+# Running the qot stack #
 
-2. Regular NIC 					Does not perform H/W timestamping
+Firstly, SSH into a node of choice:
 
-   a. With CLK
-   b. With SFD
-   c. With CLK and SFD			
-   d. Without CLK and SFD
+If you type ```capes``` on the command line you should see four slots as empty:
 
-IMPORTANT
+```
+root@arm:~# capes
+ 0: PF----  -1 
+ 1: PF----  -1 
+ 2: PF----  -1 
+ 3: PF----  -1 
+````
 
-All PTP-compliant devices have an RX filter to determine which packets
-are timestamped. This can vary based on the manufacturer, so no method
-is guaranteed. For example, the BBB Ethernet adapter stamps 802.3 L2
-packets only. Others may also stamp L4 IPv4 or IPv6 UDP packets. For 
-this reason our PTP client must support all options.
+Now, add the roseline-qot cape.
 
-In the first instance all our QoT stack will adapt is the location of
-the master, and the node synchronization frequency. In future we will
-support switching between NICs, sync alorithms and adaptive clocking.
+```
+$> capes ROSELINE-QOT
+```
+
+The output of the ```capes``` command should now be this"
+
+```
+root@arm:~# capes
+ 0: PF----  -1 
+ 1: PF----  -1 
+ 2: PF----  -1 
+ 3: PF----  -1 
+ 4: P-O-L-   0 Override Board Name,00A0,Override Manuf,ROSELINE-QOT
+````
+
+And the ```lsmod``` command should list two new kernel modules:
+
+```
+root@arm:~# lsmod
+Module                  Size  Used by
+qot_am335x              7121  0 
+qot_core                7655  3 qot_am335x
+```
+
+We have included a ```helloworld``` application to test the qot stack.
+
+
+```
+$> helloworld
+```
+
+Run this command on multiple nodes and the time should be synchronized transparently in the background.
+
+## Development ##
+
+Take a look at the ```src/examples``` for an idea of how to use the stack.
