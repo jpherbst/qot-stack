@@ -203,10 +203,30 @@ $> tail -f /var/log/syslog
 
 If you can't find anything useful there, use a FTDI cable to inspect the u-boot process of the slave.
 
-
 # Build instructions #
 
 Assuming that you have successfully built and net-booted the kernel, you can now setup your host environment to cross-compile kernel modules and  applications for the BeagleBone.
+
+EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST
+
+## STEP 1 : Se ##
+
+Recall that we NFS-exported the ```/export``` directory from the controller. Create the same directory on your host.
+
+```
+$> sudo mkdir -p /export
+```
+
+Now, we will add the following line to the end of the host's ```/etc/fstab``` file to automount this central controller's NFS share when the machine is booted.
+
+```
+10.42.0.1:/export /export nfs rsize=8192,wsize=8192,timeo=14,intr
+```
+
+Reboot the host and you should see the rootfs, tftp and bb-kernel directories in the ```/export``` directory.
+
+
+## Check out the QoT stack code ##
 
 Start by checking out the qot-stack code
 
