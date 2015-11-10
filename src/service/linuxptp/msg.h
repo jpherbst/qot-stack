@@ -24,8 +24,8 @@
 #include <sys/queue.h>
 #include <time.h>
 
+#include "address.h"
 #include "ddt.h"
-#include "transport.h"
 #include "tlv.h"
 
 #define PTP_VERSION 2
@@ -54,6 +54,19 @@
 #define PTP_TIMESCALE  (1<<3)
 #define TIME_TRACEABLE (1<<4)
 #define FREQ_TRACEABLE (1<<5)
+
+enum timestamp_type {
+	TS_SOFTWARE,
+	TS_HARDWARE,
+	TS_LEGACY_HW,
+	TS_ONESTEP,
+};
+
+struct hw_timestamp {
+	enum timestamp_type type;
+	struct timespec ts;
+	struct timespec sw;
+};
 
 enum controlField {
 	CTL_SYNC,
@@ -202,6 +215,11 @@ struct ptp_message {
 	 */
 	struct hw_timestamp hwts;
 	/**
+	 * Contains the address this message was received from or should be
+	 * sent to.
+	 */
+	struct address address;
+	/**
 	 * Contains the number of TLVs in the suffix.
 	 */
 	int tlv_count;
@@ -298,7 +316,7 @@ int msg_pre_send(struct ptp_message *m);
  * @param type  Value of the messageType field as returned by @ref msg_type().
  * @return      String describing the message type.
  */
-char *msg_type_string(int type);
+const char *msg_type_string(int type);
 
 /**
  * Print messages for debugging purposes.
@@ -319,6 +337,16 @@ void msg_put(struct ptp_message *m);
  * @return   One if the message is an event without a time stamp, zero otherwise.
  */
 int msg_sots_missing(struct ptp_message *m);
+
+/**
+ * Test whether a message has a valid SO_TIMESTAMPING time stamp.
+ * @param m  Message to test.
+ * @return   One if the message has a valid time stamp, zero otherwise.
+ */
+static inline int msg_sots_valid(struct ptp_message *m)
+{
+	return (m->hwts.ts.tv_sec || m->hwts.ts.tv_nsec) ? 1 : 0;
+}
 
 /**
  * Work around buggy 802.1AS switches.

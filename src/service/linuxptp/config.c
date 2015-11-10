@@ -20,6 +20,7 @@
 #include <float.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "config.h"
 #include "ether.h"
@@ -125,6 +126,24 @@ static enum parser_result parse_pod_setting(const char *option,
 			return r;
 		pod->neighborPropDelayThresh = uval;
 
+	} else if (!strcmp(option, "min_neighbor_prop_delay")) {
+		r = get_ranged_int(value, &val, INT_MIN, -1);
+		if (r != PARSED_OK)
+			return r;
+		pod->min_neighbor_prop_delay = val;
+
+	} else if (!strcmp(option, "egressLatency")) {
+		r = get_ranged_int(value, &val, INT_MIN, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		pod->tx_timestamp_offset = val;
+
+	} else if (!strcmp(option, "ingressLatency")) {
+		r = get_ranged_int(value, &val, INT_MIN, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		pod->rx_timestamp_offset = val;
+
 	} else if (!strcmp(option, "fault_badpeernet_interval")) {
 		pod->flt_interval_pertype[FT_BAD_PEER_NETWORK].type = FTMO_LINEAR_SECONDS;
 		if (!strcasecmp("ASAP", value)) {
@@ -155,34 +174,55 @@ static enum parser_result parse_pod_setting(const char *option,
 
 static enum parser_result parse_port_setting(const char *option,
 					    const char *value,
-					    struct config *cfg,
-					    int p)
+					    struct interface *iface)
 {
 	enum parser_result r;
+	int val;
 
-	r = parse_pod_setting(option, value, &cfg->iface[p].pod);
+	r = parse_pod_setting(option, value, &iface->pod);
 	if (r != NOT_PARSED)
 		return r;
 
 	if (!strcmp(option, "network_transport")) {
 		if (!strcasecmp("L2", value))
-			cfg->iface[p].transport = TRANS_IEEE_802_3;
+			iface->transport = TRANS_IEEE_802_3;
 		else if (!strcasecmp("UDPv4", value))
-			cfg->iface[p].transport = TRANS_UDP_IPV4;
+			iface->transport = TRANS_UDP_IPV4;
 		else if (!strcasecmp("UDPv6", value))
-			cfg->iface[p].transport = TRANS_UDP_IPV6;
+			iface->transport = TRANS_UDP_IPV6;
 		else
 			return BAD_VALUE;
 
 	} else if (!strcmp(option, "delay_mechanism")) {
 		if (!strcasecmp("Auto", value))
-			cfg->iface[p].dm = DM_AUTO;
+			iface->dm = DM_AUTO;
 		else if (!strcasecmp("E2E", value))
-			cfg->iface[p].dm = DM_E2E;
+			iface->dm = DM_E2E;
 		else if (!strcasecmp("P2P", value))
-			cfg->iface[p].dm = DM_P2P;
+			iface->dm = DM_P2P;
 		else
 			return BAD_VALUE;
+
+	} else if (!strcmp(option, "delay_filter")) {
+		if (!strcasecmp("moving_average", value))
+			iface->delay_filter = FILTER_MOVING_AVERAGE;
+		else if (!strcasecmp("moving_median", value))
+			iface->delay_filter = FILTER_MOVING_MEDIAN;
+		else
+			return BAD_VALUE;
+
+	} else if (!strcmp(option, "delay_filter_length")) {
+		r = get_ranged_int(value, &val, 1, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		iface->delay_filter_length = val;
+
+	} else if (!strcmp(option, "boundary_clock_jbod")) {
+		r = get_ranged_int(value, &val, 0, 1);
+		if (r != PARSED_OK)
+			return r;
+		iface->boundary_clock_jbod = val;
+
 	} else
 		return NOT_PARSED;
 
@@ -238,6 +278,12 @@ static enum parser_result parse_global_setting(const char *option,
 			else
 				dds->flags &= ~DDS_SLAVE_ONLY;
 		}
+
+	} else if (!strcmp(option, "gmCapable")) {
+		r = get_ranged_int(value, &val, 0, 1);
+		if (r != PARSED_OK)
+			return r;
+		cfg->dds.grand_master_capable = val;
 
 	} else if (!strcmp(option, "priority1")) {
 		r = get_ranged_uint(value, &uval, 0, UINT8_MAX);
@@ -355,23 +401,35 @@ static enum parser_result parse_global_setting(const char *option,
 			return r;
 		*cfg->pi_integral_norm_max = df;
 
-	} else if (!strcmp(option, "pi_offset_const")) {
+	} else if (!strcmp(option, "step_threshold")) {
 		r = get_ranged_double(value, &df, 0.0, DBL_MAX);
 		if (r != PARSED_OK)
 			return r;
-		*cfg->pi_offset_const = df;
+		*cfg->step_threshold = df;
 
-	} else if (!strcmp(option, "pi_f_offset_const")) {
+	} else if (!strcmp(option, "first_step_threshold")) {
 		r = get_ranged_double(value, &df, 0.0, DBL_MAX);
 		if (r != PARSED_OK)
 			return r;
-		*cfg->pi_f_offset_const = df;
+		*cfg->first_step_threshold = df;
 
-	} else if (!strcmp(option, "pi_max_frequency")) {
+	} else if (!strcmp(option, "max_frequency")) {
 		r = get_ranged_int(value, &val, 0, INT_MAX);
 		if (r != PARSED_OK)
 			return r;
-		*cfg->pi_max_frequency = val;
+		*cfg->max_frequency = val;
+
+	} else if (!strcmp(option, "sanity_freq_limit")) {
+		r = get_ranged_int(value, &val, 0, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		cfg->dds.sanity_freq_limit = val;
+
+	} else if (!strcmp(option, "ntpshm_segment")) {
+		r = get_ranged_int(value, &val, INT_MIN, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		*cfg->ntpshm_segment = val;
 
 	} else if (!strcmp(option, "ptp_dst_mac")) {
 		if (MAC_LEN != sscanf(value, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
@@ -392,6 +450,11 @@ static enum parser_result parse_global_setting(const char *option,
 		if (r != PARSED_OK)
 			return r;
 		*cfg->udp6_scope = uval;
+
+	} else if (!strcmp(option, "uds_address")) {
+		if (strlen(value) > MAX_IFNAME_SIZE)
+			return OUT_OF_RANGE;
+		strncpy(cfg->uds_address, value, MAX_IFNAME_SIZE);
 
 	} else if (!strcmp(option, "logging_level")) {
 		r = get_ranged_int(value, &val,
@@ -455,6 +518,10 @@ static enum parser_result parse_global_setting(const char *option,
 	} else if (!strcmp(option, "clock_servo")) {
 		if (!strcasecmp("pi", value))
 			cfg->clock_servo = CLOCK_SERVO_PI;
+		else if (!strcasecmp("linreg", value))
+			cfg->clock_servo = CLOCK_SERVO_LINREG;
+		else if (!strcasecmp("ntpshm", value))
+			cfg->clock_servo = CLOCK_SERVO_NTPSHM;
 		else
 			return BAD_VALUE;
 
@@ -499,13 +566,35 @@ static enum parser_result parse_global_setting(const char *option,
 			return r;
 		cfg->dds.time_source = val;
 
+	} else if (!strcmp(option, "delay_filter")) {
+		if (!strcasecmp("moving_average", value))
+			cfg->dds.delay_filter = FILTER_MOVING_AVERAGE;
+		else if (!strcasecmp("moving_median", value))
+			cfg->dds.delay_filter = FILTER_MOVING_MEDIAN;
+		else
+			return BAD_VALUE;
+
+	} else if (!strcmp(option, "delay_filter_length")) {
+		r = get_ranged_int(value, &val, 1, INT_MAX);
+		if (r != PARSED_OK)
+			return r;
+		cfg->dds.delay_filter_length = val;
+
+	} else if (!strcmp(option, "boundary_clock_jbod")) {
+		r = get_ranged_int(value, &val, 0, 1);
+		if (r != PARSED_OK)
+			return r;
+		cfg->dds.boundary_clock_jbod = val;
+
 	} else
 		return NOT_PARSED;
 
 	return PARSED_OK;
 }
 
-static enum parser_result parse_setting_line(char *line, char **option, char **value)
+static enum parser_result parse_setting_line(char *line,
+					     const char **option,
+					     const char **value)
 {
 	*option = line;
 
@@ -525,13 +614,34 @@ static enum parser_result parse_setting_line(char *line, char **option, char **v
 	return PARSED_OK;
 }
 
+static void check_deprecated_options(const char **option)
+{
+	const char *new_option = NULL;
+
+	if (!strcmp(*option, "pi_offset_const")) {
+		new_option = "step_threshold";
+	} else if (!strcmp(*option, "pi_f_offset_const")) {
+		new_option = "first_step_threshold";
+	} else if (!strcmp(*option, "pi_max_frequency")) {
+		new_option = "max_frequency";
+	}
+
+	if (new_option) {
+		fprintf(stderr, "option %s is deprecated, please use %s instead\n",
+				*option, new_option);
+		*option = new_option;
+	}
+}
+
 int config_read(char *name, struct config *cfg)
 {
 	enum config_section current_section = UNKNOWN_SECTION;
 	enum parser_result parser_res;
 	FILE *fp;
-	char buf[1024], *line, *c, *option, *value;
-	int current_port = 0, line_num;
+	char buf[1024], *line, *c;
+	const char *option, *value;
+	struct interface *current_port = NULL;
+	int line_num;
 
 	fp = 0 == strncmp(name, "-", 2) ? stdin : fopen(name, "r");
 
@@ -567,8 +677,9 @@ int config_read(char *name, struct config *cfg)
 					goto parse_error;
 				}
 				current_port = config_create_interface(port, cfg);
-				if (current_port < 0)
+				if (!current_port)
 					goto parse_error;
+				config_init_interface(current_port, cfg);
 			}
 			continue;
 		}
@@ -580,14 +691,16 @@ int config_read(char *name, struct config *cfg)
 				fprintf(stderr, "could not parse line %d in %s section\n",
 						line_num,
 						current_section == GLOBAL_SECTION ?
-							"global" : cfg->iface[current_port].name);
+							"global" : current_port->name);
 				goto parse_error;
 			}
+
+			check_deprecated_options(&option);
 
 			if (current_section == GLOBAL_SECTION)
 				parser_res = parse_global_setting(option, value, cfg);
 			else
-				parser_res = parse_port_setting(option, value, cfg, current_port);
+				parser_res = parse_port_setting(option, value, current_port);
 
 			switch (parser_res) {
 			case PARSED_OK:
@@ -596,7 +709,7 @@ int config_read(char *name, struct config *cfg)
 				fprintf(stderr, "unknown option %s at line %d in %s section\n",
 						option, line_num,
 						current_section == GLOBAL_SECTION ?
-							"global" : cfg->iface[current_port].name);
+							"global" : current_port->name);
 				goto parse_error;
 			case BAD_VALUE:
 				fprintf(stderr, "%s is a bad value for option %s at line %d\n",
@@ -630,33 +743,46 @@ parse_error:
 	return -2;
 }
 
-/* returns the number matching that interface, or -1 on failure */
-int config_create_interface(char *name, struct config *cfg)
+struct interface *config_create_interface(char *name, struct config *cfg)
 {
 	struct interface *iface;
-	int i;
-
-	if (cfg->nports >= MAX_PORTS) {
-		fprintf(stderr, "more than %d ports specified\n", MAX_PORTS);
-		return -1;
-	}
-
-	iface = &cfg->iface[cfg->nports];
 
 	/* only create each interface once (by name) */
-	for(i = 0; i < cfg->nports; i++) {
-		if (0 == strncmp(name, cfg->iface[i].name, MAX_IFNAME_SIZE))
-			return i;
+	STAILQ_FOREACH(iface, &cfg->interfaces, list) {
+		if (0 == strncmp(name, iface->name, MAX_IFNAME_SIZE))
+			return iface;
+	}
+
+	iface = calloc(1, sizeof(struct interface));
+	if (!iface) {
+		fprintf(stderr, "cannot allocate memory for a port\n");
+		return NULL;
 	}
 
 	strncpy(iface->name, name, MAX_IFNAME_SIZE);
+	STAILQ_INSERT_TAIL(&cfg->interfaces, iface, list);
+	return iface;
+}
+
+void config_init_interface(struct interface *iface, struct config *cfg)
+{
 	iface->dm = cfg->dm;
 	iface->transport = cfg->transport;
 	memcpy(&iface->pod, &cfg->pod, sizeof(cfg->pod));
 
-	sk_get_ts_info(name, &iface->ts_info);
+	sk_get_ts_info(iface->name, &iface->ts_info);
 
-	cfg->nports++;
+	iface->delay_filter = cfg->dds.delay_filter;
+	iface->delay_filter_length = cfg->dds.delay_filter_length;
+	iface->boundary_clock_jbod = cfg->dds.boundary_clock_jbod;
+}
 
-	return i;
+void config_destroy(struct config *cfg)
+{
+	struct interface *iface;
+
+	while ((iface = STAILQ_FIRST(&cfg->interfaces))) {
+		STAILQ_REMOVE_HEAD(&cfg->interfaces, list);
+		free(iface);
+	}
 }

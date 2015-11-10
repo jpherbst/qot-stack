@@ -22,10 +22,11 @@
 #define HAVE_PMC_COMMON_H
 
 #include "msg.h"
+#include "transport.h"
 
 struct pmc;
 
-struct pmc *pmc_create(enum transport_type transport_type, char *iface_name,
+struct pmc *pmc_create(enum transport_type transport_type, const char *iface_name,
 		       UInteger8 boundary_hops, UInteger8 domain_number,
 		       UInteger8 transport_specific, int zero_datalen);
 
@@ -40,5 +41,7 @@ int pmc_send_set_action(struct pmc *pmc, int id, void *data, int datasize);
 struct ptp_message *pmc_recv(struct pmc *pmc);
 
 int pmc_target(struct pmc *pmc, struct PortIdentity *pid);
+void pmc_target_port(struct pmc *pmc, UInteger16 portNumber);
+void pmc_target_all(struct pmc *pmc);
 
 #endif

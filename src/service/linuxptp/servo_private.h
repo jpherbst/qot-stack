@@ -22,6 +22,10 @@
 #include "contain.h"
 
 struct servo {
+	double max_frequency;
+	double step_threshold;
+	double first_step_threshold;
+	int first_update;
 
 	void (*destroy)(struct servo *servo);
 
@@ -30,6 +34,12 @@ struct servo {
 			 enum servo_state *state);
 
 	void (*sync_interval)(struct servo *servo, double interval);
+
+	void (*reset)(struct servo *servo);
+
+	double (*rate_ratio)(struct servo *servo);
+
+	void (*leap)(struct servo *servo, int leap);
 };
 
 #endif

@@ -24,6 +24,12 @@
 #include <time.h>
 
 /**
+ * Initialize state needed when adjusting or reading the clock.
+ * @param clkid A clock ID obtained using phc_open() or CLOCK_REALTIME.
+ */
+void clockadj_init(clockid_t clkid);
+
+/**
  * Set clock's frequency offset.
  * @param clkid A clock ID obtained using phc_open() or CLOCK_REALTIME.
  * @param freq  The frequency offset in parts per billion (ppb).
@@ -50,6 +56,12 @@ void clockadj_step(clockid_t clkid, int64_t step);
  *              0 to reset the leap state.
  */
 void sysclk_set_leap(int leap);
+
+/**
+ * Set the TAI offset of the system clock to have correct CLOCK_TAI.
+ * @param offset The TAI-UTC offset in seconds.
+ */
+void sysclk_set_tai_offset(int offset);
 
 /**
  * Read maximum frequency adjustment of the system clock (CLOCK_REALTIME).

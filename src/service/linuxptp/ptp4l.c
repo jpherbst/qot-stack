@@ -17,7 +17,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-#include <signal.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,20 +26,22 @@
 
 #include "clock.h"
 #include "config.h"
+#include "ntpshm.h"
 #include "pi.h"
 #include "print.h"
 #include "raw.h"
 #include "sk.h"
 #include "transport.h"
 #include "udp6.h"
+#include "uds.h"
 #include "util.h"
 #include "version.h"
 
 int assume_two_step = 0;
 
-static int running = 1;
-
 static struct config cfg_settings = {
+	.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces),
+
 	.dds = {
 		.dds = {
 			.flags = DDS_TWO_STEP_FLAG,
@@ -52,8 +54,10 @@ static struct config cfg_settings = {
 		},
 		.free_running = 0,
 		.freq_est_interval = 1,
+		.grand_master_capable = 1,
 		.stats_interval = 0,
 		.kernel_leap = 1,
+		.sanity_freq_limit = 200000000,
 		.time_source = INTERNAL_OSCILLATOR,
 		.clock_desc = {
 			.productDescription = {
@@ -69,6 +73,9 @@ static struct config cfg_settings = {
 			.userDescription      = { .max_symbols = 128 },
 			.manufacturerIdentity = { 0, 0, 0 },
 		},
+		.delay_filter = FILTER_MOVING_MEDIAN,
+		.delay_filter_length = 10,
+		.boundary_clock_jbod = 0,
 	},
 
 	.pod = {
@@ -79,11 +86,15 @@ static struct config cfg_settings = {
 		.announceReceiptTimeout = 3,
 		.syncReceiptTimeout = 0,
 		.transportSpecific = 0,
+		.announce_span = 1,
 		.path_trace_enabled = 0,
 		.follow_up_info = 0,
 		.freq_est_interval = 1,
 		/* Default to very a large neighborPropDelay threshold */
 		.neighborPropDelayThresh = 20000000,
+		.min_neighbor_prop_delay = -20000000,
+		.tx_timestamp_offset = 0,
+		.rx_timestamp_offset = 0,
 	},
 
 	.timestamping = TS_HARDWARE,
@@ -96,6 +107,10 @@ static struct config cfg_settings = {
 
 	.clock_servo = CLOCK_SERVO_PI,
 
+	.step_threshold = &servo_step_threshold,
+	.first_step_threshold = &servo_first_step_threshold,
+	.max_frequency = &servo_max_frequency,
+
 	.pi_proportional_const = &configured_pi_kp,
 	.pi_integral_const = &configured_pi_ki,
 	.pi_proportional_scale = &configured_pi_kp_scale,
@@ -104,13 +119,12 @@ static struct config cfg_settings = {
 	.pi_integral_scale = &configured_pi_ki_scale,
 	.pi_integral_exponent = &configured_pi_ki_exponent,
 	.pi_integral_norm_max = &configured_pi_ki_norm_max,
-	.pi_offset_const = &configured_pi_offset,
-	.pi_f_offset_const = &configured_pi_f_offset,
-	.pi_max_frequency = &configured_pi_max_freq,
+	.ntpshm_segment = &ntpshm_segment,
 
 	.ptp_dst_mac = ptp_dst_mac,
 	.p2p_dst_mac = p2p_dst_mac,
 	.udp6_scope = &udp6_scope,
+	.uds_address = uds_path,
 
 	.print_level = LOG_INFO,
 	.use_syslog = 1,
@@ -118,12 +132,6 @@ static struct config cfg_settings = {
 
 	.cfg_ignore = 0,
 };
-
-static void handle_int_quit_term(int s)
-{
-	pr_notice("caught signal %d", s);
-	running = 0;
-}
 
 static void usage(char *progname)
 {
@@ -161,9 +169,7 @@ int main(int argc, char *argv[])
 {
 	char *config = NULL, *req_phc = NULL, *progname;
 	int c, i;
-	struct interface *iface = cfg_settings.iface;
-	char *ports[MAX_PORTS];
-	int nports = 0;
+	struct interface *iface;
 	int *cfg_ignore = &cfg_settings.cfg_ignore;
 	enum delay_mechanism *dm = &cfg_settings.dm;
 	enum transport_type *transport = &cfg_settings.transport;
@@ -172,18 +178,8 @@ int main(int argc, char *argv[])
 	struct defaultDS *ds = &cfg_settings.dds.dds;
 	int phc_index = -1, required_modes = 0;
 
-	if (SIG_ERR == signal(SIGINT, handle_int_quit_term)) {
-		fprintf(stderr, "cannot handle SIGINT\n");
+	if (handle_term_signals())
 		return -1;
-	}
-	if (SIG_ERR == signal(SIGQUIT, handle_int_quit_term)) {
-		fprintf(stderr, "cannot handle SIGQUIT\n");
-		return -1;
-	}
-	if (SIG_ERR == signal(SIGTERM, handle_int_quit_term)) {
-		fprintf(stderr, "cannot handle SIGTERM\n");
-		return -1;
-	}
 
 	/* Set fault timeouts to a default value */
 	for (i = 0; i < FT_CNT; i++) {
@@ -236,8 +232,8 @@ int main(int argc, char *argv[])
 			config = optarg;
 			break;
 		case 'i':
-			ports[nports] = optarg;
-			nports++;
+			if (!config_create_interface(optarg, &cfg_settings))
+				return -1;
 			break;
 		case 'p':
 			req_phc = optarg;
@@ -278,8 +274,19 @@ int main(int argc, char *argv[])
 	if (config && (c = config_read(config, &cfg_settings))) {
 		return c;
 	}
-	if (ds->flags & DDS_SLAVE_ONLY) {
+	if (!cfg_settings.dds.grand_master_capable &&
+	    ds->flags & DDS_SLAVE_ONLY) {
+		fprintf(stderr,
+			"Cannot mix 1588 slaveOnly with 802.1AS !gmCapable.\n");
+		return -1;
+	}
+	if (!cfg_settings.dds.grand_master_capable ||
+	    ds->flags & DDS_SLAVE_ONLY) {
 		ds->clockQuality.clockClass = 255;
+	}
+	if (cfg_settings.clock_servo == CLOCK_SERVO_NTPSHM) {
+		cfg_settings.dds.kernel_leap = 0;
+		cfg_settings.dds.sanity_freq_limit = 0;
 	}
 
 	print_set_progname(progname);
@@ -287,14 +294,7 @@ int main(int argc, char *argv[])
 	print_set_syslog(cfg_settings.use_syslog);
 	print_set_level(cfg_settings.print_level);
 
-	for (i = 0; i < nports; i++) {
-		if (config_create_interface(ports[i], &cfg_settings) < 0) {
-			fprintf(stderr, "too many interfaces\n");
-			return -1;
-		}
-	}
-
-	if (!cfg_settings.nports) {
+	if (STAILQ_EMPTY(&cfg_settings.interfaces)) {
 		fprintf(stderr, "no interface specified\n");
 		usage(progname);
 		return -1;
@@ -334,18 +334,21 @@ int main(int argc, char *argv[])
 		break;
 	}
 
-	/* check whether timestamping mode is supported. */
-	for (i = 0; i < cfg_settings.nports; i++) {
-		if (iface[i].ts_info.valid &&
-		    ((iface[i].ts_info.so_timestamping & required_modes) != required_modes)) {
+	/* Init interface configs and check whether timestamping mode is
+	 * supported. */
+	STAILQ_FOREACH(iface, &cfg_settings.interfaces, list) {
+		config_init_interface(iface, &cfg_settings);
+		if (iface->ts_info.valid &&
+		    ((iface->ts_info.so_timestamping & required_modes) != required_modes)) {
 			fprintf(stderr, "interface '%s' does not support "
 				        "requested timestamping mode.\n",
-				iface[i].name);
+				iface->name);
 			return -1;
 		}
 	}
 
 	/* determine PHC Clock index */
+	iface = STAILQ_FIRST(&cfg_settings.interfaces);
 	if (cfg_settings.dds.free_running) {
 		phc_index = -1;
 	} else if (*timestamping == TS_SOFTWARE || *timestamping == TS_LEGACY_HW) {
@@ -355,8 +358,8 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "bad ptp device string\n");
 			return -1;
 		}
-	} else if (iface[0].ts_info.valid) {
-		phc_index = iface[0].ts_info.phc_index;
+	} else if (iface->ts_info.valid) {
+		phc_index = iface->ts_info.phc_index;
 	} else {
 		fprintf(stderr, "ptp device not specified and\n"
 			        "automatic determination is not\n"
@@ -368,12 +371,12 @@ int main(int argc, char *argv[])
 		pr_info("selected /dev/ptp%d as PTP clock", phc_index);
 	}
 
-	if (generate_clock_identity(&ds->clockIdentity, iface[0].name)) {
+	if (generate_clock_identity(&ds->clockIdentity, iface->name)) {
 		fprintf(stderr, "failed to generate a clock identity\n");
 		return -1;
 	}
 
-	clock = clock_create(phc_index, iface, cfg_settings.nports,
+	clock = clock_create(phc_index, &cfg_settings.interfaces,
 			     *timestamping, &cfg_settings.dds,
 			     cfg_settings.clock_servo);
 	if (!clock) {
@@ -381,11 +384,12 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	while (running) {
+	while (is_running()) {
 		if (clock_poll(clock))
 			break;
 	}
 
 	clock_destroy(clock);
+	config_destroy(&cfg_settings);
 	return 0;
 }

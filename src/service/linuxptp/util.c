@@ -17,10 +17,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 #include <errno.h>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "address.h"
+#include "print.h"
 #include "sk.h"
 #include "util.h"
 
@@ -28,7 +32,9 @@
 #define NS_PER_HOUR (3600 * NS_PER_SEC)
 #define NS_PER_DAY (24 * NS_PER_HOUR)
 
-char *ps_str[] = {
+static int running = 1;
+
+const char *ps_str[] = {
 	"NONE",
 	"INITIALIZING",
 	"FAULTY",
@@ -42,7 +48,7 @@ char *ps_str[] = {
 	"GRAND_MASTER",
 };
 
-char *ev_str[] = {
+const char *ev_str[] = {
 	"NONE",
 	"POWERUP",
 	"INITIALIZE",
@@ -98,19 +104,20 @@ int str2pid(const char *s, struct PortIdentity *result)
 	return -1;
 }
 
-int generate_clock_identity(struct ClockIdentity *ci, char *name)
+int generate_clock_identity(struct ClockIdentity *ci, const char *name)
 {
-	unsigned char mac[6];
-	if (sk_interface_macaddr(name, mac, sizeof(mac)))
+	struct address addr;
+
+	if (sk_interface_macaddr(name, &addr))
 		return -1;
-	ci->id[0] = mac[0];
-	ci->id[1] = mac[1];
-	ci->id[2] = mac[2];
+	ci->id[0] = addr.sa.sa_data[0];
+	ci->id[1] = addr.sa.sa_data[1];
+	ci->id[2] = addr.sa.sa_data[2];
 	ci->id[3] = 0xFF;
 	ci->id[4] = 0xFE;
-	ci->id[5] = mac[3];
-	ci->id[6] = mac[4];
-	ci->id[7] = mac[5];
+	ci->id[5] = addr.sa.sa_data[3];
+	ci->id[6] = addr.sa.sa_data[4];
+	ci->id[7] = addr.sa.sa_data[5];
 	return 0;
 }
 
@@ -308,4 +315,125 @@ int get_arg_val_d(int op, const char *optarg, double *val,
 		return -1;
 	}
 	return 0;
+}
+
+static void handle_int_quit_term(int s)
+{
+	running = 0;
+}
+
+int handle_term_signals(void)
+{
+	if (SIG_ERR == signal(SIGINT, handle_int_quit_term)) {
+		fprintf(stderr, "cannot handle SIGINT\n");
+		return -1;
+	}
+	if (SIG_ERR == signal(SIGQUIT, handle_int_quit_term)) {
+		fprintf(stderr, "cannot handle SIGQUIT\n");
+		return -1;
+	}
+	if (SIG_ERR == signal(SIGTERM, handle_int_quit_term)) {
+		fprintf(stderr, "cannot handle SIGTERM\n");
+		return -1;
+	}
+	return 0;
+}
+
+int is_running(void)
+{
+	return running;
+}
+
+char *string_newf(const char *format, ...)
+{
+	va_list ap;
+	char *s;
+
+	va_start(ap, format);
+	if (vasprintf(&s, format, ap) < 0)
+		s = NULL;
+	va_end(ap);
+
+	return s;
+}
+
+void string_append(char **s, const char *str)
+{
+	size_t len1, len2;
+
+	len1 = strlen(*s);
+	len2 = strlen(str);
+	*s = realloc(*s, len1 + len2 + 1);
+	if (*s)
+		memcpy((*s) + len1, str, len2 + 1);
+}
+
+void string_appendf(char **s, const char *format, ...)
+{
+	va_list ap;
+	size_t len1, len2;
+	char *s2;
+
+	len1 = strlen(*s);
+
+	va_start(ap, format);
+	len2 = vasprintf(&s2, format, ap);
+	va_end(ap);
+
+	if (len2 < 0) {
+		*s = NULL;
+		return;
+	}
+
+	*s = realloc(*s, len1 + len2 + 1);
+	if (*s)
+		memcpy((*s) + len1, s2, len2 + 1);
+	free(s2);
+}
+
+void **parray_new(void)
+{
+	void **a = malloc(sizeof(*a));
+
+	if (a)
+		*a = NULL;
+	return a;
+}
+
+void parray_append(void ***a, void *p)
+{
+	parray_extend(a, p, NULL);
+}
+
+void parray_extend(void ***a, ...)
+{
+	va_list ap;
+	int ilen, len, alloced;
+	void *p;
+
+	for (len = 0; (*a)[len]; len++)
+		;
+	len++;
+
+	va_start(ap, a);
+	for (ilen = 0; va_arg(ap, void *); ilen++)
+		;
+	va_end(ap);
+
+	/* Reallocate in exponentially increasing sizes. */
+	for (alloced = 1; alloced < len; alloced <<= 1)
+		;
+	if (alloced < len + ilen) {
+		while (alloced < len + ilen)
+			alloced *= 2;
+		*a = realloc(*a, alloced * sizeof **a);
+		if (!*a)
+			return;
+	}
+
+	va_start(ap, a);
+	while ((p = va_arg(ap, void *)))
+		(*a)[len++ - 1] = p;
+	va_end(ap);
+	(*a)[len - 1] = NULL;
 }

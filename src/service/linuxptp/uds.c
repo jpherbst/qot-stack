@@ -25,26 +25,36 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "address.h"
 #include "contain.h"
 #include "print.h"
 #include "transport_private.h"
 #include "uds.h"
 
+char uds_path[MAX_IFNAME_SIZE + 1] = "/var/run/ptp4l";
+
 #define UDS_FILEMODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP) /*0660*/
 
 struct uds {
 	struct transport t;
-	struct sockaddr_un sa;
-	socklen_t len;
+	struct address address;
 };
 
 static int uds_close(struct transport *t, struct fdarray *fda)
 {
+	struct sockaddr_un sa;
+	socklen_t len = sizeof(sa);
+
+	if (!getsockname(fda->fd[FD_GENERAL], (struct sockaddr *) &sa, &len) &&
+	    sa.sun_family == AF_LOCAL) {
+		unlink(sa.sun_path);
+	}
+
 	close(fda->fd[FD_GENERAL]);
 	return 0;
 }
 
-static int uds_open(struct transport *t, char *name, struct fdarray *fda,
+static int uds_open(struct transport *t, const char *name, struct fdarray *fda,
 		    enum timestamp_type tt)
 {
 	int fd, err;
@@ -58,7 +68,7 @@ static int uds_open(struct transport *t, char *name, struct fdarray *fda,
 	}
 	memset(&sa, 0, sizeof(sa));
 	sa.sun_family = AF_LOCAL;
-	strcpy(sa.sun_path, name);
+	strncpy(sa.sun_path, name, sizeof(sa.sun_path) - 1);
 
 	unlink(name);
 
@@ -72,9 +82,9 @@ static int uds_open(struct transport *t, char *name, struct fdarray *fda,
 	/* For client use, pre load the server path. */
 	memset(&sa, 0, sizeof(sa));
 	sa.sun_family = AF_LOCAL;
-	strcpy(sa.sun_path, UDS_PATH);
-	uds->sa = sa;
-	uds->len = sizeof(sa);
+	strncpy(sa.sun_path, uds_path, sizeof(sa.sun_path) - 1);
+	uds->address.sun = sa;
+	uds->address.len = sizeof(sa);
 
 	chmod(name, UDS_FILEMODE);
 	fda->fd[FD_EVENT] = -1;
@@ -83,26 +93,33 @@ static int uds_open(struct transport *t, char *name, struct fdarray *fda,
 }
 
 static int uds_recv(struct transport *t, int fd, void *buf, int buflen,
-		    struct hw_timestamp *hwts)
+		    struct address *addr, struct hw_timestamp *hwts)
 {
 	int cnt;
 	struct uds *uds = container_of(t, struct uds, t);
-	socklen_t *len = &uds->len;
-	uds->len = sizeof(uds->sa);
-	cnt = recvfrom(fd, buf, buflen, 0, (struct sockaddr *) &uds->sa, len);
+
+	addr->len = sizeof(addr->sun);
+	cnt = recvfrom(fd, buf, buflen, 0, &addr->sa, &addr->len);
 	if (cnt <= 0) {
 		pr_err("uds: recvfrom failed: %m");
+		return cnt;
 	}
+	uds->address = *addr;
 	return cnt;
 }
 
 static int uds_send(struct transport *t, struct fdarray *fda, int event,
-		    int peer, void *buf, int buflen, struct hw_timestamp *hwts)
+		    int peer, void *buf, int buflen, struct address *addr,
+		    struct hw_timestamp *hwts)
 {
 	int cnt, fd = fda->fd[FD_GENERAL];
 	struct uds *uds = container_of(t, struct uds, t);
-	cnt = sendto(fd, buf, buflen, 0, (struct sockaddr *) &uds->sa, uds->len);
-	if (cnt <= 0) {
+
+	if (!addr)
+		addr = &uds->address;
+
+	cnt = sendto(fd, buf, buflen, 0, &addr->sa, addr->len);
+	if (cnt <= 0 && errno != ECONNREFUSED) {
 		pr_err("uds: sendto failed: %m");
 	}
 	return cnt;

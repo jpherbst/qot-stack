@@ -22,6 +22,30 @@
 
 #include <stdint.h>
 
+/**
+ * When set to a non-zero value, this variable controls the maximum allowed
+ * offset before a clock jump occurs instead of the default clock-slewing
+ * mechanism.
+ *
+ * Note that this variable is measured in seconds, and allows fractional values.
+ */
+extern double servo_step_threshold;
+
+/**
+ * When set to zero, the clock is not stepped on start. When set to a non-zero
+ * value, the value bahaves as a threshold and the clock is stepped on start if
+ * the offset is bigger than the threshold.
+ *
+ * Note that this variable is measured in seconds, and allows fractional values.
+ */
+extern double servo_first_step_threshold;
+
+/**
+ * When set to a non-zero value, this variable sets an additional limit for
+ * the frequency adjustment of the clock. It's in ppb.
+ */
+extern int servo_max_frequency;
+
 /** Opaque type */
 struct servo;
 
@@ -30,6 +54,8 @@ struct servo;
  */
 enum servo_type {
 	CLOCK_SERVO_PI,
+	CLOCK_SERVO_LINREG,
+	CLOCK_SERVO_NTPSHM,
 };
 
 /**
@@ -92,5 +118,26 @@ double servo_sample(struct servo *servo,
  * @param interval The sync interval in seconds.
  */
 void servo_sync_interval(struct servo *servo, double interval);
+
+/**
+ * Reset a clock servo.
+ * @param servo   Pointer to a servo obtained via @ref servo_create().
+ */
+void servo_reset(struct servo *servo);
+
+/**
+ * Obtain ratio between master's frequency and current servo frequency.
+ * @param servo   Pointer to a servo obtained via @ref servo_create().
+ * @return   The rate ratio, 1.0 is returned when not known.
+ */
+double servo_rate_ratio(struct servo *servo);
+
+/**
+ * Inform a clock servo about upcoming leap second.
+ * @param servo   Pointer to a servo obtained via @ref servo_create().
+ * @param leap    +1 when leap second will be inserted, -1 when leap second
+ *                will be deleted, 0 when it passed.
+ */
+void servo_leap(struct servo *servo, int leap);
 
 #endif

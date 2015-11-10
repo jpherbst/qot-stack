@@ -23,6 +23,7 @@
 #include "dm.h"
 #include "ds.h"
 #include "config.h"
+#include "notification.h"
 #include "servo.h"
 #include "tlv.h"
 #include "tmv.h"
@@ -62,14 +63,13 @@ UInteger8 clock_class(struct clock *c);
  *
  * @param phc_index    PTP hardware clock device to use.
  *                     Pass -1 to select CLOCK_REALTIME.
- * @param interface    An array of network interfaces.
- * @param count        The number of elements in @a interfaces.
+ * @param ifaces       A queue of network interfaces.
  * @param timestamping The timestamping mode for this clock.
  * @param dds          A pointer to a default data set for the clock.
  * @param servo        The servo that this clock will use.
  * @return             A pointer to the single global clock instance.
  */
-struct clock *clock_create(int phc_index, struct interface *iface, int count,
+struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
 			   enum servo_type servo);
 
@@ -101,6 +101,14 @@ UInteger8 clock_domain_number(struct clock *c);
 void clock_follow_up_info(struct clock *c, struct follow_up_info_tlv *f);
 
 /**
+ * Obtain the gmCapable flag from a clock's default data set.
+ * This function is specific to the 802.1AS standard.
+ * @param c  The clock instance.
+ * @return One if the clock is capable of becoming grand master, zero otherwise.
+ */
+int clock_gm_capable(struct clock *c);
+
+/**
  * Obtain a clock's identity from its default data set.
  * @param c  The clock instance.
  * @return   The clock's identity.
@@ -108,12 +116,11 @@ void clock_follow_up_info(struct clock *c, struct follow_up_info_tlv *f);
 struct ClockIdentity clock_identity(struct clock *c);
 
 /**
- * Install a port's file descriptor array into its controlling clock.
+ * Informs clock that a file descriptor of one of its ports changed. The
+ * clock will rebuild its array of file descriptors to poll.
  * @param c    The clock instance.
- * @param p    The port installing the array.
- * @param fda  The port's open file decriptors for its sockets and timers.
  */
-void clock_install_fda(struct clock *c, struct port *p, struct fdarray fda);
+void clock_fda_changed(struct clock *c);
 
 /**
  * Manage the clock according to a given message.
@@ -124,6 +131,24 @@ void clock_install_fda(struct clock *c, struct port *p, struct fdarray fda);
  *             implies a state decision event, zero otherwise.
  */
 int clock_manage(struct clock *c, struct port *p, struct ptp_message *msg);
+
+/**
+ * Send notification about an event to all subscribers.
+ * @param c      The clock instance.
+ * @param msg    The PTP message to send, in network byte order.
+ * @param msglen The length of the message in bytes.
+ * @param event  The event that occured.
+ */
+void clock_send_notification(struct clock *c, struct ptp_message *msg,
+			     int msglen, enum notification event);
+
+/**
+ * Construct and send notification to subscribers about an event that
+ * occured on the clock.
+ * @param c      The clock instance.
+ * @param event  The identification of the event.
+ */
+void clock_notify_event(struct clock *c, enum notification event);
 
 /**
  * Obtain a clock's parent data set.
@@ -166,14 +191,6 @@ void clock_peer_delay(struct clock *c, tmv_t ppd, double nrr);
 int clock_poll(struct clock *c);
 
 /**
- * Remove a port's file descriptor array from its controlling clock.
- * @param c    The clock instance.
- * @param p    The port removing the array.
- * @param fda  The port's file decriptor array.
- */
-void clock_remove_fda(struct clock *c, struct port *p, struct fdarray fda);
-
-/**
  * Obtain the slave-only flag from a clock's default data set.
  * @param c  The clock instance.
  * @return   The value of the clock's slave-only flag.
@@ -186,6 +203,14 @@ int clock_slave_only(struct clock *c);
  * @return   The value of the clock's steps removed field.
  */
 UInteger16 clock_steps_removed(struct clock *c);
+
+/**
+ * Switch to a new PTP Hardware Clock, for use with the "jbod" mode.
+ * @param c          The clock instance.
+ * @param phc_index  The index of the PHC device to use.
+ * @return           Zero on success, non-zero otherwise.
+ */
+int clock_switch_phc(struct clock *c, int phc_index);
 
 /**
  * Provide a data point to synchronize the clock.
@@ -237,5 +262,19 @@ struct clock_description *clock_description(struct clock *c);
  * @return   The number of ports.
  */
 int clock_num_ports(struct clock *c);
+
+/**
+ * Perform a sanity check on a time stamp made by a clock.
+ * @param c  The clock instance.
+ * @param ts The time stamp.
+ */
+void clock_check_ts(struct clock *c, struct timespec ts);
+
+/**
+ * Obtain ratio between master's frequency and current clock frequency.
+ * @param c  The clock instance.
+ * @return   The rate ratio, 1.0 is returned when not known.
+ */
+double clock_rate_ratio(struct clock *c);
 
 #endif

@@ -22,6 +22,7 @@
 
 #include "ddt.h"
 #include "fault.h"
+#include "filter.h"
 
 /* clock data sets */
 
@@ -52,10 +53,15 @@ struct default_ds {
 	struct defaultDS dds;
 	int free_running;
 	int freq_est_interval; /*log seconds*/
+	int grand_master_capable; /*802.1AS only*/
 	int stats_interval; /*log seconds*/
 	int kernel_leap;
+	int sanity_freq_limit;
 	int time_source;
 	struct clock_description clock_desc;
+	enum filter_type delay_filter;
+	int delay_filter_length;
+	int boundary_clock_jbod;
 };
 
 struct dataset {
@@ -125,11 +131,15 @@ struct port_defaults {
 	UInteger8 announceReceiptTimeout;
 	UInteger8 syncReceiptTimeout;
 	UInteger8 transportSpecific;
+	int announce_span;
 	int path_trace_enabled;
 	int follow_up_info;
 	int freq_est_interval; /*log seconds*/
 	struct fault_interval flt_interval_pertype[FT_CNT];
 	UInteger32 neighborPropDelayThresh; /*nanoseconds*/
+	int min_neighbor_prop_delay; /*nanoseconds*/
+	int tx_timestamp_offset; /*nanoseconds*/
+	int rx_timestamp_offset; /*nanoseconds*/
 };
 
 #endif

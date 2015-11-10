@@ -28,6 +28,10 @@
 #include <sys/timex.h>
 #include <unistd.h>
 
+#ifndef ADJ_TAI
+#define ADJ_TAI 0x0080
+#endif
+
 #ifndef ADJ_NANO
 #define ADJ_NANO 0x2000
 #endif
@@ -48,6 +52,14 @@
 enum _missing_hwtstamp_tx_types {
 	HWTSTAMP_TX_ONESTEP_SYNC = 2,
 };
+#endif
+
+#ifndef SIOCGHWTSTAMP
+#define SIOCGHWTSTAMP 0x89b1
+#endif
+
+#ifndef SO_SELECT_ERR_QUEUE
+#define SO_SELECT_ERR_QUEUE 45
 #endif
 
 #ifndef HAVE_CLOCK_ADJTIME

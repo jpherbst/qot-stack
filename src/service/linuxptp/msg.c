@@ -379,7 +379,7 @@ int msg_pre_send(struct ptp_message *m)
 	return 0;
 }
 
-char *msg_type_string(int type)
+const char *msg_type_string(int type)
 {
 	switch (type) {
 	case SYNC:
@@ -468,5 +468,5 @@ int msg_sots_missing(struct ptp_message *m)
 	default:
 		return 0;
 	}
-	return (!m->hwts.ts.tv_sec && !m->hwts.ts.tv_nsec) ? 1 : 0;
+	return msg_sots_valid(m) ? 0 : 1;
 }

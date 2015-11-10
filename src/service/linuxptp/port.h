@@ -23,6 +23,7 @@
 #include "fd.h"
 #include "foreign.h"
 #include "fsm.h"
+#include "notification.h"
 #include "transport.h"
 
 /* forward declarations */
@@ -87,10 +88,29 @@ enum fsm_event port_event(struct port *port, int fd_index);
  * Forward a message on a given port.
  * @param port    A pointer previously obtained via port_open().
  * @param msg     The message to send. Must be in network byte order.
- * @param msglen  The length of the message in bytes.
  * @return        Zero on success, non-zero otherwise.
  */
-int port_forward(struct port *p, struct ptp_message *msg, int msglen);
+int port_forward(struct port *p, struct ptp_message *msg);
+
+/**
+ * Forward a message on a given port to the address stored in the message.
+ * @param port    A pointer previously obtained via port_open().
+ * @param msg     The message to send. Must be in network byte order.
+ * @return        Zero on success, non-zero otherwise.
+ */
+int port_forward_to(struct port *p, struct ptp_message *msg);
+
+/**
+ * Prepare message for transmission and send it to a given port. Note that
+ * a single message cannot be sent several times using this function, that
+ * would lead to corrupted data being sent. Use msg_pre_send and
+ * port_forward if you need to send single message to several ports.
+ * @param p        A pointer previously obtained via port_open().
+ * @param msg      The message to send.
+ * @param event    0 if the message is a general message, 1 if it is an
+ *                 event message.
+ */
+int port_prepare_and_send(struct port *p, struct ptp_message *msg, int event);
 
 /**
  * Obtain a port's identity.
@@ -100,11 +120,19 @@ int port_forward(struct port *p, struct ptp_message *msg, int msglen);
 struct PortIdentity port_identity(struct port *p);
 
 /**
+ * Obtain a port number.
+ * @param p        A port instance.
+ * @return         The port number of 'p'.
+ */
+int port_number(struct port *p);
+
+/**
  * Manage a port according to a given message.
  * @param p        A pointer previously obtained via port_open().
  * @param ingress  The port on which 'msg' was received.
  * @param msg      A management message.
- * @return         Zero if the message is valid, non-zero otherwise.
+ * @return         1 if the message was responded to, 0 if it did not apply
+ *                 to the port, -1 if it was invalid.
  */
 int port_manage(struct port *p, struct port *ingress, struct ptp_message *msg);
 
@@ -136,6 +164,28 @@ struct ptp_message *port_management_reply(struct PortIdentity pid,
 					  struct ptp_message *req);
 
 /**
+ * Allocate a standalone reply management message.
+ *
+ * See note in @ref port_management_reply description about freeing the
+ * message. Also note that the constructed message does not have
+ * targetPortIdentity and sequenceId filled.
+ *
+ * @param pid      The id of the responding port.
+ * @param port     The port to which the message will be sent.
+ * @return         Pointer to a message on success, NULL otherwise.
+ */
+struct ptp_message *port_management_notify(struct PortIdentity pid,
+					   struct port *port);
+
+/**
+ * Construct and send notification to subscribers about an event that
+ * occured on the port.
+ * @param p        The port.
+ * @param event    The identification of the event.
+ */
+void port_notify_event(struct port *p, enum notification event);
+
+/**
  * Open a network port.
  * @param phc_index     The PHC device index for the network device.
  * @param timestamping  The timestamping mode for this port.
@@ -158,6 +208,22 @@ struct port *port_open(int phc_index,
 enum port_state port_state(struct port *port);
 
 /**
+ * Return array of file descriptors for this port. The fault fd is not
+ * included.
+ * @param port	A port instance
+ * @return	Array of file descriptors. Unused descriptors are guranteed
+ *		to be set to -1.
+ */
+struct fdarray *port_fda(struct port *port);
+
+/**
+ * Return file descriptor of the port.
+ * @param port	A port instance.
+ * @return	File descriptor or -1 if not applicable.
+ */
+int port_fault_fd(struct port *port);
+
+/**
  * Utility function for setting or resetting a file descriptor timer.
  *
  * This function sets the timer 'fd' to the value M(2^N), where M is
@@ -174,6 +240,21 @@ enum port_state port_state(struct port *port);
 int set_tmo_log(int fd, unsigned int scale, int log_seconds);
 
 /**
+ * Utility function for setting a file descriptor timer.
+ *
+ * This function sets the timer 'fd' to a random value between M * 2^N and
+ * (M + S) * 2^N, where M is the value of the 'min' parameter, S is the value
+ * of the 'span' parameter, and N in the value of the 'log_seconds' parameter.
+ *
+ * @param fd A file descriptor previously opened with timerfd_create(2).
+ * @param min The minimum value for the timer.
+ * @param span The span value for the timer. Must be a positive value.
+ * @param log_seconds The exponential factor for the timer.
+ * @return Zero on success, non-zero otherwise.
+ */
+int set_tmo_random(int fd, int min, int span, int log_seconds);
+
+/**
  * Utility function for setting or resetting a file descriptor timer.
  *
  * This function sets the timer 'fd' to the value of the 'seconds' parameter.
@@ -185,6 +266,28 @@ int set_tmo_log(int fd, unsigned int scale, int log_seconds);
  * @return Zero on success, non-zero otherwise.
  */
 int set_tmo_lin(int fd, int seconds);
+
+/**
+ * Sets port's fault file descriptor timer.
+ * Passing both 'scale' and 'log_seconds' as zero disables the timer.
+ *
+ * @param fd		A port instance.
+ * @param scale		The multiplicative factor for the timer.
+ * @param log_seconds	The exponential factor for the timer.
+ * @return		Zero on success, non-zero otherwise.
+ */
+int port_set_fault_timer_log(struct port *port,
+			     unsigned int scale, int log_seconds);
+
+/**
+ * Sets port's fault file descriptor timer.
+ * Passing 'seconds' as zero disables the timer.
+ *
+ * @param fd		A port instance.
+ * @param seconds	The timeout value for the timer.
+ * @return		Zero on success, non-zero otherwise.
+ */
+int port_set_fault_timer_lin(struct port *port, int seconds);
 
 /**
  * Returns a port's last fault type.

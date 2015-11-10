@@ -21,12 +21,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/queue.h>
 
+#include "address.h"
 #include "bmc.h"
 #include "clock.h"
 #include "clockadj.h"
+#include "clockcheck.h"
 #include "foreign.h"
-#include "mave.h"
+#include "filter.h"
 #include "missing.h"
 #include "msg.h"
 #include "phc.h"
@@ -38,12 +41,12 @@
 #include "uds.h"
 #include "util.h"
 
-#define CLK_N_PORTS (MAX_PORTS + 1) /* plus one for the UDS interface */
 #define N_CLOCK_PFD (N_POLLFD + 1) /* one extra per port, for the fault timer */
-#define MAVE_LENGTH 10
 #define POW2_41 ((double)(1ULL << 41))
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+struct port {
+	LIST_ENTRY(port) list;
+};
 
 struct freq_estimator {
 	tmv_t origin1;
@@ -59,9 +62,19 @@ struct clock_stats {
 	unsigned int max_count;
 };
 
+struct clock_subscriber {
+	LIST_ENTRY(clock_subscriber) list;
+	uint8_t events[EVENT_BITMASK_CNT];
+	struct PortIdentity targetPortIdentity;
+	struct address addr;
+	UInteger16 sequenceId;
+	time_t expiration;
+};
+
 struct clock {
 	clockid_t clkid;
 	struct servo *servo;
+	enum servo_type servo_type;
 	struct defaultDS dds;
 	struct dataset default_dataset;
 	struct currentDS cur;
@@ -70,13 +83,17 @@ struct clock {
 	struct ClockIdentity ptl[PATH_TRACE_MAX];
 	struct foreign_clock *best;
 	struct ClockIdentity best_id;
-	struct port *port[CLK_N_PORTS];
-	struct pollfd pollfd[CLK_N_PORTS*N_CLOCK_PFD];
-	int fault_fd[CLK_N_PORTS];
+	LIST_HEAD(ports_head, port) ports;
+	struct port *uds_port;
+	struct pollfd *pollfd;
+	int pollfd_valid;
 	int nports; /* does not include the UDS port */
+	int last_port_number;
 	int free_running;
 	int freq_est_interval;
+	int grand_master_capable; /* for 802.1AS only */
 	int utc_timescale;
+	int utc_offset_set;
 	int leap_set;
 	int kernel_leap;
 	int utc_offset;  /* grand master role */
@@ -85,7 +102,7 @@ struct clock {
 	enum servo_state servo_state;
 	tmv_t master_offset;
 	tmv_t path_delay;
-	struct mave *avg_delay;
+	struct filter *delay_filter;
 	struct freq_estimator fest;
 	struct time_status_np status;
 	double nrr;
@@ -96,56 +113,195 @@ struct clock {
 	struct clock_description desc;
 	struct clock_stats stats;
 	int stats_interval;
+	struct clockcheck *sanity_check;
+	struct interface uds_interface;
+	LIST_HEAD(clock_subscribers_head, clock_subscriber) subscribers;
 };
 
 struct clock the_clock;
 
 static void handle_state_decision_event(struct clock *c);
+static int clock_resize_pollfd(struct clock *c, int new_nports);
+static void clock_remove_port(struct clock *c, struct port *p);
 
 static int cid_eq(struct ClockIdentity *a, struct ClockIdentity *b)
 {
 	return 0 == memcmp(a, b, sizeof(*a));
 }
 
+#ifndef LIST_FOREACH_SAFE
+#define	LIST_FOREACH_SAFE(var, head, field, tvar)			\
+	for ((var) = LIST_FIRST((head));				\
+	    (var) && ((tvar) = LIST_NEXT((var), field), 1);		\
+	    (var) = (tvar))
+#endif
+
+static void remove_subscriber(struct clock_subscriber *s)
+{
+	LIST_REMOVE(s, list);
+	free(s);
+}
+
+static void clock_update_subscription(struct clock *c, struct ptp_message *req,
+				      uint8_t *bitmask, uint16_t duration)
+{
+	struct clock_subscriber *s;
+	int i, remove = 1;
+	struct timespec now;
+
+	for (i = 0; i < EVENT_BITMASK_CNT; i++) {
+		if (bitmask[i]) {
+			remove = 0;
+			break;
+		}
+	}
+
+	LIST_FOREACH(s, &c->subscribers, list) {
+		if (!memcmp(&s->targetPortIdentity, &req->header.sourcePortIdentity,
+		            sizeof(struct PortIdentity))) {
+			/* Found, update the transport address and event
+			 * mask. */
+			if (!remove) {
+				s->addr = req->address;
+				memcpy(s->events, bitmask, EVENT_BITMASK_CNT);
+				clock_gettime(CLOCK_MONOTONIC, &now);
+				s->expiration = now.tv_sec + duration;
+			} else {
+				remove_subscriber(s);
+			}
+			return;
+		}
+	}
+	if (remove)
+		return;
+	/* Not present yet, add the subscriber. */
+	s = malloc(sizeof(*s));
+	if (!s) {
+		pr_err("failed to allocate memory for a subscriber");
+		return;
+	}
+	s->targetPortIdentity = req->header.sourcePortIdentity;
+	s->addr = req->address;
+	memcpy(s->events, bitmask, EVENT_BITMASK_CNT);
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	s->expiration = now.tv_sec + duration;
+	s->sequenceId = 0;
+	LIST_INSERT_HEAD(&c->subscribers, s, list);
+}
+
+static void clock_get_subscription(struct clock *c, struct ptp_message *req,
+				   uint8_t *bitmask, uint16_t *duration)
+{
+	struct clock_subscriber *s;
+	struct timespec now;
+
+	LIST_FOREACH(s, &c->subscribers, list) {
+		if (!memcmp(&s->targetPortIdentity, &req->header.sourcePortIdentity,
+			    sizeof(struct PortIdentity))) {
+			memcpy(bitmask, s->events, EVENT_BITMASK_CNT);
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			if (s->expiration < now.tv_sec)
+				*duration = 0;
+			else
+				*duration = s->expiration - now.tv_sec;
+			return;
+		}
+	}
+	/* A client without entry means the client has no subscriptions. */
+	memset(bitmask, 0, EVENT_BITMASK_CNT);
+	*duration = 0;
+}
+
+static void clock_flush_subscriptions(struct clock *c)
+{
+	struct clock_subscriber *s, *tmp;
+
+	LIST_FOREACH_SAFE(s, &c->subscribers, list, tmp) {
+		remove_subscriber(s);
+	}
+}
+
+static void clock_prune_subscriptions(struct clock *c)
+{
+	struct clock_subscriber *s, *tmp;
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	LIST_FOREACH_SAFE(s, &c->subscribers, list, tmp) {
+		if (s->expiration <= now.tv_sec) {
+			pr_info("subscriber %s timed out",
+				pid2str(&s->targetPortIdentity));
+			remove_subscriber(s);
+		}
+	}
+}
+
+void clock_send_notification(struct clock *c, struct ptp_message *msg,
+			     int msglen, enum notification event)
+{
+	unsigned int event_pos = event / 8;
+	uint8_t mask = 1 << (event % 8);
+	struct port *uds = c->uds_port;
+	struct clock_subscriber *s;
+
+	LIST_FOREACH(s, &c->subscribers, list) {
+		if (!(s->events[event_pos] & mask))
+			continue;
+		/* send event */
+		msg->header.sequenceId = htons(s->sequenceId);
+		s->sequenceId++;
+		msg->management.targetPortIdentity.clockIdentity =
+			s->targetPortIdentity.clockIdentity;
+		msg->management.targetPortIdentity.portNumber =
+			htons(s->targetPortIdentity.portNumber);
+		msg->address = s->addr;
+		port_forward_to(uds, msg);
+	}
+}
+
 void clock_destroy(struct clock *c)
 {
-	int i;
-	for (i = 0; i < c->nports; i++) {
-		port_close(c->port[i]);
-		close(c->fault_fd[i]);
+	struct port *p, *tmp;
+
+	clock_flush_subscriptions(c);
+	LIST_FOREACH_SAFE(p, &c->ports, list, tmp) {
+		clock_remove_port(c, p);
 	}
-	port_close(c->port[i]); /*uds*/
+	port_close(c->uds_port);
+	free(c->pollfd);
 	if (c->clkid != CLOCK_REALTIME) {
 		phc_close(c->clkid);
 	}
 	servo_destroy(c->servo);
-	mave_destroy(c->avg_delay);
+	filter_destroy(c->delay_filter);
 	stats_destroy(c->stats.offset);
 	stats_destroy(c->stats.freq);
 	stats_destroy(c->stats.delay);
+	if (c->sanity_check)
+		clockcheck_destroy(c->sanity_check);
 	memset(c, 0, sizeof(*c));
 	msg_cleanup();
 }
 
-static int clock_fault_timeout(struct clock *c, int index, int set)
+static int clock_fault_timeout(struct port *port, int set)
 {
 	struct fault_interval i;
 
 	if (!set) {
-		pr_debug("clearing fault on port %d", index + 1);
-		return set_tmo_lin(c->fault_fd[index], 0);
+		pr_debug("clearing fault on port %d", port_number(port));
+		return port_set_fault_timer_lin(port, 0);
 	}
 
-	fault_interval(c->port[index], last_fault_type(c->port[index]), &i);
+	fault_interval(port, last_fault_type(port), &i);
 
 	if (i.type == FTMO_LINEAR_SECONDS) {
 		pr_debug("waiting %d seconds to clear fault on port %d",
-			 i.val, index + 1);
-		return set_tmo_lin(c->fault_fd[index], i.val);
+			 i.val, port_number(port));
+		return port_set_fault_timer_lin(port, i.val);
 	} else if (i.type == FTMO_LOG2_SECONDS) {
 		pr_debug("waiting 2^{%d} seconds to clear fault on port %d",
-			 i.val, index + 1);
-		return set_tmo_log(c->fault_fd[index], 1, i.val);
+			 i.val, port_number(port));
+		return port_set_fault_timer_log(port, 1, i.val);
 	}
 
 	pr_err("Unsupported fault interval type %d", i.type);
@@ -166,102 +322,102 @@ static void clock_management_send_error(struct port *p,
 		pr_err("failed to send management error status");
 }
 
-static int clock_management_get_response(struct clock *c, struct port *p,
-					 int id, struct ptp_message *req)
+/* The 'p' and 'req' paremeters are needed for the GET actions that operate
+ * on per-client datasets. If such actions do not apply to the caller, it is
+ * allowed to pass both of them as NULL.
+ */
+static int clock_management_fill_response(struct clock *c, struct port *p,
+					  struct ptp_message *req,
+					  struct ptp_message *rsp, int id)
 {
-	int datalen = 0, err, pdulen, respond = 0;
+	int datalen = 0, respond = 0;
 	struct management_tlv *tlv;
 	struct management_tlv_datum *mtd;
-	struct ptp_message *rsp;
 	struct time_status_np *tsn;
 	struct grandmaster_settings_np *gsn;
-	struct PortIdentity pid = port_identity(p);
+	struct subscribe_events_np *sen;
 	struct PTPText *text;
 
-	rsp = port_management_reply(pid, p, req);
-	if (!rsp) {
-		return 0;
-	}
 	tlv = (struct management_tlv *) rsp->management.suffix;
 	tlv->type = TLV_MANAGEMENT;
 	tlv->id = id;
 
 	switch (id) {
-	case USER_DESCRIPTION:
+	case TLV_USER_DESCRIPTION:
 		text = (struct PTPText *) tlv->data;
 		text->length = c->desc.userDescription.length;
 		memcpy(text->text, c->desc.userDescription.text, text->length);
 		datalen = 1 + text->length;
 		respond = 1;
 		break;
-	case DEFAULT_DATA_SET:
+	case TLV_DEFAULT_DATA_SET:
 		memcpy(tlv->data, &c->dds, sizeof(c->dds));
 		datalen = sizeof(c->dds);
 		respond = 1;
 		break;
-	case CURRENT_DATA_SET:
+	case TLV_CURRENT_DATA_SET:
 		memcpy(tlv->data, &c->cur, sizeof(c->cur));
 		datalen = sizeof(c->cur);
 		respond = 1;
 		break;
-	case PARENT_DATA_SET:
+	case TLV_PARENT_DATA_SET:
 		memcpy(tlv->data, &c->dad.pds, sizeof(c->dad.pds));
 		datalen = sizeof(c->dad.pds);
 		respond = 1;
 		break;
-	case TIME_PROPERTIES_DATA_SET:
+	case TLV_TIME_PROPERTIES_DATA_SET:
 		memcpy(tlv->data, &c->tds, sizeof(c->tds));
 		datalen = sizeof(c->tds);
 		respond = 1;
 		break;
-	case PRIORITY1:
+	case TLV_PRIORITY1:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->dds.priority1;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case PRIORITY2:
+	case TLV_PRIORITY2:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->dds.priority2;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case DOMAIN:
+	case TLV_DOMAIN:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->dds.domainNumber;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case SLAVE_ONLY:
+	case TLV_SLAVE_ONLY:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->dds.flags & DDS_SLAVE_ONLY;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case CLOCK_ACCURACY:
+	case TLV_CLOCK_ACCURACY:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->dds.clockQuality.clockAccuracy;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case TRACEABILITY_PROPERTIES:
+	case TLV_TRACEABILITY_PROPERTIES:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->tds.flags & (TIME_TRACEABLE|FREQ_TRACEABLE);
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case TIMESCALE_PROPERTIES:
+	case TLV_TIMESCALE_PROPERTIES:
 		mtd = (struct management_tlv_datum *) tlv->data;
 		mtd->val = c->tds.flags & PTP_TIMESCALE;
 		datalen = sizeof(*mtd);
 		respond = 1;
 		break;
-	case TIME_STATUS_NP:
+	case TLV_TIME_STATUS_NP:
 		tsn = (struct time_status_np *) tlv->data;
 		tsn->master_offset = c->master_offset;
 		tsn->ingress_time = tmv_to_nanoseconds(c->t2);
 		tsn->cumulativeScaledRateOffset =
-			(UInteger32) (c->status.cumulativeScaledRateOffset +
+			(Integer32) (c->status.cumulativeScaledRateOffset +
 				      c->nrr * POW2_41 - POW2_41);
 		tsn->scaledLastGmPhaseChange = c->status.scaledLastGmPhaseChange;
 		tsn->gmTimeBaseIndicator = c->status.gmTimeBaseIndicator;
@@ -274,13 +430,22 @@ static int clock_management_get_response(struct clock *c, struct port *p,
 		datalen = sizeof(*tsn);
 		respond = 1;
 		break;
-	case GRANDMASTER_SETTINGS_NP:
+	case TLV_GRANDMASTER_SETTINGS_NP:
 		gsn = (struct grandmaster_settings_np *) tlv->data;
 		gsn->clockQuality = c->dds.clockQuality;
 		gsn->utc_offset = c->utc_offset;
 		gsn->time_flags = c->time_flags;
 		gsn->time_source = c->time_source;
 		datalen = sizeof(*gsn);
+		respond = 1;
+		break;
+	case TLV_SUBSCRIBE_EVENTS_NP:
+		if (p != c->uds_port) {
+			/* Only the UDS port allowed. */
+			break;
+		}
+		sen = (struct subscribe_events_np *)tlv->data;
+		clock_get_subscription(c, req, sen->bitmask, &sen->duration);
 		respond = 1;
 		break;
 	}
@@ -290,18 +455,28 @@ static int clock_management_get_response(struct clock *c, struct port *p,
 			datalen++;
 		}
 		tlv->length = sizeof(tlv->id) + datalen;
-		pdulen = rsp->header.messageLength + sizeof(*tlv) + datalen;
-		rsp->header.messageLength = pdulen;
+		rsp->header.messageLength += sizeof(*tlv) + datalen;
 		rsp->tlv_count = 1;
-		err = msg_pre_send(rsp);
-		if (err) {
-			goto out;
-		}
-		err = port_forward(p, rsp, pdulen);
 	}
-out:
+	return respond;
+}
+
+static int clock_management_get_response(struct clock *c, struct port *p,
+					 int id, struct ptp_message *req)
+{
+	struct PortIdentity pid = port_identity(p);
+	struct ptp_message *rsp;
+	int respond;
+
+	rsp = port_management_reply(pid, p, req);
+	if (!rsp) {
+		return 0;
+	}
+	respond = clock_management_fill_response(c, p, req, rsp, id);
+	if (respond)
+		port_prepare_and_send(p, rsp, 0);
 	msg_put(rsp);
-	return respond ? 1 : 0;
+	return respond;
 }
 
 static int clock_management_set(struct clock *c, struct port *p,
@@ -310,21 +485,24 @@ static int clock_management_set(struct clock *c, struct port *p,
 	int respond = 0;
 	struct management_tlv *tlv;
 	struct grandmaster_settings_np *gsn;
+	struct subscribe_events_np *sen;
 
 	tlv = (struct management_tlv *) req->management.suffix;
 
 	switch (id) {
-	case GRANDMASTER_SETTINGS_NP:
-		if (p != c->port[c->nports]) {
-			/* Sorry, only allowed on the UDS port. */
-			break;
-		}
+	case TLV_GRANDMASTER_SETTINGS_NP:
 		gsn = (struct grandmaster_settings_np *) tlv->data;
 		c->dds.clockQuality = gsn->clockQuality;
 		c->utc_offset = gsn->utc_offset;
 		c->time_flags = gsn->time_flags;
 		c->time_source = gsn->time_source;
 		*changed = 1;
+		respond = 1;
+		break;
+	case TLV_SUBSCRIBE_EVENTS_NP:
+		sen = (struct subscribe_events_np *)tlv->data;
+		clock_update_subscription(c, req, sen->bitmask,
+					  sen->duration);
 		respond = 1;
 		break;
 	}
@@ -526,8 +704,17 @@ static int clock_utc_correct(struct clock *c, tmv_t ingress)
 		if (c->leap_set != clock_leap) {
 			if (c->kernel_leap)
 				sysclk_set_leap(clock_leap);
+			else
+				servo_leap(c->servo, clock_leap);
 			c->leap_set = clock_leap;
 		}
+	}
+
+	/* Update TAI-UTC offset of the system clock if valid and traceable. */
+	if (c->tds.flags & UTC_OFF_VALID && c->tds.flags & TIME_TRACEABLE &&
+	    c->utc_offset_set != utc_offset && c->clkid == CLOCK_REALTIME) {
+		sysclk_set_tai_offset(utc_offset);
+		c->utc_offset_set = utc_offset;
 	}
 
 	if (!(c->tds.flags & PTP_TIMESCALE))
@@ -553,7 +740,7 @@ static int forwarding(struct clock *c, struct port *p)
 	default:
 		break;
 	}
-	if (p == c->port[c->nports] && ps != PS_FAULTY) { /*uds*/
+	if (p == c->uds_port && ps != PS_FAULTY) {
 		return 1;
 	}
 	return 0;
@@ -566,26 +753,69 @@ UInteger8 clock_class(struct clock *c)
 	return c->dds.clockQuality.clockClass;
 }
 
-struct clock *clock_create(int phc_index, struct interface *iface, int count,
+static int clock_add_port(struct clock *c, int phc_index,
+			  enum timestamp_type timestamping,
+			  struct interface *iface)
+{
+	struct port *p, *piter, *lastp = NULL;
+
+	if (clock_resize_pollfd(c, c->nports + 1))
+		return -1;
+	p = port_open(phc_index, timestamping, ++c->last_port_number,
+		      iface, c);
+	if (!p) {
+		/* No need to shrink pollfd */
+		return -1;
+	}
+	LIST_FOREACH(piter, &c->ports, list)
+		lastp = piter;
+	if (lastp)
+		LIST_INSERT_AFTER(lastp, p, list);
+	else
+		LIST_INSERT_HEAD(&c->ports, p, list);
+	c->nports++;
+	clock_fda_changed(c);
+	return 0;
+}
+
+static void clock_remove_port(struct clock *c, struct port *p)
+{
+	/* Do not call clock_resize_pollfd, it's pointless to shrink
+	 * the allocated memory at this point, clock_destroy will free
+	 * it all anyway. This function is usable from other parts of
+	 * the code, but even then we don't mind if pollfd is larger
+	 * than necessary. */
+	LIST_REMOVE(p, list);
+	c->nports--;
+	clock_fda_changed(c);
+	port_close(p);
+}
+
+struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
 			   enum servo_type servo)
 {
-	int i, fadj = 0, max_adj = 0.0, sw_ts = timestamping == TS_SOFTWARE ? 1 : 0;
+	int fadj = 0, max_adj = 0, sw_ts = timestamping == TS_SOFTWARE ? 1 : 0;
 	struct clock *c = &the_clock;
+	struct port *p;
 	char phc[32];
-	struct interface udsif;
+	struct interface *udsif = &c->uds_interface;
+	struct interface *iface;
+	struct timespec ts;
 
-	memset(&udsif, 0, sizeof(udsif));
-	snprintf(udsif.name, sizeof(udsif.name), UDS_PATH);
-	udsif.transport = TRANS_UDS;
-
-	srandom(time(NULL));
+	clock_gettime(CLOCK_REALTIME, &ts);
+	srandom(ts.tv_sec ^ ts.tv_nsec);
 
 	if (c->nports)
 		clock_destroy(c);
 
+	snprintf(udsif->name, sizeof(udsif->name), "%s", uds_path);
+	udsif->transport = TRANS_UDS;
+	udsif->delay_filter_length = 1;
+
 	c->free_running = dds->free_running;
 	c->freq_est_interval = dds->freq_est_interval;
+	c->grand_master_capable = dds->grand_master_capable;
 	c->kernel_leap = dds->kernel_leap;
 	c->utc_offset = CURRENT_UTC_OFFSET;
 	c->time_source = dds->time_source;
@@ -608,12 +838,15 @@ struct clock *clock_create(int phc_index, struct interface *iface, int count,
 			pr_err("clock is not adjustable");
 			return NULL;
 		}
+		clockadj_init(c->clkid);
 	} else {
 		c->clkid = CLOCK_REALTIME;
 		c->utc_timescale = 1;
+		clockadj_init(c->clkid);
 		max_adj = sysclk_max_freq();
 		sysclk_set_leap(0);
 	}
+	c->utc_offset_set = 0;
 	c->leap_set = 0;
 	c->time_flags = c->utc_timescale ? 0 : PTP_TIMESCALE;
 
@@ -630,11 +863,14 @@ struct clock *clock_create(int phc_index, struct interface *iface, int count,
 		return NULL;
 	}
 	c->servo_state = SERVO_UNLOCKED;
-	c->avg_delay = mave_create(MAVE_LENGTH);
-	if (!c->avg_delay) {
-		pr_err("Failed to create moving average");
+	c->servo_type = servo;
+	c->delay_filter = filter_create(dds->delay_filter,
+					dds->delay_filter_length);
+	if (!c->delay_filter) {
+		pr_err("Failed to create delay filter");
 		return NULL;
 	}
+	c->nrr = 1.0;
 	c->stats_interval = dds->stats_interval;
 	c->stats.offset = stats_create();
 	c->stats.freq = stats_create();
@@ -642,6 +878,13 @@ struct clock *clock_create(int phc_index, struct interface *iface, int count,
 	if (!c->stats.offset || !c->stats.freq || !c->stats.delay) {
 		pr_err("failed to create stats");
 		return NULL;
+	}
+	if (dds->sanity_freq_limit) {
+		c->sanity_check = clockcheck_create(dds->sanity_freq_limit);
+		if (!c->sanity_check) {
+			pr_err("Failed to create clock sanity check");
+			return NULL;
+		}
 	}
 
 	c->dds = dds->dds;
@@ -653,43 +896,40 @@ struct clock *clock_create(int phc_index, struct interface *iface, int count,
 	c->dad.pds.observedParentClockPhaseChangeRate    = 0x7fffffff;
 	c->dad.ptl = c->ptl;
 
-	for (i = 0; i < ARRAY_SIZE(c->pollfd); i++) {
-		c->pollfd[i].fd = -1;
-		c->pollfd[i].events = 0;
-	}
-
 	clock_sync_interval(c, 0);
 
-	for (i = 0; i < count; i++) {
-		c->port[i] = port_open(phc_index, timestamping, 1+i, &iface[i], c);
-		if (!c->port[i]) {
-			pr_err("failed to open port %s", iface[i].name);
-			return NULL;
-		}
-		c->fault_fd[i] = timerfd_create(CLOCK_MONOTONIC, 0);
-		if (c->fault_fd[i] < 0) {
-			pr_err("timerfd_create failed: %m");
-			return NULL;
-		}
-		c->pollfd[N_CLOCK_PFD * i + N_POLLFD].fd = c->fault_fd[i];
-		c->pollfd[N_CLOCK_PFD * i + N_POLLFD].events = POLLIN|POLLPRI;
-	}
+	LIST_INIT(&c->subscribers);
+	LIST_INIT(&c->ports);
+	c->last_port_number = 0;
 
 	/*
-	 * One extra port is for the UDS interface.
+	 * Create the UDS interface.
 	 */
-	c->port[i] = port_open(phc_index, timestamping, 0, &udsif, c);
-	if (!c->port[i]) {
+	if (clock_resize_pollfd(c, 0)) {
+		pr_err("failed to allocate pollfd");
+		return NULL;
+	}
+	c->uds_port = port_open(phc_index, timestamping, 0, udsif, c);
+	if (!c->uds_port) {
 		pr_err("failed to open the UDS port");
 		return NULL;
 	}
+	clock_fda_changed(c);
 
-	c->dds.numberPorts = c->nports = count;
+	/* Create the ports. */
+	STAILQ_FOREACH(iface, ifaces, list) {
+		if (clock_add_port(c, phc_index, timestamping, iface)) {
+			pr_err("failed to open port %s", iface->name);
+			return NULL;
+		}
+	}
 
-	for (i = 0; i < c->nports; i++)
-		port_dispatch(c->port[i], EV_INITIALIZE, 0);
+	c->dds.numberPorts = c->nports;
 
-	port_dispatch(c->port[i], EV_INITIALIZE, 0); /*uds*/
+	LIST_FOREACH(p, &c->ports, list) {
+		port_dispatch(p, EV_INITIALIZE, 0);
+	}
+	port_dispatch(c->uds_port, EV_INITIALIZE, 0);
 
 	return c;
 }
@@ -736,45 +976,94 @@ void clock_follow_up_info(struct clock *c, struct follow_up_info_tlv *f)
 	       sizeof(c->status.lastGmPhaseChange));
 }
 
+int clock_gm_capable(struct clock *c)
+{
+	return c->grand_master_capable;
+}
+
 struct ClockIdentity clock_identity(struct clock *c)
 {
 	return c->dds.clockIdentity;
 }
 
-void clock_install_fda(struct clock *c, struct port *p, struct fdarray fda)
+static int clock_resize_pollfd(struct clock *c, int new_nports)
 {
-	int i, j, k;
-	for (i = 0; i < c->nports + 1; i++) {
-		if (p == c->port[i])
-			break;
+	struct pollfd *new_pollfd;
+
+	/* Need to allocate one extra block of fds for uds */
+	new_pollfd = realloc(c->pollfd,
+			     (new_nports + 1) * N_CLOCK_PFD *
+			     sizeof(struct pollfd));
+	if (!new_pollfd)
+		return -1;
+	c->pollfd = new_pollfd;
+	return 0;
+}
+
+static void clock_fill_pollfd(struct pollfd *dest, struct port *p)
+{
+	struct fdarray *fda;
+	int i;
+
+	fda = port_fda(p);
+	for (i = 0; i < N_POLLFD; i++) {
+		dest[i].fd = fda->fd[i];
+		dest[i].events = POLLIN|POLLPRI;
 	}
-	for (j = 0; j < N_POLLFD; j++) {
-		k = N_CLOCK_PFD * i + j;
-		c->pollfd[k].fd = fda.fd[j];
-		c->pollfd[k].events = POLLIN|POLLPRI;
+	dest[i].fd = port_fault_fd(p);
+	dest[i].events = POLLIN|POLLPRI;
+}
+
+static void clock_check_pollfd(struct clock *c)
+{
+	struct port *p;
+	struct pollfd *dest = c->pollfd;
+
+	if (c->pollfd_valid)
+		return;
+	LIST_FOREACH(p, &c->ports, list) {
+		clock_fill_pollfd(dest, p);
+		dest += N_CLOCK_PFD;
 	}
+	clock_fill_pollfd(dest, c->uds_port);
+	c->pollfd_valid = 1;
+}
+
+void clock_fda_changed(struct clock *c)
+{
+	c->pollfd_valid = 0;
+}
+
+static int clock_do_forward_mgmt(struct clock *c,
+				 struct port *in, struct port *out,
+				 struct ptp_message *msg, int *pre_sent)
+{
+	if (in == out || !forwarding(c, out))
+		return 0;
+	if (!*pre_sent) {
+		/* delay calling msg_pre_send until
+		 * actually forwarding */
+		msg_pre_send(msg);
+		*pre_sent = 1;
+	}
+	return port_forward(out, msg);
 }
 
 static void clock_forward_mgmt_msg(struct clock *c, struct port *p, struct ptp_message *msg)
 {
-	int i, pdulen = 0, msg_ready = 0;
-	struct port *fwd;
+	struct port *piter;
+	int pdulen = 0, msg_ready = 0;
+
 	if (forwarding(c, p) && msg->management.boundaryHops) {
-		for (i = 0; i < c->nports + 1; i++) {
-			fwd = c->port[i];
-			if (fwd != p && forwarding(c, fwd)) {
-				/* delay calling msg_pre_send until
-				 * actually forwarding */
-				if (!msg_ready) {
-					msg_ready = 1;
-					pdulen = msg->header.messageLength;
-					msg->management.boundaryHops--;
-					msg_pre_send(msg);
-				}
-				if (port_forward(fwd, msg, pdulen))
-					pr_err("port %d: management forward failed", i + 1);
-			}
+		pdulen = msg->header.messageLength;
+		msg->management.boundaryHops--;
+		LIST_FOREACH(piter, &c->ports, list) {
+			if (clock_do_forward_mgmt(c, p, piter, msg, &msg_ready))
+				pr_err("port %d: management forward failed",
+				       port_number(piter));
 		}
+		if (clock_do_forward_mgmt(c, p, c->uds_port, msg, &msg_ready))
+			pr_err("uds port: management forward failed");
 		if (msg_ready) {
 			msg_post_recv(msg, pdulen);
 			msg->management.boundaryHops++;
@@ -784,7 +1073,8 @@ static void clock_forward_mgmt_msg(struct clock *c, struct port *p, struct ptp_m
 
 int clock_manage(struct clock *c, struct port *p, struct ptp_message *msg)
 {
-	int changed = 0, i;
+	int changed = 0, res, answers;
+	struct port *piter;
 	struct management_tlv *mgt;
 	struct ClockIdentity *tcid, wildcard = {
 		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -815,66 +1105,114 @@ int clock_manage(struct clock *c, struct port *p, struct ptp_message *msg)
 			return changed;
 		break;
 	case SET:
-		if (mgt->length == 2 && mgt->id != NULL_MANAGEMENT) {
-			clock_management_send_error(p, msg, WRONG_LENGTH);
+		if (mgt->length == 2 && mgt->id != TLV_NULL_MANAGEMENT) {
+			clock_management_send_error(p, msg, TLV_WRONG_LENGTH);
+			return changed;
+		}
+		if (p != c->uds_port) {
+			/* Sorry, only allowed on the UDS port. */
+			clock_management_send_error(p, msg, TLV_NOT_SUPPORTED);
 			return changed;
 		}
 		if (clock_management_set(c, p, mgt->id, msg, &changed))
 			return changed;
 		break;
 	case COMMAND:
-		if (mgt->length != 2) {
-			clock_management_send_error(p, msg, WRONG_LENGTH);
-			return changed;
-		}
 		break;
 	default:
 		return changed;
 	}
 
 	switch (mgt->id) {
-	case USER_DESCRIPTION:
-	case SAVE_IN_NON_VOLATILE_STORAGE:
-	case RESET_NON_VOLATILE_STORAGE:
-	case INITIALIZE:
-	case FAULT_LOG:
-	case FAULT_LOG_RESET:
-	case DEFAULT_DATA_SET:
-	case CURRENT_DATA_SET:
-	case PARENT_DATA_SET:
-	case TIME_PROPERTIES_DATA_SET:
-	case PRIORITY1:
-	case PRIORITY2:
-	case DOMAIN:
-	case SLAVE_ONLY:
-	case TIME:
-	case CLOCK_ACCURACY:
-	case UTC_PROPERTIES:
-	case TRACEABILITY_PROPERTIES:
-	case TIMESCALE_PROPERTIES:
-	case PATH_TRACE_LIST:
-	case PATH_TRACE_ENABLE:
-	case GRANDMASTER_CLUSTER_TABLE:
-	case ACCEPTABLE_MASTER_TABLE:
-	case ACCEPTABLE_MASTER_MAX_TABLE_SIZE:
-	case ALTERNATE_TIME_OFFSET_ENABLE:
-	case ALTERNATE_TIME_OFFSET_NAME:
-	case ALTERNATE_TIME_OFFSET_MAX_KEY:
-	case ALTERNATE_TIME_OFFSET_PROPERTIES:
-	case TRANSPARENT_CLOCK_DEFAULT_DATA_SET:
-	case PRIMARY_DOMAIN:
-	case TIME_STATUS_NP:
-	case GRANDMASTER_SETTINGS_NP:
-		clock_management_send_error(p, msg, NOT_SUPPORTED);
+	case TLV_PORT_PROPERTIES_NP:
+		if (p != c->uds_port) {
+			/* Only the UDS port allowed. */
+			clock_management_send_error(p, msg, TLV_NOT_SUPPORTED);
+			return 0;
+		}
+	}
+
+	switch (mgt->id) {
+	case TLV_USER_DESCRIPTION:
+	case TLV_SAVE_IN_NON_VOLATILE_STORAGE:
+	case TLV_RESET_NON_VOLATILE_STORAGE:
+	case TLV_INITIALIZE:
+	case TLV_FAULT_LOG:
+	case TLV_FAULT_LOG_RESET:
+	case TLV_DEFAULT_DATA_SET:
+	case TLV_CURRENT_DATA_SET:
+	case TLV_PARENT_DATA_SET:
+	case TLV_TIME_PROPERTIES_DATA_SET:
+	case TLV_PRIORITY1:
+	case TLV_PRIORITY2:
+	case TLV_DOMAIN:
+	case TLV_SLAVE_ONLY:
+	case TLV_TIME:
+	case TLV_CLOCK_ACCURACY:
+	case TLV_UTC_PROPERTIES:
+	case TLV_TRACEABILITY_PROPERTIES:
+	case TLV_TIMESCALE_PROPERTIES:
+	case TLV_PATH_TRACE_LIST:
+	case TLV_PATH_TRACE_ENABLE:
+	case TLV_GRANDMASTER_CLUSTER_TABLE:
+	case TLV_ACCEPTABLE_MASTER_TABLE:
+	case TLV_ACCEPTABLE_MASTER_MAX_TABLE_SIZE:
+	case TLV_ALTERNATE_TIME_OFFSET_ENABLE:
+	case TLV_ALTERNATE_TIME_OFFSET_NAME:
+	case TLV_ALTERNATE_TIME_OFFSET_MAX_KEY:
+	case TLV_ALTERNATE_TIME_OFFSET_PROPERTIES:
+	case TLV_TRANSPARENT_CLOCK_DEFAULT_DATA_SET:
+	case TLV_PRIMARY_DOMAIN:
+	case TLV_TIME_STATUS_NP:
+	case TLV_GRANDMASTER_SETTINGS_NP:
+	case TLV_SUBSCRIBE_EVENTS_NP:
+		clock_management_send_error(p, msg, TLV_NOT_SUPPORTED);
 		break;
 	default:
-		for (i = 0; i < c->nports; i++) {
-			if (port_manage(c->port[i], p, msg))
-				break;
+		answers = 0;
+		LIST_FOREACH(piter, &c->ports, list) {
+			res = port_manage(piter, p, msg);
+			if (res < 0)
+				return changed;
+			if (res > 0)
+				answers++;
+		}
+		if (!answers) {
+			/* IEEE 1588 Interpretation #21 suggests to use
+			 * TLV_WRONG_VALUE for ports that do not exist */
+			clock_management_send_error(p, msg, TLV_WRONG_VALUE);
 		}
 		break;
 	}
 	return changed;
+}
+
+void clock_notify_event(struct clock *c, enum notification event)
+{
+	struct port *uds = c->uds_port;
+	struct PortIdentity pid = port_identity(uds);
+	struct ptp_message *msg;
+	UInteger16 msg_len;
+	int id;
+
+	switch (event) {
+	/* set id */
+	default:
+		return;
+	}
+	/* targetPortIdentity and sequenceId will be filled by
+	 * clock_send_notification */
+	msg = port_management_notify(pid, uds);
+	if (!msg)
+		return;
+	if (!clock_management_fill_response(c, NULL, NULL, msg, id))
+		goto err;
+	msg_len = msg->header.messageLength;
+	if (msg_pre_send(msg))
+		goto err;
+	clock_send_notification(c, msg, msg_len, event);
+err:
+	msg_put(msg);
 }
 
 struct parent_ds *clock_parent_ds(struct clock *c)
@@ -889,10 +1227,13 @@ struct PortIdentity clock_parent_identity(struct clock *c)
 
 int clock_poll(struct clock *c)
 {
-	int cnt, err, i, j, k, sde = 0;
+	int cnt, err, i, sde = 0;
 	enum fsm_event event;
+	struct pollfd *cur;
+	struct port *p;
 
-	cnt = poll(c->pollfd, ARRAY_SIZE(c->pollfd), -1);
+	clock_check_pollfd(c);
+	cnt = poll(c->pollfd, (c->nports + 1) * N_CLOCK_PFD, -1);
 	if (cnt < 0) {
 		if (EINTR == errno) {
 			return 0;
@@ -904,39 +1245,38 @@ int clock_poll(struct clock *c)
 		return 0;
 	}
 
-	for (i = 0; i < c->nports; i++) {
-
+	cur = c->pollfd;
+	LIST_FOREACH(p, &c->ports, list) {
 		/* Let the ports handle their events. */
-		for (j = err = 0; j < N_POLLFD && !err; j++) {
-			k = N_CLOCK_PFD * i + j;
-			if (c->pollfd[k].revents & (POLLIN|POLLPRI)) {
-				event = port_event(c->port[i], j);
+		for (i = err = 0; i < N_POLLFD && !err; i++) {
+			if (cur[i].revents & (POLLIN|POLLPRI)) {
+				event = port_event(p, i);
 				if (EV_STATE_DECISION_EVENT == event)
 					sde = 1;
 				if (EV_ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES == event)
 					sde = 1;
-				err = port_dispatch(c->port[i], event, 0);
+				err = port_dispatch(p, event, 0);
 				/* Clear any fault after a little while. */
-				if (PS_FAULTY == port_state(c->port[i])) {
-					clock_fault_timeout(c, i, 1);
+				if (PS_FAULTY == port_state(p)) {
+					clock_fault_timeout(p, 1);
 					break;
 				}
 			}
 		}
 
 		/* Check the fault timer. */
-		k = N_CLOCK_PFD * i + N_POLLFD;
-		if (c->pollfd[k].revents & (POLLIN|POLLPRI)) {
-			clock_fault_timeout(c, i, 0);
-			port_dispatch(c->port[i], EV_FAULT_CLEARED, 0);
+		if (cur[N_POLLFD].revents & (POLLIN|POLLPRI)) {
+			clock_fault_timeout(p, 0);
+			port_dispatch(p, EV_FAULT_CLEARED, 0);
 		}
+
+		cur += N_CLOCK_PFD;
 	}
 
 	/* Check the UDS port. */
-	for (j = 0; j < N_POLLFD; j++) {
-		k = N_CLOCK_PFD * i + j;
-		if (c->pollfd[k].revents & (POLLIN|POLLPRI)) {
-			event = port_event(c->port[i], j);
+	for (i = 0; i < N_POLLFD; i++) {
+		if (cur[i].revents & (POLLIN|POLLPRI)) {
+			event = port_event(c->uds_port, i);
 			if (EV_STATE_DECISION_EVENT == event)
 				sde = 1;
 		}
@@ -945,6 +1285,7 @@ int clock_poll(struct clock *c)
 	if (sde)
 		handle_state_decision_event(c);
 
+	clock_prune_subscriptions(c);
 	return 0;
 }
 
@@ -952,6 +1293,7 @@ void clock_path_delay(struct clock *c, struct timespec req, struct timestamp rx,
 		      Integer64 correction)
 {
 	tmv_t c1, c2, c3, pd, t1, t2, t3, t4;
+	double rr;
 
 	if (tmv_is_zero(c->t1))
 		return;
@@ -963,31 +1305,37 @@ void clock_path_delay(struct clock *c, struct timespec req, struct timestamp rx,
 	t2 = c->t2;
 	t3 = timespec_to_tmv(req);
 	t4 = timestamp_to_tmv(rx);
+	rr = clock_rate_ratio(c);
 
 	/*
-	 * c->path_delay = (t2 - t3) + (t4 - t1);
+	 * c->path_delay = (t2 - t3) * rr + (t4 - t1);
 	 * c->path_delay -= c_sync + c_fup + c_delay_resp;
 	 * c->path_delay /= 2.0;
 	 */
-	pd = tmv_add(tmv_sub(t2, t3), tmv_sub(t4, t1));
+
+	pd = tmv_sub(t2, t3);
+	if (rr != 1.0)
+		pd = dbl_tmv(tmv_dbl(pd) * rr);
+	pd = tmv_add(pd, tmv_sub(t4, t1));
 	pd = tmv_sub(pd, tmv_add(c1, tmv_add(c2, c3)));
 	pd = tmv_div(pd, 2);
 
 	if (pd < 0) {
-		pr_warning("negative path delay %10lld", pd);
-		pr_warning("path_delay = (t2 - t3) + (t4 - t1)");
-		pr_warning("t2 - t3 = %+10lld", t2 - t3);
-		pr_warning("t4 - t1 = %+10lld", t4 - t1);
-		pr_warning("c1 %10lld", c1);
-		pr_warning("c2 %10lld", c2);
-		pr_warning("c3 %10lld", c3);
+		pr_debug("negative path delay %10" PRId64, pd);
+		pr_debug("path_delay = (t2 - t3) * rr + (t4 - t1) - (c1 + c2 + c3)");
+		pr_debug("t2 - t3 = %+10" PRId64, t2 - t3);
+		pr_debug("t4 - t1 = %+10" PRId64, t4 - t1);
+		pr_debug("rr = %.9f", rr);
+		pr_debug("c1 %10" PRId64, c1);
+		pr_debug("c2 %10" PRId64, c2);
+		pr_debug("c3 %10" PRId64, c3);
 	}
 
-	c->path_delay = mave_accumulate(c->avg_delay, pd);
+	c->path_delay = filter_sample(c->delay_filter, pd);
 
 	c->cur.meanPathDelay = tmv_to_TimeInterval(c->path_delay);
 
-	pr_debug("path delay    %10lld %10lld", c->path_delay, pd);
+	pr_debug("path delay    %10" PRId64 " %10" PRId64, c->path_delay, pd);
 
 	if (c->stats.delay)
 		stats_add_value(c->stats.delay, tmv_to_nanoseconds(pd));
@@ -1002,20 +1350,6 @@ void clock_peer_delay(struct clock *c, tmv_t ppd, double nrr)
 		stats_add_value(c->stats.delay, tmv_to_nanoseconds(ppd));
 }
 
-void clock_remove_fda(struct clock *c, struct port *p, struct fdarray fda)
-{
-	int i, j, k;
-	for (i = 0; i < c->nports + 1; i++) {
-		if (p == c->port[i])
-			break;
-	}
-	for (j = 0; j < N_POLLFD; j++) {
-		k = N_CLOCK_PFD * i + j;
-		c->pollfd[k].fd = -1;
-		c->pollfd[k].events = 0;
-	}
-}
-
 int clock_slave_only(struct clock *c)
 {
 	return c->dds.flags & DDS_SLAVE_ONLY;
@@ -1024,6 +1358,41 @@ int clock_slave_only(struct clock *c)
 UInteger16 clock_steps_removed(struct clock *c)
 {
 	return c->cur.stepsRemoved;
+}
+
+int clock_switch_phc(struct clock *c, int phc_index)
+{
+	struct servo *servo;
+	int fadj, max_adj;
+	clockid_t clkid;
+	char phc[32];
+
+	snprintf(phc, 31, "/dev/ptp%d", phc_index);
+	clkid = phc_open(phc);
+	if (clkid == CLOCK_INVALID) {
+		pr_err("Switching PHC, failed to open %s: %m", phc);
+		return -1;
+	}
+	max_adj = phc_max_adj(clkid);
+	if (!max_adj) {
+		pr_err("Switching PHC, clock is not adjustable");
+		phc_close(clkid);
+		return -1;
+	}
+	fadj = (int) clockadj_get_freq(clkid);
+	clockadj_set_freq(clkid, fadj);
+	servo = servo_create(c->servo_type, -fadj, max_adj, 0);
+	if (!servo) {
+		pr_err("Switching PHC, failed to create clock servo");
+		phc_close(clkid);
+		return -1;
+	}
+	phc_close(c->clkid);
+	servo_destroy(c->servo);
+	c->clkid = clkid;
+	c->servo = servo;
+	c->servo_state = SERVO_UNLOCKED;
+	return 0;
 }
 
 enum servo_state clock_synchronize(struct clock *c,
@@ -1084,11 +1453,18 @@ enum servo_state clock_synchronize(struct clock *c,
 		clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset));
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
+		if (c->sanity_check) {
+			clockcheck_set_freq(c->sanity_check, -adj);
+			clockcheck_step(c->sanity_check,
+					-tmv_to_nanoseconds(c->master_offset));
+		}
 		break;
 	case SERVO_LOCKED:
 		clockadj_set_freq(c->clkid, -adj);
 		if (c->clkid == CLOCK_REALTIME)
 			sysclk_set_sync();
+		if (c->sanity_check)
+			clockcheck_set_freq(c->sanity_check, -adj);
 		break;
 	}
 	return state;
@@ -1133,10 +1509,11 @@ static void handle_state_decision_event(struct clock *c)
 {
 	struct foreign_clock *best = NULL, *fc;
 	struct ClockIdentity best_id;
-	int fresh_best = 0, i;
+	struct port *piter;
+	int fresh_best = 0;
 
-	for (i = 0; i < c->nports; i++) {
-		fc = port_compute_best(c->port[i]);
+	LIST_FOREACH(piter, &c->ports, list) {
+		fc = port_compute_best(piter);
 		if (!fc)
 			continue;
 		if (!best || dscmp(&fc->dataset, &best->dataset) > 0)
@@ -1154,18 +1531,21 @@ static void handle_state_decision_event(struct clock *c)
 
 	if (!cid_eq(&best_id, &c->best_id)) {
 		clock_freq_est_reset(c);
-		mave_reset(c->avg_delay);
+		filter_reset(c->delay_filter);
+		c->t1 = tmv_zero();
+		c->t2 = tmv_zero();
 		c->path_delay = 0;
+		c->nrr = 1.0;
 		fresh_best = 1;
 	}
 
 	c->best = best;
 	c->best_id = best_id;
 
-	for (i = 0; i < c->nports; i++) {
+	LIST_FOREACH(piter, &c->ports, list) {
 		enum port_state ps;
 		enum fsm_event event;
-		ps = bmc_state_decision(c, c->port[i]);
+		ps = bmc_state_decision(c, piter);
 		switch (ps) {
 		case PS_LISTENING:
 			event = EV_NONE;
@@ -1189,7 +1569,7 @@ static void handle_state_decision_event(struct clock *c)
 			event = EV_FAULT_DETECTED;
 			break;
 		}
-		port_dispatch(c->port[i], event, fresh_best);
+		port_dispatch(piter, event, fresh_best);
 	}
 }
 
@@ -1201,4 +1581,18 @@ struct clock_description *clock_description(struct clock *c)
 int clock_num_ports(struct clock *c)
 {
 	return c->nports;
+}
+
+void clock_check_ts(struct clock *c, struct timespec ts)
+{
+	if (c->sanity_check &&
+	    clockcheck_sample(c->sanity_check,
+			      ts.tv_sec * NS_PER_SEC + ts.tv_nsec)) {
+		servo_reset(c->servo);
+	}
+}
+
+double clock_rate_ratio(struct clock *c)
+{
+	return servo_rate_ratio(c->servo);
 }

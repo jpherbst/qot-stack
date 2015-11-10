@@ -20,18 +20,17 @@
 #ifndef HAVE_UTIL_H
 #define HAVE_UTIL_H
 
-#include "config.h"
 #include "ddt.h"
 
 /**
  * Table of human readable strings, one for each port state.
  */
-extern char *ps_str[];
+extern const char *ps_str[];
 
 /**
  * Table of human readable strings, one for each port event.
  */
-extern char *ev_str[];
+extern const char *ev_str[];
 
 /**
  * Convert a clock identity into a human readable string.
@@ -64,7 +63,7 @@ char *pid2str(struct PortIdentity *id);
  */
 int str2pid(const char *s, struct PortIdentity *result);
 
-int generate_clock_identity(struct ClockIdentity *ci, char *name);
+int generate_clock_identity(struct ClockIdentity *ci, const char *name);
 
 /**
  * Copies a PTPText to a static_ptp_text. This copies the text into
@@ -124,6 +123,17 @@ int is_utc_ambiguous(uint64_t ts);
  *                   inserted, -1 if leap second will be deleted.
  */
 int leap_second_status(uint64_t ts, int leap_set, int *leap, int *utc_offset);
+
+/**
+ * Values returned by get_ranged_*().
+ */
+enum parser_result {
+	PARSED_OK,
+	NOT_PARSED,
+	BAD_VALUE,
+	MALFORMED,
+	OUT_OF_RANGE,
+};
 
 /**
  * Get an integer value from string with error checking and range
@@ -211,5 +221,76 @@ int get_arg_val_ui(int op, const char *optarg, unsigned int *val,
  */
 int get_arg_val_d(int op, const char *optarg, double *val,
 		  double min, double max);
+
+/**
+ * Setup a handler for terminating signals (SIGINT, SIGQUIT, SIGTERM).
+ *
+ * @return       0 on success, -1 on error.
+ */
+int handle_term_signals(void);
+
+/**
+ * Check if a terminating signal was received.
+ *
+ * @return       1 if no terminating signal was received, 0 otherwise.
+ */
+int is_running(void);
+
+/**
+ * Get an allocated and formatted string. This is a wrapper around asprintf().
+ *
+ * @param format    printf() format string.
+ * @param ...       printf() arguments.
+ * @return          Pointer to the allocated string, NULL on error.
+ */
+#ifdef __GNUC__
+__attribute__ ((format (printf, 1, 2)))
+#endif
+char *string_newf(const char *format, ...);
+
+/**
+ * Reallocate a string and append another string to it.
+ *
+ * @param s         String that should be extended, set to NULL on error.
+ * @param str       String appended to s.
+ */
+void string_append(char **s, const char *str);
+#ifdef __GNUC__
+__attribute__ ((format (printf, 2, 3)))
+#endif
+/**
+ * Reallocate a string and append a formatted string to it.
+ *
+ * @param s         String that should be extended, set to NULL on error.
+ * @param format    printf() format string.
+ * @param ...       printf() arguments.
+ */
+void string_appendf(char **s, const char *format, ...);
+
+/**
+ * Get an empty array of pointers terminated by NULL.
+ *
+ * @return          Pointer to the allocated array, NULL on error.
+ */
+void **parray_new(void);
+
+/**
+ * Append pointer to a NULL-terminated pointer array. The array is reallocated
+ * in exponentially increasing sizes.
+ *
+ * @param a         Pointer to pointer array, set to NULL on error.
+ * @param p         Pointer appended to the array.
+ */
+void parray_append(void ***a, void *p);
+
+
+/**
+ * Append pointers to a NULL-terminated pointer array. The array is reallocated
+ * in exponentially increasing sizes.
+ *
+ * @param a         Pointer to pointer array, set to NULL on error.
+ * @param ...       NULL-terminated list of pointers.
+ */
+void parray_extend(void ***a, ...);
 
 #endif

@@ -20,22 +20,28 @@
 #ifndef HAVE_CONFIG_H
 #define HAVE_CONFIG_H
 
+#include <sys/queue.h>
+
 #include "ds.h"
 #include "dm.h"
+#include "filter.h"
 #include "transport.h"
 #include "servo.h"
 #include "sk.h"
 
-#define MAX_PORTS 8
-#define MAX_IFNAME_SIZE 16
+#define MAX_IFNAME_SIZE 108 /* = UNIX_PATH_MAX */
 
 /** Defines a network interface, with PTP options. */
 struct interface {
+	STAILQ_ENTRY(interface) list;
 	char name[MAX_IFNAME_SIZE + 1];
 	enum delay_mechanism dm;
 	enum transport_type transport;
 	struct port_defaults pod;
 	struct sk_ts_info ts_info;
+	enum filter_type delay_filter;
+	int delay_filter_length;
+	int boundary_clock_jbod;
 };
 
 #define CFG_IGNORE_DM           (1 << 0)
@@ -46,21 +52,12 @@ struct interface {
 #define CFG_IGNORE_USE_SYSLOG   (1 << 5)
 #define CFG_IGNORE_VERBOSE      (1 << 6)
 
-enum parser_result {
-	PARSED_OK,
-	NOT_PARSED,
-	BAD_VALUE,
-	MALFORMED,
-	OUT_OF_RANGE,
-};
-
 struct config {
 	/* configuration override */
 	int cfg_ignore;
 
 	/* configured interfaces */
-	struct interface iface[MAX_PORTS];
-	int nports;
+	STAILQ_HEAD(interfaces_head, interface) interfaces;
 
 	enum timestamp_type timestamping;
 	enum transport_type transport;
@@ -74,6 +71,10 @@ struct config {
 
 	enum servo_type clock_servo;
 
+	double *step_threshold;
+	double *first_step_threshold;
+	int *max_frequency;
+
 	double *pi_proportional_const;
 	double *pi_integral_const;
 	double *pi_proportional_scale;
@@ -82,13 +83,12 @@ struct config {
 	double *pi_integral_scale;
 	double *pi_integral_exponent;
 	double *pi_integral_norm_max;
-	double *pi_offset_const;
-	double *pi_f_offset_const;
-	int *pi_max_frequency;
+	int *ntpshm_segment;
 
 	unsigned char *ptp_dst_mac;
 	unsigned char *p2p_dst_mac;
 	unsigned char *udp6_scope;
+	char *uds_address;
 
 	int print_level;
 	int use_syslog;
@@ -96,6 +96,8 @@ struct config {
 };
 
 int config_read(char *name, struct config *cfg);
-int config_create_interface(char *name, struct config *cfg);
+struct interface *config_create_interface(char *name, struct config *cfg);
+void config_init_interface(struct interface *iface, struct config *cfg);
+void config_destroy(struct config *cfg);
 
 #endif

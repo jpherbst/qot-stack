@@ -61,7 +61,7 @@ struct pmc {
 	int zero_length_gets;
 };
 
-struct pmc *pmc_create(enum transport_type transport_type, char *iface_name,
+struct pmc *pmc_create(enum transport_type transport_type, const char *iface_name,
 		       UInteger8 boundary_hops, UInteger8 domain_number,
 		       UInteger8 transport_specific, int zero_datalen)
 {
@@ -78,7 +78,7 @@ struct pmc *pmc_create(enum transport_type transport_type, char *iface_name,
 		goto failed;
 	}
 	pmc->port_identity.portNumber = 1;
-	memset(&pmc->target, 0xff, sizeof(pmc->target));
+	pmc_target_all(pmc);
 
 	pmc->boundary_hops = boundary_hops;
 	pmc->domain_number = domain_number;
@@ -143,19 +143,14 @@ static struct ptp_message *pmc_message(struct pmc *pmc, uint8_t action)
 
 static int pmc_send(struct pmc *pmc, struct ptp_message *msg, int pdulen)
 {
-	int cnt, err;
+	int err;
+
 	err = msg_pre_send(msg);
 	if (err) {
 		pr_err("msg_pre_send failed");
 		return -1;
 	}
-	cnt = transport_send(pmc->transport, &pmc->fdarray, 0,
-			     msg, pdulen, &msg->hwts);
-	if (cnt < 0) {
-		pr_err("failed to send message");
-		return -1;
-	}
-	return 0;
+	return transport_send(pmc->transport, &pmc->fdarray, 0, msg);
 }
 
 static int pmc_tlv_datalen(struct pmc *pmc, int id)
@@ -166,50 +161,53 @@ static int pmc_tlv_datalen(struct pmc *pmc, int id)
 		return len;
 
 	switch (id) {
-	case USER_DESCRIPTION:
+	case TLV_USER_DESCRIPTION:
 		len += EMPTY_PTP_TEXT;
 		break;
-	case DEFAULT_DATA_SET:
+	case TLV_DEFAULT_DATA_SET:
 		len += sizeof(struct defaultDS);
 		break;
-	case CURRENT_DATA_SET:
+	case TLV_CURRENT_DATA_SET:
 		len += sizeof(struct currentDS);
 		break;
-	case PARENT_DATA_SET:
+	case TLV_PARENT_DATA_SET:
 		len += sizeof(struct parentDS);
 		break;
-	case TIME_PROPERTIES_DATA_SET:
+	case TLV_TIME_PROPERTIES_DATA_SET:
 		len += sizeof(struct timePropertiesDS);
 		break;
-	case PRIORITY1:
-	case PRIORITY2:
-	case DOMAIN:
-	case SLAVE_ONLY:
-	case CLOCK_ACCURACY:
-	case TRACEABILITY_PROPERTIES:
-	case TIMESCALE_PROPERTIES:
+	case TLV_PRIORITY1:
+	case TLV_PRIORITY2:
+	case TLV_DOMAIN:
+	case TLV_SLAVE_ONLY:
+	case TLV_CLOCK_ACCURACY:
+	case TLV_TRACEABILITY_PROPERTIES:
+	case TLV_TIMESCALE_PROPERTIES:
 		len += sizeof(struct management_tlv_datum);
 		break;
-	case TIME_STATUS_NP:
+	case TLV_TIME_STATUS_NP:
 		len += sizeof(struct time_status_np);
 		break;
-	case GRANDMASTER_SETTINGS_NP:
+	case TLV_GRANDMASTER_SETTINGS_NP:
 		len += sizeof(struct grandmaster_settings_np);
 		break;
-	case NULL_MANAGEMENT:
+	case TLV_NULL_MANAGEMENT:
 		break;
-	case CLOCK_DESCRIPTION:
+	case TLV_CLOCK_DESCRIPTION:
 		len += EMPTY_CLOCK_DESCRIPTION;
 		break;
-	case PORT_DATA_SET:
+	case TLV_PORT_DATA_SET:
 		len += sizeof(struct portDS);
 		break;
-	case LOG_ANNOUNCE_INTERVAL:
-	case ANNOUNCE_RECEIPT_TIMEOUT:
-	case LOG_SYNC_INTERVAL:
-	case VERSION_NUMBER:
-	case DELAY_MECHANISM:
-	case LOG_MIN_PDELAY_REQ_INTERVAL:
+	case TLV_PORT_DATA_SET_NP:
+		len += sizeof(struct port_ds_np);
+		break;
+	case TLV_LOG_ANNOUNCE_INTERVAL:
+	case TLV_ANNOUNCE_RECEIPT_TIMEOUT:
+	case TLV_LOG_SYNC_INTERVAL:
+	case TLV_VERSION_NUMBER:
+	case TLV_DELAY_MECHANISM:
+	case TLV_LOG_MIN_PDELAY_REQ_INTERVAL:
 		len += sizeof(struct management_tlv_datum);
 		break;
 	}
@@ -239,7 +237,7 @@ int pmc_send_get_action(struct pmc *pmc, int id)
 	msg->header.messageLength = pdulen;
 	msg->tlv_count = 1;
 
-	if (id == CLOCK_DESCRIPTION && !pmc->zero_length_gets) {
+	if (id == TLV_CLOCK_DESCRIPTION && !pmc->zero_length_gets) {
 		/*
 		 * Make sure the tlv_extra pointers dereferenced in
 		 * mgt_pre_send() do point to something.
@@ -295,8 +293,7 @@ struct ptp_message *pmc_recv(struct pmc *pmc)
 		return NULL;
 	}
 	msg->hwts.type = TS_SOFTWARE;
-	cnt = transport_recv(pmc->transport, pmc_get_transport_fd(pmc),
-			     msg, sizeof(msg->data), &msg->hwts);
+	cnt = transport_recv(pmc->transport, pmc_get_transport_fd(pmc), msg);
 	if (cnt <= 0) {
 		pr_err("recv message failed");
 		goto failed;
@@ -327,4 +324,14 @@ int pmc_target(struct pmc *pmc, struct PortIdentity *pid)
 {
 	pmc->target = *pid;
 	return 0;
+}
+
+void pmc_target_port(struct pmc *pmc, UInteger16 portNumber)
+{
+	pmc->target.portNumber = portNumber;
+}
+
+void pmc_target_all(struct pmc *pmc)
+{
+	memset(&pmc->target, 0xff, sizeof(pmc->target));
 }

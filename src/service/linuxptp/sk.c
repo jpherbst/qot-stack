@@ -30,6 +30,9 @@
 #include <stdlib.h>
 #include <poll.h>
 
+#include "address.h"
+#include "ether.h"
+#include "missing.h"
 #include "print.h"
 #include "sk.h"
 
@@ -40,7 +43,7 @@ int sk_check_fupsync;
 
 /* private methods */
 
-static int hwts_init(int fd, char *device, int rx_filter, int one_step)
+static int hwts_init(int fd, const char *device, int rx_filter, int one_step)
 {
 	struct ifreq ifreq;
 	struct hwtstamp_config cfg, req;
@@ -49,7 +52,7 @@ static int hwts_init(int fd, char *device, int rx_filter, int one_step)
 	memset(&ifreq, 0, sizeof(ifreq));
 	memset(&cfg, 0, sizeof(cfg));
 
-	strncpy(ifreq.ifr_name, device, sizeof(ifreq.ifr_name));
+	strncpy(ifreq.ifr_name, device, sizeof(ifreq.ifr_name) - 1);
 
 	ifreq.ifr_data = (void *) &cfg;
 	cfg.tx_type    = one_step ? HWTSTAMP_TX_ONESTEP_SYNC : HWTSTAMP_TX_ON;
@@ -77,13 +80,13 @@ static int hwts_init(int fd, char *device, int rx_filter, int one_step)
 
 /* public methods */
 
-int sk_interface_index(int fd, char *name)
+int sk_interface_index(int fd, const char *name)
 {
 	struct ifreq ifreq;
 	int err;
 
 	memset(&ifreq, 0, sizeof(ifreq));
-	strcpy(ifreq.ifr_name, name);
+	strncpy(ifreq.ifr_name, name, sizeof(ifreq.ifr_name) - 1);
 	err = ioctl(fd, SIOCGIFINDEX, &ifreq);
 	if (err < 0) {
 		pr_err("ioctl SIOCGIFINDEX failed: %m");
@@ -102,7 +105,7 @@ int sk_general_init(int fd)
 	return 0;
 }
 
-int sk_get_ts_info(char *name, struct sk_ts_info *sk_info)
+int sk_get_ts_info(const char *name, struct sk_ts_info *sk_info)
 {
 #ifdef ETHTOOL_GET_TS_INFO
 	struct ethtool_ts_info info;
@@ -146,13 +149,13 @@ failed:
 	return -1;
 }
 
-int sk_interface_macaddr(char *name, unsigned char *mac, int len)
+int sk_interface_macaddr(const char *name, struct address *mac)
 {
 	struct ifreq ifreq;
 	int err, fd;
 
 	memset(&ifreq, 0, sizeof(ifreq));
-	strcpy(ifreq.ifr_name, name);
+	strncpy(ifreq.ifr_name, name, sizeof(ifreq.ifr_name) - 1);
 
 	fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (fd < 0) {
@@ -167,16 +170,17 @@ int sk_interface_macaddr(char *name, unsigned char *mac, int len)
 		return -1;
 	}
 
-	memcpy(mac, ifreq.ifr_hwaddr.sa_data, len);
+	memcpy(&mac->sa, &ifreq.ifr_hwaddr, sizeof(ifreq.ifr_hwaddr));
+	mac->len = sizeof(ifreq.ifr_hwaddr.sa_family) + MAC_LEN;
 	close(fd);
 	return 0;
 }
 
-int sk_interface_addr(char *name, int family, uint8_t *addr, int len)
+int sk_interface_addr(const char *name, int family, struct address *addr)
 {
 	struct ifaddrs *ifaddr, *i;
-	int copy_len, result = -1;
-	void *copy_from;
+	int result = -1;
+
 	if (getifaddrs(&ifaddr) == -1) {
 		pr_err("getifaddrs failed: %m");
 		return -1;
@@ -187,20 +191,17 @@ int sk_interface_addr(char *name, int family, uint8_t *addr, int len)
 		{
 			switch (family) {
 			case AF_INET:
-				copy_len = 4;
-				copy_from = &((struct sockaddr_in *)i->ifa_addr)->sin_addr.s_addr;
+				addr->len = sizeof(addr->sin);
+				memcpy(&addr->sin, i->ifa_addr, addr->len);
 				break;
 			case AF_INET6:
-				copy_len = 16;
-				copy_from = &((struct sockaddr_in6 *)i->ifa_addr)->sin6_addr.s6_addr;
+				addr->len = sizeof(addr->sin6);
+				memcpy(&addr->sin6, i->ifa_addr, addr->len);
 				break;
 			default:
 				continue;
 			}
-			if (copy_len > len)
-				copy_len = len;
-			memcpy(addr, copy_from, copy_len);
-			result = copy_len;
+			result = 0;
 			break;
 		}
 	}
@@ -208,8 +209,11 @@ int sk_interface_addr(char *name, int family, uint8_t *addr, int len)
 	return result;
 }
 
+static short sk_events = POLLPRI;
+static short sk_revents = POLLPRI;
+
 int sk_receive(int fd, void *buf, int buflen,
-	       struct hw_timestamp *hwts, int flags)
+	       struct address *addr, struct hw_timestamp *hwts, int flags)
 {
 	char control[256];
 	int cnt = 0, res = 0, level, type;
@@ -220,20 +224,26 @@ int sk_receive(int fd, void *buf, int buflen,
 
 	memset(control, 0, sizeof(control));
 	memset(&msg, 0, sizeof(msg));
+	if (addr) {
+		msg.msg_name = &addr->ss;
+		msg.msg_namelen = sizeof(addr->ss);
+	}
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 	msg.msg_control = control;
 	msg.msg_controllen = sizeof(control);
 
 	if (flags == MSG_ERRQUEUE) {
-		struct pollfd pfd = { fd, 0, 0 };
+		struct pollfd pfd = { fd, sk_events, 0 };
 		res = poll(&pfd, 1, sk_tx_timeout);
 		if (res < 1) {
-			pr_err(res ? "poll tx timestamp failed: %m" :
-			             "poll tx timestamp timeout");
+			pr_err(res ? "poll for tx timestamp failed: %m" :
+			             "timed out while polling for tx timestamp");
+			pr_err("increasing tx_timestamp_timeout may correct "
+			       "this issue, but it is likely caused by a driver bug");
 			return res;
-		} else if (!(pfd.revents & POLLERR)) {
-			pr_err("poll tx woke up on non ERR event");
+		} else if (!(pfd.revents & sk_revents)) {
+			pr_err("poll for tx timestamp woke up on non ERR event");
 			return -1;
 		}
 	}
@@ -263,6 +273,9 @@ int sk_receive(int fd, void *buf, int buflen,
 		}
 	}
 
+	if (addr)
+		addr->len = msg.msg_namelen;
+
 	if (!ts) {
 		memset(&hwts->ts, 0, sizeof(hwts->ts));
 		return cnt;
@@ -283,7 +296,7 @@ int sk_receive(int fd, void *buf, int buflen,
 	return cnt;
 }
 
-int sk_timestamping_init(int fd, char *device, enum timestamp_type type,
+int sk_timestamping_init(int fd, const char *device, enum timestamp_type type,
 			 enum transport_type transport)
 {
 	int err, filter1, filter2 = 0, flags, one_step;
@@ -341,6 +354,14 @@ int sk_timestamping_init(int fd, char *device, enum timestamp_type type,
 		       &flags, sizeof(flags)) < 0) {
 		pr_err("ioctl SO_TIMESTAMPING failed: %m");
 		return -1;
+	}
+
+	flags = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_SELECT_ERR_QUEUE,
+		       &flags, sizeof(flags)) < 0) {
+		pr_warning("%s: SO_SELECT_ERR_QUEUE: %m", device);
+		sk_events = 0;
+		sk_revents = POLLERR;
 	}
 
 	/* Enable the sk_check_fupsync option, perhaps. */

@@ -69,6 +69,44 @@ ENDFOREACH(idl)
 
 #################################################################################################
 
+# This is required for boost::log
+ADD_DEFINITIONS(-DHAVE_ONESTEP_SYNC)
+ADD_DEFINITIONS(-DHAVE_CLOCK_ADJTIME)
+ADD_DEFINITIONS(-D_GNU_SOURCE)
+
+# PTP library
+ADD_LIBRARY(ptp SHARED
+	linuxptp/bmc.c
+	linuxptp/clock.c
+	linuxptp/clockadj.c
+	linuxptp/clockcheck.c
+	linuxptp/config.c
+	linuxptp/fault.c
+	linuxptp/filter.c
+	linuxptp/fsm.c
+	linuxptp/linreg.c
+	linuxptp/mave.c
+	linuxptp/mmedian.c
+	linuxptp/msg.c
+	linuxptp/ntpshm.c
+	linuxptp/phc.c
+	linuxptp/pi.c
+	linuxptp/port.c
+	linuxptp/print.c
+	linuxptp/raw.c
+	linuxptp/servo.c
+	linuxptp/sk.c
+	linuxptp/stats.c
+	linuxptp/tlv.c
+	linuxptp/transport.c
+	linuxptp/udp.c
+	linuxptp/udp6.c
+	linuxptp/uds.c
+	linuxptp/util.c
+	linuxptp/version.c
+)
+TARGET_LINK_LIBRARIES(ptp ${MATH_LIBRARIES})
+
 ADD_EXECUTABLE(qotdaemon 
 	Coordinator.hpp
 	Coordinator.cpp
@@ -79,7 +117,17 @@ ADD_EXECUTABLE(qotdaemon
 	main.cpp
 	${OpenSplice_DATAMODEL}
 )
-TARGET_LINK_LIBRARIES(qotdaemon ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon ptp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+
+# Install the PTP library
+INSTALL(
+	TARGETS 
+		ptp 
+	DESTINATION 
+		lib 
+	COMPONENT 
+		libraries
+)
 
 # Install the qot library to the given prefix
 INSTALL(
