@@ -1,3 +1,5 @@
+<<toc>> 
+
 # Overview #
 
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
@@ -87,7 +89,7 @@ subnet 10.42.0.0 netmask 255.255.255.0 {
 host alpha { hardware ethernet 6c:ec:eb:ad:a7:3c; fixed-address 10.42.0.100; }
 ```
 
-# STEP 3 : Configure NAT #
+## STEP 3 : Configure NAT ##
 
 In the file ```/etc/default/ufw``` change the parameter ```DEFAULT_FORWARD_POLICY```
 
@@ -202,7 +204,7 @@ If you can't find anything useful there, use a FTDI cable to inspect the u-boot 
 
 # Build instructions #
 
-Now that we have a working kernel
+Now that we have successfully built and net-booted the kernel, we can start 
 
 
 ## Install system dependencies, checkout code and initialize submodules ##
