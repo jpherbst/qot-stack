@@ -52,8 +52,8 @@ extern "C"
 using namespace qot;
 
 // Constructor
-Notifier::Notifier(boost::asio::io_service *io, const std::string &dir)
-	: asio(io), basedir(dir)
+Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &dir)
+	: asio(io), basedir(dir), basename(name)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier at directory " << dir;
 
@@ -100,9 +100,9 @@ void Notifier::add(const char *name)
 	std::ostringstream oss("");
 	oss << basedir << "/" << name;
 	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << oss.str();
-	std::map<std::string,std::shared_ptr<Timeline>>::iterator it = timelines.find(oss.str());
+	std::map<std::string,Timeline*>::iterator it = timelines.find(oss.str());
 	if (it == timelines.end())
-		timelines[oss.str()] = std::shared_ptr<Timeline>(new Timeline(asio, oss.str()));
+		timelines[oss.str()] = new Timeline(asio, basename, oss.str());
 	else
 		BOOST_LOG_TRIVIAL(warning) << "The timeline has already been added";
 }
@@ -112,9 +112,15 @@ void Notifier::del(const char *name)
 	std::ostringstream oss("");
 	oss << basedir << "/" << name;
 	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " << oss.str();
-	std::map<std::string,std::shared_ptr<Timeline>>::iterator it = timelines.find(oss.str());
+	std::map<std::string,Timeline*>::iterator it = timelines.find(oss.str());
 	if (it != timelines.end())
+	{
+		// Delete the timeline (shutting it down safely)
+		delete it->second;
+		
+		// Remove the reference from the list
 		timelines.erase(it);
+	}
 	else
 		BOOST_LOG_TRIVIAL(warning) << "No such timeline exists locally";
 }

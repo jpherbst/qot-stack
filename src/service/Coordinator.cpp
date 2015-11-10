@@ -40,31 +40,76 @@ std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts)
   return os;
 }
 
-void TimelineListener::on_data_available(dds::sub::DataReader<::qot_msgs::TimelineType>& dr) 
+void TimelineListener::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr) 
 { 
 	std::cout << "----------on_data_available-----------" << std::endl;      
 	auto samples =  dr.read();
 	std::for_each(samples.begin(), samples.end(), [](
-		const dds::sub::Sample<::qot_msgs::TimelineType>& s)
+		const dds::sub::Sample<qot_msgs::TimelineType>& s)
 		{
 			std::cout << s.data() << std::endl;
 		}
 	);
 }
 
-void  TimelineListener::on_liveliness_changed(dds::sub::DataReader<::qot_msgs::TimelineType>& dr, 
+void  TimelineListener::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
 	const dds::core::status::LivelinessChangedStatus& status) 
 {
 	std::cout << "!!! Liveliness Changed !!!" << std::endl;
 }
 
-Coordinator::Coordinator(boost::asio::io_service *io)
-	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic)
+Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
+	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic),
+		timer(*io, boost::posix_time::seconds(1))
 {
-	dr.listener(&this->listener, dds::core::status::StatusMask::data_available());
+	// Set the name
+	timeline.name() = (std::string) name;
 }
 
-Coordinator::~Coordinator()
+Coordinator::~Coordinator() {}
+
+// Initialize this coordinator with a name
+void Coordinator::Start(const char* uuid, double acc, double res)
 {
+	// Set the timeline information
+	timeline.uuid() = (std::string) uuid;
+	timeline.accuracy() = acc;
+	timeline.resolution() = res;
+
+	// Create the listener
+	dr.listener(&this->listener, dds::core::status::StatusMask::data_available());
+
+	// Start the heartbeat timer
+  	timer.async_wait(boost::bind(&Coordinator::Heartbeat, this,  boost::asio::placeholders::error));
+}
+
+// Initialize this coordinator with a name
+void Coordinator::Stop()
+{
+	// Stop the heartbeat
+	timer.cancel();
+
+	// Create the listener
 	dr.listener(nullptr, dds::core::status::StatusMask::none());
+}
+
+// Update the target metrics
+void Coordinator::Update(double acc, double res)
+{
+	// Update the timeline information
+	timeline.accuracy() = acc;
+	timeline.resolution() = res;
+}
+
+void Coordinator::Heartbeat(const boost::system::error_code& err)
+{
+	// Fail graciously
+	if (err) return;
+
+	// Send out the timeline information
+	dw.write(timeline);
+
+	// Reset the heartbeat timer
+	timer.expires_at(timer.expires_at() + boost::posix_time::seconds(1));
+	timer.async_wait(boost::bind(&Coordinator::Heartbeat, this, boost::asio::placeholders::error));
 }

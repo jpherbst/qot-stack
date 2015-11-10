@@ -45,12 +45,12 @@ namespace qot
 	{
 
 	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &file);
+	public: Timeline(boost::asio::io_service *io, const std::string &name, const std::string &file);
 	public: ~Timeline();
 
 	// Heartbeat timer
-	private: void Update();						// Fetch parameters for timeline
 	private: void MonitorThread();				// Polling thread for params
+	private: void Heartbeat(const boost::system::error_code& /*e*/);
 
 	// Asynchronous service
 	private: boost::asio::io_service *asio;
@@ -58,6 +58,7 @@ namespace qot
 	// Communication with local timeline
 	private: int fd;							// IOCTL link
 	private: bool kill;							// Kill flag
+	private: std::string basename;				// Name of service
 	private: std::thread thread;				// Worker thread for capture
 	private: std::mutex m;						// Mutex
 	private: std::condition_variable cv;		// Conditional variable
