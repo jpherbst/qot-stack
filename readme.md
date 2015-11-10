@@ -112,6 +112,7 @@ Then, add the following to ```/etc/ufw/before.rules``` just before the filter ru
 :POSTROUTING ACCEPT [0:0]
 -A POSTROUTING -s 10.42.0.0/24 -o wlan0 -j MASQUERADE
 COMMIT
+```
 
 Finally, restart the uncomplicated firewall.
 
@@ -141,6 +142,20 @@ Then, restart the server:
 
 ```
 sudo service tftpd-hpa restart
+```
+
+# STEP 5 : Configure NFS  #
+
+Edit the NFS ```/etc/exports``` on the share the ```/export``` directory 
+
+```
+/export 10.42.0.0/24(rw,sync,no_root_squash,no_subtree_check)
+```
+
+Then, restart the server:
+
+```
+sudo service nfs-kernel-server restart
 ```
 
 # Build instructions #
