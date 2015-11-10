@@ -1,5 +1,14 @@
 ## INSTALLATION INSTRUCTIONS ##
 
+This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
+
+1. Controller (x86_64-linux-gnu) - controls the test bed 
+1. Host (x86_64-linux-gnu) - where you do your development
+1. Slave (arm-linux-gnueabihf) - the BeagleBones
+
+Since the synchronization the qot-stack to work effectively, you will need a IEEE 1588v2 compliant network .
+
+
 # Build instructions #
 
 ## Install system dependencies, checkout code and initialize submodules ##
