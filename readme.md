@@ -42,30 +42,44 @@ EVERYTHING IN THIS SECTION MUST BE EXECUTED ON THE CONTROLLER.
 
 ## STEP 1 : Install the root filesystem and kernel  ##
 
-First create two important directories:
+First, create one important directory:
 
 ```
-$> sudo mkdir -p /export/rootfs
-$> sudo mkdir -p /export/tftp
+$> sudo mkdir /export
 ```
 
-Then, download the rootfs and decompress it to the correct location
-
-```
-$> wget -O qotrootfs.tar.bz2  https://tinurl.com/qotrootfs
-$> sudo tar -xjpf qotrootfs.tar.bz2 -C /export/rootfs
-```
-
-Finally, checkout, build and install the kernel:
+Then, download the qot bundle and decompress it to the correct location (as root)
 
 ```
 $> su -
 $> cd /export
-$> git clone https://bitbucket.com/rose-line/bb-kernel.git
-$> cd bb-kernel
-$> ./build_kernel.sh
-$> ./install_netboot.sh
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/qot-bundle.tar.bz2
+$> tar -xjpf qot-bundle.tar.bz2
+$> rm -rf qot-bundle.tar.bz2
 ```
+
+Then, checkout the bb-kernel code.
+
+```
+$> su -
+$> cd /export
+$> git clone https://github.com/RobertCNelson/bb-kernel.git -b 4.1.12-bone-rt-r16
+$> cd bb-kernel
+```
+Then, build the kernel using the QoT configuration. To do this, type the following command. When the Linux menu configuration appears, click the LOAD option at the bottom right and choose ```/export/qot.config``` as the path to the configuration file.
+
+```
+$> ./build_kernel.sh
+```
+
+Once the kernel has configured run the install script.
+
+```
+$> /export/install_netboot.sh
+```
+
+Now, you have a working kernel
+
 
 ## STEP 2 : Configure DHCP  ##
 
@@ -186,9 +200,9 @@ Now, install the bootloader:
 $> su -
 $> sudo mount /dev/sd?1
 $> cd /mnt
-$> wget -O MLO http://tinyurl.com/MLO
-$> wget -O u-boot.img http://tinyurl.com/u-boot.img
-$> wget -O uEnv.txt http://tinyurl.com/uEnv.txt
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads//MLO
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/u-boot.img
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt
 $> cd /
 $> umount /mnt
 ```
@@ -257,7 +271,7 @@ Switch to the OpenSplice directory and pull the third party repo for the C++ bin
 
 ```
 $> pushd thirdparty/opensplice
-$> git checkout -b OSPL_V6_4_OSS_RELEASE OSPL_V6_4_OSS_RELEASE
+$> git checkout -b OSPL_V6_4_OSS_RELEASE v64
 ```
 
 Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
@@ -266,7 +280,7 @@ Configure and build the OpenSplice DDS library. The configure script searches fo
 $> ./configure
 ```
 
-Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```envs-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. It's probably wise to not move them, as the qot-service expects them to be there.
+Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```envs-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. 
 
 ```
 $> . envs-x86_64.linux-dev.sh
@@ -275,7 +289,7 @@ $> make install
 $> popd
 ```
 
-Add c++11 support, by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```install/HDE/x86_64.linux-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will then need to recompile the C++ interface:
+Then, add C++11 support by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```./install/HDE/x86_64.linux-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will now need to recompile the C++ interface:
 
 ```
 $> pushd thirdparty/opensplice/install/HDE/%build%/custom_lib
