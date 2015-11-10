@@ -1,13 +1,147 @@
-## INSTALLATION INSTRUCTIONS ##
+## Overview ##
 
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
 
-1. Controller (x86_64-linux-gnu) - controls the test bed 
-1. Host (x86_64-linux-gnu) - where you do your development
-1. Slave (arm-linux-gnueabihf) - the BeagleBones
+1. Controller (Ubuntu 15.04, x86_64-linux-gnu) - NAT router, DCHP server, NFS server, TFTP server
+1. Host (Ubuntu 15.04, x86_64-linux-gnu) - Where you do your development
+1. Slave (Ubuntu 15.04, arm-linux-gnueabihf) - The actual BeagleBones
 
-Since the synchronization the qot-stack to work effectively, you will need a IEEE 1588v2 compliant network .
+Since the synchronization algoritnm is based on wired PTP, for the qot-stack to work effectively you will need a IEEE 1588v2 compliant network. The slaves have a PTP-compliant Ethernet adapter, and Linux supports hardware timestamping out of the box. Our version of PTP is derived from the linuxptp project.
 
+Robert Nelson's ```bb-kernel``` project provides almost everythign we need to build a suitable kernel for the BeagleBone Black. The idea will be to check this project out on the controller and build a kernel for the slaves. We will export this project alogn with the rootfs over NFS. The reason for this is that we can NFS-mount it at /export on our host environment and cross-compile and install kernel modules and user-space applications very easily.
+
+So, to summarize, you will end up having this on directory (/export) on your central controller:
+
+```
+- /export
+  - bb-kernel : kernel build script
+  - rootfs : location of the root file syste,
+  - tftp : contains kernel image and device trees
+```
+
+And, you will NFS mount this on each host. When you compile the kernel you should use the cross-compiler that is automatically downloaded by the kernel build script. However, when you compile applications you need to use the ```arm-linux-gnueabihf``` compiler in the Ubuntu. Also, it is really important that the version of this GCC compiler matches the version deployed on the slaves (currently 4.9.2). The reason for this is that different compilers have different libc versions, which causes linker errors that are very tricky to solve.
+
+## Controller preparation ##
+
+This section describes how to prepare your central controller. However, in order to do it must make some assumptionsm about your controller. In order to be used as a NAT router, your controller must have at least two interfaces. I'm going to assume the existence of these two adapters, and you will need to modify the instructions if they are different. You can use the network configuration manager in Ubuntu to configure them accordingly.
+
+1. eth0 - connected through a LAN to the slaves (static IP 10.42.0.1 and only local traffic)
+2. wlan0 - connected to the internet (address from)
+
+Install the necessary system applications
+
+```
+sudo apt-get install nfs-kernel-server tftpd-hpa isc-dhcp-server ufw
+```
+
+EVERYTHING IN THIS SECTION MUST BE EXECUTED ON THE CONTROLLER.
+
+# STEP 1 : Install the root filesystem and kernel  #
+
+First create two important directories:
+
+```
+$> sudo mkdir -p /export/rootfs
+$> sudo mkdir -p /export/tftp
+```
+
+Now, download the rootfs and decompress it to the correct location
+
+```
+$> wget -O qotrootfs.tar.bz2  https://tinurl.com/qotrootfs
+$> sudo tar -xjpf qotrootfs.tar.bz2 -C /export/rootfs
+```
+
+Then, checkout the kernel build script
+
+```
+$> su -
+$> cd /export
+$> git clone https://github.com/RobertCNelson/bb-kernel.git -b 4.1.12-bone-rt-r16
+$> sudo tar -xjpf qotrootfs.tar.bz2 -C /export/rootfs
+ctrl+D
+```
+
+We'll actually build the kernel later.
+
+# STEP 2 : Configure DHCP  #
+
+The Ubuntu host needs to act as a DHCP server, assigning IPs to slaves as they boot. I personally prefer to define each of my slaves in the configuration file so that they are assigned a constant network address that is preserved across booting. Edit the ```/etc/default/isc-dhcp-server``` file to add the interface on which you wish to serve DHCP requests:
+
+```
+INTERFACES="eth0"
+```
+
+Now, configure the DHCP server and add an entry for each slave node in ```/etc/dhcp/dhcpd.conf``` . The configuration below assigns the IP ```10.42.0.100``` to the single slave with an Ethernet MAC ```6c:ec:eb:ad:a7:3c```. To add more slaves, just add additional lines to this file.
+
+```
+subnet 10.42.0.0 netmask 255.255.255.0 {
+ range 10.42.0.100 10.42.0.254;
+ option domain-name-servers 8.8.8.8;
+ option domain-name "roseline.local";
+ option routers 10.42.0.1;
+ option broadcast-address 10.42.0.255;
+ default-lease-time 600;
+ max-lease-time 7200;
+}
+
+host alpha { hardware ethernet 6c:ec:eb:ad:a7:3c; fixed-address 10.42.0.100; }
+```
+
+# STEP 3 : Configure NAT #
+
+In the file ```/etc/default/ufw``` change the parameter ```DEFAULT_FORWARD_POLICY```
+
+```
+DEFAULT_FORWARD_POLICY="ACCEPT"
+```
+
+Then, configure ```/etc/ufw/sysctl.conf``` to allow ipv4 forwarding.
+
+```
+net.ipv4.ip_forward=1
+#net/ipv6/conf/default/forwarding=1
+#net/ipv6/conf/all/forwarding=1
+```
+
+Then, add the following to ```/etc/ufw/before.rules``` just before the filter rules (starts with ```*filter```).
+
+```
+# NAT table rules
+*nat
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -s 10.42.0.0/24 -o wlan0 -j MASQUERADE
+COMMIT
+
+Finally, restart the uncomplicated firewall.
+
+```
+$> sudo ufw disable && sudo ufw enable
+```
+
+You'll also need to add a rule that allows all traffic in on ```eth0``` so that the slaves can access services.
+
+
+```
+$> sudo ufw allow in on eth0
+```
+
+# STEP 4 : Configure TFTP  #
+
+Then, edit the ```/etc/default/tftpd-hpa``` file to the following:
+
+```
+TFTP_USERNAME="tftp" 
+TFTP_DIRECTORY="/export/tftp" 
+TFTP_ADDRESS="10.42.0.1:69" 
+TFTP_OPTIONS="-s -c -l"
+```
+
+Then, restart the server:
+
+```
+sudo service tftpd-hpa restart
+```
 
 # Build instructions #
 
