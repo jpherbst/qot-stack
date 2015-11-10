@@ -10,9 +10,9 @@ This project is intended for developers, and so it presumes a certain working kn
 1. Host (Ubuntu 15.04, x86_64-linux-gnu) - Where you do your development
 1. Slave (Ubuntu 15.04, arm-linux-gnueabihf) - The actual BeagleBones
 
-Since the synchronization algoritnm is based on wired PTP, for the qot-stack to work effectively you will need a IEEE 1588v2 compliant network. The slaves have a PTP-compliant Ethernet adapter, and Linux supports hardware timestamping out of the box. Our version of PTP is derived from the linuxptp project.
+Since the synchronization algorithm is based on wired PTP, for the qot-stack to work effectively you will need a IEEE 1588v2 compliant network. The slaves have a PTP-compliant Ethernet adapter, and Linux supports hardware time stamping out of the box. Our version of PTP is derived from the linuxptp project.
 
-Robert Nelson's ```bb-kernel``` project provides almost everythign we need to build a suitable kernel for the BeagleBone Black. The idea will be to check this project out on the controller and build a kernel for the slaves. We will export this project alogn with the rootfs over NFS. The reason for this is that we can NFS-mount it at /export on our host environment and cross-compile and install kernel modules and user-space applications very easily.
+Robert Nelson's ```bb-kernel``` project provides almost everything we need to build a suitable kernel for the BeagleBone Black. The idea will be to check this project out on the controller and build a kernel for the slaves. We will export this project along with the rootfs over NFS. The reason for this is that we can NFS-mount it at /export on our host environment and cross-compile and install kernel modules and user-space applications very easily.
 
 So, to summarize, you will end up having this on directory (/export) on your central controller:
 
@@ -27,7 +27,7 @@ And, you will NFS mount this on each host. When you compile the kernel you shoul
 
 # Controller preparation #
 
-This section describes how to prepare your central controller. However, in order to do it must make some assumptionsm about your controller. In order to be used as a NAT router, your controller must have at least two interfaces. I'm going to assume the existence of these two adapters, and you will need to modify the instructions if they are different. You can use the network configuration manager in Ubuntu to configure them accordingly.
+This section describes how to prepare your central controller. However, in order to do it must make some assumptions about your controller. In order to be used as a NAT router, your controller must have at least two interfaces. I'm going to assume the existence of these two adapters, and you will need to modify the instructions if they are different. You can use the network configuration manager in Ubuntu to configure them accordingly.
 
 1. eth0 - connected through a LAN to the slaves (static IP 10.42.0.1 and only local traffic)
 2. wlan0 - connected to the internet (address from)
@@ -35,7 +35,8 @@ This section describes how to prepare your central controller. However, in order
 Install the necessary system applications
 
 ```
-sudo apt-get install build-essential git cmake nfs-kernel-server tftpd-hpa isc-dhcp-server ufw gawk flex bison perl doxygen u-boot-tools 
+$> sudo apt-get install build-essential git cmake cmake-curses-gui gawk flex bison perl doxygen u-boot-tools 
+$> sudo apt-get install nfs-kernel-server tftpd-hpa isc-dhcp-server ufw
 ```
 
 EVERYTHING IN THIS SECTION MUST BE EXECUTED ON THE CONTROLLER.
@@ -299,7 +300,7 @@ $> popd
 
 You now have a working OpenSplice distribution with C++11 support. This basically provides a fully-distributed publish-subscribe messaging middleware with quality of service support. This mechanism will be used to advertise timelines across the network. The slaves have their own arm versions of Java, ROS and OpenSplice 6.4 in the ```/opt``` directory of the rootfs, and whenever you SSH into a slave the ```/etc/profile``` script initializes all three for you. 
 
-Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs it configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
+Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs is configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
 
 ## STEP 5 : Build and install the kernel module ##
 
@@ -357,7 +358,7 @@ When you installed the kernel module a DTBO file was copied to  ```/export/rootf
 $> capes ROSELINE-QOT
 ```
 
-The output of the ```capes``` command should now be this"
+The output of the ```capes``` command should now be this:
 
 ```
 root@arm:~# capes
@@ -366,7 +367,7 @@ root@arm:~# capes
  2: PF----  -1 
  3: PF----  -1 
  4: P-O-L-   0 Override Board Name,00A0,Override Manuf,ROSELINE-QOT
-````
+```
 
 And the ```lsmod``` command should list two new kernel modules:
 
