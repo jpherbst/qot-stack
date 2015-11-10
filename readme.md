@@ -209,7 +209,7 @@ Assuming that you have successfully built and net-booted the kernel, you can now
 
 EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST
 
-## STEP 1 : Se ##
+## STEP 1 : Setup the /export share ##
 
 Recall that we NFS-exported the ```/export``` directory from the controller. Create the same directory on your host.
 
@@ -225,8 +225,7 @@ Now, we will add the following line to the end of the host's ```/etc/fstab``` fi
 
 Reboot the host and you should see the rootfs, tftp and bb-kernel directories in the ```/export``` directory.
 
-
-## Check out the QoT stack code ##
+## STEP 2 : Check out the QoT stack code ##
 
 Start by checking out the qot-stack code
 
@@ -242,7 +241,7 @@ $> git submodule init
 $> git submodule update
 ```
 
-## Update the device tree compiler ##
+## STEP 3 : Update the device tree compiler ##
 
 Then, install an overlay for the device tree compiler. This compiles a new version of ```dtc``` which you can use to build overlays for the BeagleBone Black.
 
@@ -252,7 +251,7 @@ $> ./dtc-overlay.sh
 $> popd
 ```
 
-## Build OpenSplice ##
+## STEP 4 : Build OpenSplice ##
 
 Switch to the OpenSplice directory and pull the third party repo for the C++ bindings
 
@@ -288,7 +287,7 @@ You now have a working OpenSplice distribution with C++11 support. This basicall
 
 Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs it configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
 
-## Build and install the kernel module ##
+## STEP 5 : Build and install the kernel module ##
 
 The kernel modules are built and installed in the following way:
 
@@ -338,7 +337,7 @@ root@arm:~# capes
  3: PF----  -1 
 ````
 
-Now, add the roseline-qot cape.
+When you installed the kernel module a DTBO file was copied to  ```/export/rootfs/lib/firmware```. This is a device tree overlay file that tells the BeagleBone how to multiplex its I/O pins, and which kernel module to load after it has done so. To apply the overlay use the ```capes```command.
 
 ```
 $> capes ROSELINE-QOT
