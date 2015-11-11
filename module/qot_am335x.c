@@ -45,7 +45,7 @@ IMPORTANT : To use this driver you will need to use a special device tree overla
 #include <linux/rbtree.h>
 
 // DMTimer Code specific to the AM335x
-#include "../../thirdparty/Kronux/arch/arm/plat-omap/include/plat/dmtimer.h"
+#include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
 
 // QoT kernel API
 #include "qot.h"
