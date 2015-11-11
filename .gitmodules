@@ -1,16 +1,10 @@
 [submodule "thirdparty/opensplice"]
 	path = thirdparty/opensplice
-	url = https://github.com/asymingt/opensplice.git
-	ignore = all
-[submodule "thirdparty/Kronux"]
-	path = thirdparty/Kronux
-	url = https://github.com/asymingt/Kronux.git
-	ignore = all
-[submodule "thirdparty/bb-kernel"]
-	path = thirdparty/bb-kernel
-	url = https://github.com/asymingt/bb-kernel.git
+	url = https://github.com/PrismTech/opensplice.git
+	branch = OSPL_V6_4_OSS_RELEASE
 	ignore = all
 [submodule "thirdparty/bb.org-overlays"]
 	path = thirdparty/bb.org-overlays
-	url = https://github.com/asymingt/bb.org-overlays.git
+	url = https://github.com/RobertCNelson/bb.org-overlays.git
+	branch = master
 	ignore = all

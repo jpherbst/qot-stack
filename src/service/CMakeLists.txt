@@ -34,6 +34,7 @@ INCLUDE_DIRECTORIES(
 
 # Location of boost libraries
 LINK_DIRECTORIES(
+	"${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf"
 	"${Boost_LIBRARY_DIRS}"
 )
 
@@ -97,6 +98,7 @@ ADD_LIBRARY(ptp SHARED
 	linuxptp/servo.c
 	linuxptp/sk.c
 	linuxptp/stats.c
+	linuxptp/sysoff.c
 	linuxptp/tlv.c
 	linuxptp/transport.c
 	linuxptp/udp.c
@@ -105,9 +107,19 @@ ADD_LIBRARY(ptp SHARED
 	linuxptp/util.c
 	linuxptp/version.c
 )
-TARGET_LINK_LIBRARIES(ptp ${MATH_LIBRARIES})
+TARGET_LINK_LIBRARIES(ptp m)
+
+# ptp4l app
+ADD_EXECUTABLE(ptp4l 
+	linuxptp/ptp4l.c
+)
+TARGET_LINK_LIBRARIES(ptp4l ptp)
+
+#########################################################################################################
 
 ADD_EXECUTABLE(qotdaemon 
+	Synchronization.hpp
+	Synchronization.cpp
 	Coordinator.hpp
 	Coordinator.cpp
 	Timeline.cpp
