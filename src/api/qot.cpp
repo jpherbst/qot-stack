@@ -47,7 +47,7 @@ extern "C"
 	#include <sys/poll.h>
 
 	// Our module communication protocol
-	#include "../module/qot.h"
+	#include "../../module/qot.h"
 }
 
 #define DEBUG false

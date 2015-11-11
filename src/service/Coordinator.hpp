@@ -36,24 +36,25 @@
  // Timeline Message
 #include <msg/QoT_DCPS.hpp>
 
+// Synchronization engine
+#include "Synchronization.hpp"
+
 std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts);
 
 namespace qot
 {
-	class TimelineListener : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineType>
+	// Coordinator functionality
+	class Coordinator : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineType>
 	{
-		public: virtual void on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr);
-		public: virtual void  on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
-			const dds::core::status::LivelinessChangedStatus& status);
-	};
-
-	class Coordinator
-	{
-
 		// Constructor and destructor
 		public: Coordinator(boost::asio::io_service *io, const std::string &name);
 		public: ~Coordinator();
 
+		// Required by dds::sub::NoOpDataReaderListene
+		public: virtual void on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr);
+		public: virtual void  on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
+			const dds::core::status::LivelinessChangedStatus& status);
+	
 		// Initialize this coordinator with a name
 		public: void Start(const char* uuid, double acc, double res);
 
@@ -65,10 +66,14 @@ namespace qot
 
 		// Heartbeat signal for this coordinator
 		private: void Heartbeat(const boost::system::error_code& err);
+		private: void Timeout(const boost::system::error_code& err);
 
 		// Asynchronous service
 		private: boost::asio::io_service *asio;
 		private: boost::asio::deadline_timer timer;
+
+		// Coordinator state
+		private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines
 		private: dds::domain::DomainParticipant dp;
@@ -77,7 +82,6 @@ namespace qot
 		private: dds::pub::DataWriter<qot_msgs::TimelineType> dw;
 		private: dds::sub::Subscriber sub;
 		private: dds::sub::DataReader<qot_msgs::TimelineType> dr;
-		private: TimelineListener listener;
 		private: qot_msgs::TimelineType timeline;
 	};
 }
