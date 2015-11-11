@@ -60,6 +60,7 @@ extern "C"
 	#include "linuxptp/version.h"
 }
 
+/*
 struct config settings = {
 		
 	.interfaces = STAILQ_HEAD_INITIALIZER(settings.interfaces),
@@ -112,7 +113,6 @@ struct config settings = {
 		.path_trace_enabled = 0,
 		.follow_up_info = 0,
 		.freq_est_interval = 1,
-		/* Default to very a large neighborPropDelay threshold */
 		.neighborPropDelayThresh = 20000000,
 		.min_neighbor_prop_delay = -20000000,
 		.tx_timestamp_offset = 0,
@@ -154,6 +154,7 @@ struct config settings = {
 
 	.cfg_ignore = 0,
 };
+*/
 
 namespace qot
 {
