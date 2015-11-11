@@ -29,10 +29,12 @@ module qot_msgs
 {
 	struct TimelineType
 	{
-		string name;	
-		string uuid;
-		double resolution;
-		double accuracy;
+		string uuid;		// Name of the timeline
+		string name;		// Node's name
+		double resolution;	// Node's requested resolution
+		double accuracy;	// Node's requested accuracy
+		string master;		// Node's perception of master (handovers)
+		short domain;		// PTP Domain (only set by master)
 	};
 #pragma keylist TimelineType name
 };

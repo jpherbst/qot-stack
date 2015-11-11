@@ -31,7 +31,7 @@
 /* Include our QOT API */
 extern "C"
 {
-	#include "../module/qot.h"
+	#include "../../module/qot.h"
 }
 
 using namespace qot;
