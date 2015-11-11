@@ -1,8 +1,8 @@
+# Overview #
+
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
 
 ![qot-setup.png](https://bitbucket.org/repo/5Eg8za/images/2069891140-qot-setup.png)
-
-# Overview #
 
 There are three key devices in the system:
 
@@ -25,6 +25,10 @@ So, to summarize, you will end up having this on directory (/export) on your cen
 
 And, you will NFS mount this on each host. When you compile the kernel you should use the cross-compiler that is automatically downloaded by the kernel build script. However, when you compile applications you need to use the ```arm-linux-gnueabihf``` compiler in the Ubuntu. Also, it is really important that the version of this GCC compiler matches the version deployed on the slaves (currently 4.9.2). The reason for this is that different compilers have different libc versions, which causes linker errors that are very tricky to solve.
 
+# Table of contents #
+
+[TOC]
+  
 # Controller preparation #
 
 This section describes how to prepare your central controller. However, in order to do it must make some assumptions about your controller. In order to be used as a NAT router, your controller must have at least two interfaces. I'm going to assume the existence of these two adapters, and you will need to modify the instructions if they are different. You can use the network configuration manager in Ubuntu to configure them accordingly.
