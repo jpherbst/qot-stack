@@ -1,14 +1,14 @@
-# Table of contents #
+This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
 
-[TOC]
+![qot-setup.png](https://bitbucket.org/repo/5Eg8za/images/2069891140-qot-setup.png)
 
 # Overview #
 
-This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
+There are three key devices in the system:
 
 1. Controller (Ubuntu 15.04, x86_64-linux-gnu) - NAT router, DCHP server, NFS server, TFTP server
 1. Host (Ubuntu 15.04, x86_64-linux-gnu) - Where you do your development
-1. Slave (Ubuntu 15.04, arm-linux-gnueabihf) - The actual BeagleBones
+1. Slaves (Ubuntu 15.04, arm-linux-gnueabihf) - The actual BeagleBones
 
 Since the synchronization algorithm is based on wired PTP, for the qot-stack to work effectively you will need a IEEE 1588v2 compliant network. The slaves have a PTP-compliant Ethernet adapter, and Linux supports hardware time stamping out of the box. Our version of PTP is derived from the linuxptp project.
 
