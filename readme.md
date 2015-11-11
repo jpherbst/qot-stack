@@ -218,6 +218,18 @@ $> tail -f /var/log/syslog
 
 If you can't find anything useful there, use a FTDI cable to inspect the u-boot process of the slave.
 
+At this point you should be able to SSH into the slave device as root. However, he root password for this account is randomized by default. So, in order to SSH into the device you will need to add your RSA public key to ```/export/rootfs/root/.ssh/authorized_keys```. To find your public key type:
+
+```
+$> cat  ~/.ssh/id_rsa.pub```
+```
+
+If you get a 'No such file or directory found' error, then you need to first create your key pair with:
+
+```
+$> ssh-keygen -t rsa
+```
+
 # Build instructions #
 
 Assuming that you have successfully built and net-booted the kernel, you can now setup your host environment to cross-compile kernel modules and  applications for the BeagleBone.
