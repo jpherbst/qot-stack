@@ -77,7 +77,14 @@ Then, build the kernel using the QoT configuration. To do this, type the followi
 $> ./build_kernel.sh
 ```
 
-Once the kernel has configured run the install script.
+Once the kernel has configured, add the following two lines to the bottom of ```/export/bb-kernel/system.sh``` in order to set variables for your TFTP and root file system (so that the install script knows where to put them).
+
+```
+ROOTFS=/export/rootfs
+TFTPFS=/export/tftp
+```
+
+Then, run the install script.
 
 ```
 $> /export/install_netboot.sh
@@ -108,6 +115,12 @@ subnet 10.42.0.0 netmask 255.255.255.0 {
 }
 
 host alpha { hardware ethernet 6c:ec:eb:ad:a7:3c; fixed-address 10.42.0.100; }
+```
+
+Then, restart the server:
+
+```
+$> sudo service isc-dhcp-server restart
 ```
 
 ## STEP 3 : Configure NAT ##
