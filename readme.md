@@ -163,7 +163,7 @@ TFTP_OPTIONS="-s -c -l"
 Then, restart the server:
 
 ```
-sudo service tftpd-hpa restart
+$> sudo service tftpd-hpa restart
 ```
 
 ## STEP 5 : Configure NFS  ##
