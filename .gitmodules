@@ -2,14 +2,6 @@
 	path = thirdparty/opensplice
 	url = https://github.com/asymingt/opensplice.git
 	ignore = all
-[submodule "thirdparty/Kronux"]
-	path = thirdparty/Kronux
-	url = https://github.com/asymingt/Kronux.git
-	ignore = all
-[submodule "thirdparty/bb-kernel"]
-	path = thirdparty/bb-kernel
-	url = https://github.com/asymingt/bb-kernel.git
-	ignore = all
 [submodule "thirdparty/bb.org-overlays"]
 	path = thirdparty/bb.org-overlays
 	url = https://github.com/asymingt/bb.org-overlays.git
