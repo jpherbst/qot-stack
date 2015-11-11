@@ -250,7 +250,7 @@ static inline uint8_t management_action(struct ptp_message *m)
  */
 static inline Boolean field_is_set(struct ptp_message *m, int index, Octet bit)
 {
-	return m->header.flagField[index] & bit ? TRUE : FALSE;
+	return m->header.flagField[index] & bit ? 1 : 0;
 }
 
 /**
