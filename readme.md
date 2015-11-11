@@ -403,6 +403,4 @@ $> helloworld
 
 Run this command on multiple nodes and the time should be synchronized transparently in the background.
 
-## Development ##
-
 Take a look at the ```src/examples``` for an idea of how to use the stack.
