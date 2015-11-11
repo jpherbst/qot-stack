@@ -163,7 +163,7 @@ TFTP_OPTIONS="-s -c -l"
 Then, restart the server:
 
 ```
-sudo service tftpd-hpa restart
+$> sudo service tftpd-hpa restart
 ```
 
 ## STEP 5 : Configure NFS  ##
@@ -203,9 +203,9 @@ Now, install the bootloader:
 
 ```
 $> su -
-$> sudo mount /dev/sd?1
+$> sudo mount /dev/sd?1 /mnt
 $> cd /mnt
-$> wget https://bitbucket.org/rose-line/qot-stack/downloads//MLO
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/MLO
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/u-boot.img
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt
 $> cd /
@@ -402,7 +402,5 @@ $> helloworld
 ```
 
 Run this command on multiple nodes and the time should be synchronized transparently in the background.
-
-## Development ##
 
 Take a look at the ```src/examples``` for an idea of how to use the stack.
