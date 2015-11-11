@@ -203,7 +203,7 @@ Now, install the bootloader:
 
 ```
 $> su -
-$> sudo mount /dev/sd?1
+$> sudo mount /dev/sd?1 /mnt
 $> cd /mnt
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads//MLO
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/u-boot.img
