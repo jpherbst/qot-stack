@@ -71,8 +71,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					 		//BOOST_LOG_TRIVIAL(info) << "Peer chosen"; 
 					 		handover = true;
 					 	}
-					 	else
-					 		//BOOST_LOG_TRIVIAL(info) << "Self chosen"; 
+					 	//else BOOST_LOG_TRIVIAL(info) << "Self chosen"; 
 					}
 
 					// But I shouldn't be, because this peer needs better accuracy...
