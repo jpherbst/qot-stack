@@ -416,4 +416,15 @@ $> helloworld
 
 Run this command on multiple nodes and the time should be synchronized transparently in the background.
 
+# Development #
+
 Take a look at the ```src/examples``` for an idea of how to use the stack.
+
+Occasionally you may wish to compile code from a remote location, without having to copy the entire ```/export``` filesystem onto your laptop. Since the NFS share does not go beyond the LAN, we use an SSH file system. You must first put your laptop's RSA public key in the ```/root/.ssh/authorized_keys``` file on the central controller. Then, you can mount the central controller's  ```/export``` file system locally on your laptop, where it can be used as a toolchain.
+
+```
+sudo mkdir /export
+sudo sshfs -o allow_other,default_permissions -C -oIdentityFile=/home/%user%/.ssh/id_rsa -p 45000 root@128.97.92.37:/export /export
+```
+
+In the example above you will need to replace ```%user%``` with the username on your laptop, which allows it to use the correct RSA public key for authentication user sudo. This command also presumes that there is a NAT router forwarding incoming requests on ```128.97.92.37:45000``` to your 10.42.0.1:22 on your controller.
