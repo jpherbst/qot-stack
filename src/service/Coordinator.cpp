@@ -84,8 +84,8 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						// Handover the master ownership to the peer
 						timeline.master() = s->data().name();
 
-						// Become a slave
-						sync.Slave();
+						// (Re)start the synchronization service as master
+						sync.Start(phc, timeline.domain(), false, timeline.accuracy());
 					}
 				}
 
@@ -99,8 +99,8 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					timeline.domain() = s->data().domain();
 					timeline.master() = timeline.name();
 
-					// Become the master
-					sync.Master();
+					// (Re)start the synchronization service as master
+					sync.Start(phc, timeline.domain(), true, timeline.accuracy());
 				}
 
 				// If I am a slave and this node thinks that it is the master
@@ -109,12 +109,21 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
 						<< s->data().name() << ":" << s->data().domain();
 
-					// Make sure that we are on the right domain
-					timeline.domain() = s->data().domain();
-					timeline.master() = s->data().name();
+					// If the master's domain is different to what I'd expect
+					if (s->data().domain() != timeline.domain())
+					{
+						BOOST_LOG_TRIVIAL(info) << "The domain does not match what I think it is "  
+							<< " and so I am restarting the sync service";
 
-					// Update the domain in case it has changed
-					sync.Domain(timeline.domain());
+						// Set the new domain
+						timeline.domain() = s->data().domain();
+
+						// (Re)start the synchronization service
+						sync.Start(phc, timeline.domain(), false, timeline.accuracy());
+					}
+
+					// Make sure that we are on the right domain
+					timeline.master() = s->data().name();
 				}
 			}
 		}
@@ -135,8 +144,8 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 					BOOST_LOG_TRIVIAL(info) << "Switching to " << timeline.domain();
 
-					// Switch PTP domain
-					sync.Domain(timeline.domain());
+					// (Re)start the synchronization service as master
+					sync.Start(phc, timeline.domain(), true, timeline.accuracy());
 				}
 			}
 		}
@@ -149,9 +158,9 @@ void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::Timeline
 	// Not sure what to do with this...
 }
 
-Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
+Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface)
 	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic), 
-		timer(*io), sync(io)
+		timer(*io), sync(io, iface)
 {
 	timeline.name() = (std::string) name;	// Our name
 }
@@ -198,8 +207,9 @@ void Coordinator::Update(double acc, double res)
 	timeline.accuracy() = acc;
 	timeline.resolution() = res;
 
-	// Change the accuracy in the sync algorithm
-	sync.Accuracy(acc);
+	// If I am a slave then my accuracy may change the sync rate
+	if (timeline.master().compare(timeline.name()))
+		sync.Start(phc, timeline.domain(), true, timeline.accuracy());
 }
 
 void Coordinator::Heartbeat(const boost::system::error_code& err)
@@ -227,31 +237,19 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	// No master advertised themselve before the timeout period
 	if (timeline.master().compare("") == 0)
 	{
-		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am master";
+		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am starting as master";
 
 		// Pick a new random domain in the interval [0, 127]
 		timeline.domain() = rand() % 128;
 		timeline.master() = timeline.name();
-
-		// Switch PTP domain
-		sync.Master();
 	}
 	else
 	{
-		BOOST_LOG_TRIVIAL(info) << "I heard a peer, so I am starting as a slave.";
-
-		// Switch PTP domain
-		sync.Slave();
+		BOOST_LOG_TRIVIAL(info) << "I heard another master, so I am starting as a slave.";
 	}
-
-	// Set the sync accuracy
-	sync.Accuracy(timeline.accuracy());
-
-	// Set the sync accuracy
-	sync.Domain(timeline.domain());
-
-	// Switch PTP domain
-	sync.Start(phc);
+	
+	// (Re)start the synchronization service as master
+	sync.Start(phc, timeline.domain(), true, timeline.accuracy());
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));

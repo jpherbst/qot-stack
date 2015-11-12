@@ -33,8 +33,8 @@
 
 using namespace qot;
 
-Synchronization::Synchronization(boost::asio::io_service *io)
-	: asio(io)
+Synchronization::Synchronization(boost::asio::io_service *io, const std::string &iface)
+	: asio(io), baseiface(iface)
 {
 	// Default settings...
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
@@ -114,48 +114,32 @@ Synchronization::~Synchronization()
 	this->Stop();
 }
 
-void Synchronization::Start(int phc_index)
-{
-	BOOST_LOG_TRIVIAL(info) << "Starting synchronization with PHC index " << phc_index;
+void Synchronization::Start(int phc_index, short domain, bool master, uint64_t accuracy)
+{	
+	// First stop any sync that is currently underway
+	this->Stop();
+
+	// Restart sync
+	BOOST_LOG_TRIVIAL(info) << "Starting synchronization as " << (master ? "master" : "slave") 
+		<< " on domain " << domain << " with PHC index " << phc_index << " and accuracy " << accuracy;
+	cfg_settings.dds.dds.domainNumber = domain;	
+	cfg_settings.pod.logSyncInterval = (int) floor(log2(accuracy/20.0));
+	if (master)
+		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	else
+		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
-	threadL1 = boost::thread(boost::bind(&Synchronization::L1SyncThread, this, phc_index));
-	threadL2 = boost::thread(boost::bind(&Synchronization::L2SyncThread, this, phc_index));
+	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index));
 }
 
 void Synchronization::Stop()
 {
 	BOOST_LOG_TRIVIAL(info) << "Stopping synchronization ";
 	kill = true;
-	threadL1.join();
-	threadL2.join();
+	thread.join();
 }
 
-void Synchronization::Domain(short domain)
-{
-	BOOST_LOG_TRIVIAL(info) << "Switching to domain " << domain;
-	cfg_settings.dds.dds.domainNumber = domain;
-}
-
-void Synchronization::Accuracy(uint64_t acc)
-{
-	int l2f = (int) floor(log2(acc/20.0));
-	BOOST_LOG_TRIVIAL(info) << "Accuracy request of " << acc << " ns requires log2(hz) of " << l2f;
-	cfg_settings.pod.logSyncInterval = l2f;
-}
-
-void Synchronization::Master()
-{
-	BOOST_LOG_TRIVIAL(info) << "Switching to master";
-	cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-}
-
-void Synchronization::Slave()
-{
-	BOOST_LOG_TRIVIAL(info) << "Switching to slave";
-	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
-}
-
-int Synchronization::L1SyncThread(int phc_index)
+int Synchronization::SyncThread(int phc_index)
 {
 	BOOST_LOG_TRIVIAL(info) << "L1 listen thread started ";
 	char *config = NULL;
@@ -176,8 +160,9 @@ int Synchronization::L1SyncThread(int phc_index)
 		cfg_settings.pod.flt_interval_pertype[i].val = 4;
 	}
 
-	// Add the single eth0 interface 
-	char ifname[] = "eth0";
+	// Add the single eth0 interface
+	char ifname[16];
+	strncpy(ifname, baseiface.c_str(), 16);
 	config_create_interface(ifname, &cfg_settings);
 
 	// Cannot be a slave and a grand master
@@ -282,9 +267,4 @@ int Synchronization::L1SyncThread(int phc_index)
 	// Clean up
 	clock_destroy(clock);
 	config_destroy(&cfg_settings);
-}
-
-int Synchronization::L2SyncThread(int phc_index)
-{
-	return 0;
 }

@@ -49,6 +49,20 @@ extern "C"
 // Convenience
 using namespace qot;
 
+// Generate a random tring
+std::string RandomString(uint32_t length)
+{
+    auto randchar = []() -> char
+    {
+        const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const size_t max_index = (sizeof(charset) - 1);
+        return charset[ rand() % max_index ];
+    };
+    std::string str(length,0);
+    std::generate_n( str.begin(), length, randchar );
+    return str;
+}
+
 // Main entry point of application
 int main(int argc, char **argv)
 {
@@ -57,10 +71,10 @@ int main(int argc, char **argv)
 	desc.add_options()
 		("help,h",  	"produce help message")
 		("verbose,v",  	"print verbose debug messages")
-		("conf,c", 		boost::program_options::value<std::string>()
-			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
+		("iface,i",  	boost::program_options::value<std::string>()
+			->default_value("eth0"), "PTP-compliant interface") 
 		("name,n", 		boost::program_options::value<std::string>()
-			->default_value("default"), "name of this node") 
+			->default_value(RandomString(32)), "name of this node") 
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(
@@ -95,7 +109,7 @@ int main(int argc, char **argv)
 	boost::asio::io_service::work work(io);
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	qot::Notifier notifier(&io, vm["name"].as<std::string>());
+	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>());
 
 	// Run the io service
 	io.run();

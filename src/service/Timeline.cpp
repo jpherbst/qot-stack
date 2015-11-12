@@ -32,8 +32,8 @@
 
 using namespace qot;
 
-Timeline::Timeline(boost::asio::io_service *io, const std::string &name, int id)
-	: 	coordinator(io, name), kill(false)
+Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const std::string &iface, int id)
+	: 	coordinator(io, name, iface), kill(false)
 {
 	// First, save the id to the message data structure. Having this present
 	// in the data structure will cause us to bind without affecting metrics

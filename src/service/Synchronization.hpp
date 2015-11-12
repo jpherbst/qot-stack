@@ -68,25 +68,20 @@ namespace qot
 	{
 
 	// Constructor and destructor
-	public: Synchronization(boost::asio::io_service *io);
+	public: Synchronization(boost::asio::io_service *io, const std::string &iface);
 	public: ~Synchronization();
 
 	// Control dunctions
-	public: void Start(int phc_index);			// Start syncrhonizing
+	public: void Start(int phc_index, short domain, bool master, uint64_t accuracy);
 	public: void Stop();						// Stop
-	public: void Domain(short domain);			// Set domain
-	public: void Accuracy(uint64_t acc);		// Set accuracy (slave)
-	public: void Master();						// Set master
-	public: void Slave();						// Set slave
 
 	// This thread performs rhe actual syncrhonization
-	private: int L1SyncThread(int phc_index);
-	private: int L2SyncThread(int phc_index);
+	private: int SyncThread(int phc_index);
 
 	// Boost ASIO
 	private: boost::asio::io_service *asio;
-	private: boost::thread threadL1;
-	private: boost::thread threadL2;
+	private: boost::thread thread;
+	private: std::string baseiface;
 	private: bool kill;
 
 	// PTP settings

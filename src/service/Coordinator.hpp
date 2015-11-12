@@ -47,7 +47,7 @@ namespace qot
 	class Coordinator : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineType>
 	{
 		// Constructor and destructor
-		public: Coordinator(boost::asio::io_service *io, const std::string &name);
+		public: Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface);
 		public: ~Coordinator();
 
 		// Required by dds::sub::NoOpDataReaderListene

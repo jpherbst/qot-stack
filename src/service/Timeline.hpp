@@ -51,7 +51,8 @@ namespace qot
 	class Timeline
 	{
 	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &name, int id);
+	public: Timeline(boost::asio::io_service *io, const std::string &name, 
+						const std::string &iface, int id);
 	public: ~Timeline();
 
 	// Heartbeat timer
