@@ -80,11 +80,13 @@ namespace qot
 	public: void Slave();						// Set slave
 
 	// This thread performs rhe actual syncrhonization
-	private: int SyncThread(int phc_index);
+	private: int L1SyncThread(int phc_index);
+	private: int L2SyncThread(int phc_index);
 
 	// Boost ASIO
 	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
+	private: boost::thread threadL1;
+	private: boost::thread threadL2;
 	private: bool kill;
 
 	// PTP settings

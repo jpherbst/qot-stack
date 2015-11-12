@@ -2506,12 +2506,16 @@ struct port *port_open(int phc_index,
 		if (interface->boundary_clock_jbod) {
 			pr_warning("port %d: just a bunch of devices", number);
 			p->phc_index = interface->ts_info.phc_index;
-		} else {
+		} 
+		/*
+		else
+		{
 			pr_err("port %d: PHC device mismatch", number);
 			pr_err("port %d: /dev/ptp%d requested, ptp%d attached",
 			       number, phc_index, interface->ts_info.phc_index);
 			goto err_port;
 		}
+		*/
 	}
 
 	p->pod = interface->pod;

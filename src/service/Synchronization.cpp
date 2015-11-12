@@ -118,13 +118,15 @@ void Synchronization::Start(int phc_index)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting synchronization with PHC index " << phc_index;
 	kill = false;
-	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index));
+	threadL1 = boost::thread(boost::bind(&Synchronization::L1SyncThread, this, phc_index));
+	threadL2 = boost::thread(boost::bind(&Synchronization::L2SyncThread, this, phc_index));
 }
 
 void Synchronization::Stop()
 {
 	kill = true;
-	thread.join();
+	threadL1.join();
+	threadL2.join();
 }
 
 void Synchronization::Domain(short domain)
@@ -152,7 +154,7 @@ void Synchronization::Slave()
 	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 }
 
-int Synchronization::SyncThread(int phc_index)
+int Synchronization::L1SyncThread(int phc_index)
 {
 	char *config = NULL;
 	int c, i;
@@ -262,7 +264,7 @@ int Synchronization::SyncThread(int phc_index)
 	}
 
 	// Create the clock
-	phc_index = 0; // For now ...
+	//phc_index = 0; // For now ...
 	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, *timestamping, 
 		&cfg_settings.dds, cfg_settings.clock_servo);
 	if (!clock)
@@ -278,4 +280,9 @@ int Synchronization::SyncThread(int phc_index)
 	// Clean up
 	clock_destroy(clock);
 	config_destroy(&cfg_settings);
+}
+
+int Synchronization::L2SyncThread(int phc_index)
+{
+	return 0;
 }
