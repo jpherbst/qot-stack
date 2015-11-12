@@ -72,12 +72,12 @@ namespace qot
 	public: ~Synchronization();
 
 	// Control dunctions
-	public: void Start(int phc_index, short domain, uint64_t acc);	// Start syncrhonizing
-	public: void Stop();											// Stop
-	public: void Domain(short domain);								// Set domain
-	public: void Accuracy(uint64_t acc);							// Set accuracy (slave)
-	public: void Master();											// Set master
-	public: void Slave();											// Set slave
+	public: void Start(int phc_index);			// Start syncrhonizing
+	public: void Stop();						// Stop
+	public: void Domain(short domain);			// Set domain
+	public: void Accuracy(uint64_t acc);		// Set accuracy (slave)
+	public: void Master();						// Set master
+	public: void Slave();						// Set slave
 
 	// This thread performs rhe actual syncrhonization
 	private: int SyncThread(int phc_index);

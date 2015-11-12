@@ -50,41 +50,45 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 	for (auto& s : dr.read())
 	{
 		// If this is the timeline of interest
-		if (s->data().uuid().compare(this->timeline.uuid()) == 0)
+		if (s->data().uuid().compare(timeline.uuid()) == 0)
 		{
 			// This message is from somebody else
-			if (s->data().name().compare(this->timeline.name()) != 0)
+			if (s->data().name().compare(timeline.name()) != 0)
 			{
 				// If I currently think that I am the master
-				if (this->timeline.master().compare(this->timeline.name())==0)
+				if (timeline.master().compare(timeline.name())==0)
 				{
 					// But I shouldn't be, because this peer needs better accuracy...
-					if (s->data().accuracy() < this->timeline.accuracy());
+					if (s->data().accuracy() < timeline.accuracy());
 					{
-						// Handover the master ownership to the node
-						this->timeline.master() = s->data().name();
+						// Handover the master ownership to the peer
+						timeline.master() = s->data().name();
 
 						// Become a slave
-						// this->sync.Slave();
+						sync.Slave();
 					}
 				}
 
 				// If I am a slave, but this node thinks I should be the master
-				else if (s->data().master().compare(this->timeline.name()) == 0)
+				else if (s->data().master().compare(timeline.name()) == 0)
 				{
 					// Make myself the master and copy over the domain
-					this->timeline.domain() = s->data().domain();
-					this->timeline.master() = this->timeline.name();
+					timeline.domain() = s->data().domain();
+					timeline.master() = timeline.name();
 
 					// Become the master
-					// this->sync.Master();
+					sync.Master();
 				}
 
 				// If I am a slave and this node thinks that it is the master
 				else if (s->data().name().compare(s->data().master()) == 0)
 				{
 					// Make sure that we are on the right domain
-					// this->sync.Start(s->data().domain());
+					timeline.domain() = s->data().domain();
+					timeline.master() = s->data().name();
+
+					// Update the domain in case it has changed
+					sync.Domain(timeline.domain());
 				}
 			}
 		}
@@ -93,16 +97,16 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 		else if (s->data().name().compare(s->data().master()) == 0)
 		{
 			// If I currently think that I am the master
-			if (this->timeline.master().compare(this->timeline.name())==0)
+			if (timeline.master().compare(timeline.name())==0)
 			{
 				// And our domains collide (this is a bad thing)
-				if (s->data().domain() == this->timeline.domain())
+				if (s->data().domain() == timeline.domain())
 				{
-					// Pick a new random domain in the interval [0, 128]
-					this->timeline.domain() = rand() % 128;
+					// Pick a new random domain in the interval [0, 127]
+					timeline.domain() = rand() % 128;
 
 					// Switch PTP domain
-					// this->sync.Start(this->timeline.domain());
+					sync.Domain(timeline.domain());
 				}
 			}
 		}
@@ -112,7 +116,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
 	const dds::core::status::LivelinessChangedStatus& status) 
 {
-	// Not sure what to fo with this...
+	// Not sure what to do with this...
 }
 
 Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
@@ -127,6 +131,9 @@ Coordinator::~Coordinator() {}
 // Initialize this coordinator with a name
 void Coordinator::Start(int id, const char* uuid, double acc, double res)
 {
+	// Set the phc index
+	phc = id;
+
 	// Set the timeline information
 	timeline.uuid() = (std::string) uuid;	
 	timeline.accuracy() = acc;				// Our accuracy
@@ -147,6 +154,9 @@ void Coordinator::Stop()
 	// Stop the timeout and heartbeat timers
 	timer.cancel();
 
+	// Stop syncrhonizing
+	sync.Stop();
+
 	// Create the listener
 	dr.listener(nullptr, dds::core::status::StatusMask::none());
 }
@@ -157,6 +167,9 @@ void Coordinator::Update(double acc, double res)
 	// Update the timeline information
 	timeline.accuracy() = acc;
 	timeline.resolution() = res;
+
+	// Change the accuracy in the sync algorithm
+	sync.Accuracy(acc);
 }
 
 void Coordinator::Heartbeat(const boost::system::error_code& err)
@@ -178,17 +191,28 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	if (err) return;
 
 	// No master advertised themselve before the timeout period
-	if (this->timeline.master().compare("") == 0)
+	if (timeline.master().compare("") == 0)
 	{
-		// Pick a new random domain in the interval [0, 128]
-		this->timeline.domain() = rand() % 128;
+		// Pick a new random domain in the interval [0, 127]
+		timeline.domain() = rand() % 128;
 
 		// Switch PTP domain
-		//this->sync.Start(this->timeline.domain());
-
-		// Switch PTP domain
-		//this->sync.Master();
+		sync.Master();
 	}
+	else
+	{
+		// Set the sync accuracy
+		sync.Accuracy(timeline.accuracy());
+
+		// Switch PTP domain
+		sync.Slave();
+	}
+
+	// Set the sync accuracy
+	sync.Domain(timeline.domain());
+
+	// Switch PTP domain
+	sync.Start(phc);
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));

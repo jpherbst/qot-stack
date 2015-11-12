@@ -73,6 +73,7 @@ namespace qot
 		private: boost::asio::deadline_timer timer;
 
 		// Coordinator state
+		private: int phc;
 		private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines

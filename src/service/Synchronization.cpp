@@ -114,11 +114,9 @@ Synchronization::~Synchronization()
 	this->Stop();
 }
 
-void Synchronization::Start(int phc_index, short domain, uint64_t acc)
+void Synchronization::Start(int phc_index)
 {
-	BOOST_LOG_TRIVIAL(info) << "Starting synchronization";
-	this->Domain(domain);
-	this->Accuracy(acc);
+	BOOST_LOG_TRIVIAL(info) << "Starting synchronization with PHC index " << phc_index;
 	kill = false;
 	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index));
 }
