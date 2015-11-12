@@ -254,6 +254,7 @@ int Synchronization::SyncThread(int phc_index)
 	}
 
 	// Generate the clock identity
+	iface = STAILQ_FIRST(&cfg_settings.interfaces);
 	if (generate_clock_identity(&ds->clockIdentity, iface->name))
 	{
 		fprintf(stderr, "failed to generate a clock identity\n");
