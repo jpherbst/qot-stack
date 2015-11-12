@@ -407,8 +407,15 @@ qot_am335x              7121  0
 qot_core                7655  3 qot_am335x
 ```
 
-We have included a ```helloworld``` application to test the qot stack.
+The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```ptpX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
+Here's how you launch the daemon:
+
+```
+$> qotdaemon -v
+```
+
+If you now launch the ```helloworld``` application in a different shell, you should see the daemon do its work. 
 
 ```
 $> helloworld
