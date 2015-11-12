@@ -2223,6 +2223,7 @@ enum fsm_event port_event(struct port *p, int fd_index)
 		return EV_NONE;
 	}
 
+	/////////////////////////////////////////////////////////////////////////////////////////////
 	// The phc_index being used by this clock does not in fact match the one on the adapter. This
 	// is intentional, as it allows us to discipline several logical clocks in parallel using a
 	// single source of hardware timestamps. The only trick is that we need to project the HW/SW
@@ -2236,11 +2237,9 @@ enum fsm_event port_event(struct port *p, int fd_index)
 	// So, what I am going to do is pass in a pointer to a file descriptor representing a ioctl
 	// link to the qt core. We can use the QOT_PROJECT calling code to perform the actual 
 	// projection. 
-
-	pr_info("TS_HARDWARE [B]: %lld.%.9ld",(long long)msg->hwts.ts.tv_sec, msg->hwts.ts.tv_nsec);
 	if (clock_qot(p->clock, &msg->hwts.ts))
 		pr_warning("Could not project time");
-	pr_info("TS_HARDWARE [A]: %lld.%.9ld",(long long)msg->hwts.ts.tv_sec, msg->hwts.ts.tv_nsec);
+	////////////////////////////////////////////////////////////////////////////////////////////
 
 	if (msg_sots_valid(msg)) {
 		ts_add(&msg->hwts.ts, -p->pod.rx_timestamp_offset);
