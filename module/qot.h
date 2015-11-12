@@ -32,6 +32,7 @@
 #ifdef __KERNEL__
 	#include <linux/ioctl.h>
 #else
+	#include <time.h>
 	#include <stdint.h>
 	#include <sys/ioctl.h>
 #endif
@@ -108,5 +109,8 @@ typedef struct qot_message {
 #define QOT_GET_TARGET 			 _IOR(MAGIC_CODE,  7, struct qot_message*)
 #define QOT_SET_ACTUAL 			 _IOW(MAGIC_CODE,  8, struct qot_message*)
 #define QOT_PUSH_EVENT 			 _IOW(MAGIC_CODE,  9, struct qot_message*)
+
+// Used by linuxptp 
+#define QOT_PROJECT_TIME 		_IOWR(MAGIC_CODE, 10, struct timespec*)
 
 #endif

@@ -538,7 +538,9 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_binding *binding;
 	struct qot_capture_item *capture_item;
 	struct qot_event_item *event_item;
-
+	struct timespec64 ts;
+	int64_t ns;
+	
 	// Check that a hardware driver has registered itself with the QoT core
 	binding = qot_binding_search(&binding_root, f);
 	if (!binding)
@@ -809,6 +811,28 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// Iterate over all bindings attached to this timeline using the resolution list
 		qot_push_event(binding->timeline, msg.event.type, msg.event.info);
+
+		break;
+
+	///////////////////////////// USED BY LINUX PTP ///////////////////////////////////////////
+
+	case QOT_PROJECT_TIME:
+
+		// Get the parameters passed into the ioctl
+		if (copy_from_user(&ts, (struct timespec*)arg, sizeof(struct timespec)))
+			return -EACCES;
+
+		// mMake sure the timeline exists
+		if (!binding->timeline)
+			return -EACCES;
+
+		// Perform the projection into remore time
+		ns = timespec64_to_ns(&ts);
+		ts = ns_to_timespec64(qot_loc2rem(binding->timeline, 0, &ns));
+
+		// Send back the data structure with the updated timespec
+		if (copy_to_user((struct timespec*)arg, &ts, sizeof(struct timespec)))
+			return -EACCES;
 
 		break;
 
