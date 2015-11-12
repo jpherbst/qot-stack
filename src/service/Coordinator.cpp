@@ -55,7 +55,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 			// This message is from somebody else
 			if (s->data().name().compare(timeline.name()) != 0)
 			{
-				BOOST_LOG_TRIVIAL(info) << "Message received from peer " << s->data().name();
+				//BOOST_LOG_TRIVIAL(info) << "Message received from peer " << s->data().name();
 
 				// If I currently think that I am the master
 				if (timeline.master().compare(timeline.name())==0)
@@ -65,14 +65,14 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					bool handover = (s->data().accuracy() < timeline.accuracy());
 					if (s->data().accuracy() == timeline.accuracy())
 					{
-						BOOST_LOG_TRIVIAL(info) << "Same desired accuracy. Resolving conflict";  
+						//BOOST_LOG_TRIVIAL(info) << "Same desired accuracy. Resolving conflict";  
 					 	if (s->data().name().compare(timeline.name()) < 0)
 					 	{
-					 		BOOST_LOG_TRIVIAL(info) << "Peer chosen"; 
+					 		//BOOST_LOG_TRIVIAL(info) << "Peer chosen"; 
 					 		handover = true;
 					 	}
 					 	else
-					 		BOOST_LOG_TRIVIAL(info) << "Self chosen"; 
+					 		//BOOST_LOG_TRIVIAL(info) << "Self chosen"; 
 					}
 
 					// But I shouldn't be, because this peer needs better accuracy...
@@ -217,7 +217,7 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 	// Fail graciously
 	if (err) return;
 
-	BOOST_LOG_TRIVIAL(info) << "Heartbeat";
+	// BOOST_LOG_TRIVIAL(info) << "Heartbeat";
 
 	// Send out the timeline information
 	dw.write(timeline);
