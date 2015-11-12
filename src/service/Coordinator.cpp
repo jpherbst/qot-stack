@@ -231,6 +231,7 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 
 		// Pick a new random domain in the interval [0, 127]
 		timeline.domain() = rand() % 128;
+		timeline.master() = timeline.name();
 
 		// Switch PTP domain
 		sync.Master();
