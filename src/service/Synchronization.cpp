@@ -164,31 +164,30 @@ int Synchronization::SyncThread(int phc_index)
 	struct clock *clock;
 	struct defaultDS *ds = &cfg_settings.dds.dds;
 	int required_modes = 0;
-	char ifname[] = "eth0";
 
-	if (handle_term_signals())
-		return -1;
-
-	/* Set fault timeouts to a default value */
-	for (i = 0; i < FT_CNT; i++) {
+	// Set fault timeouts
+	for (i = 0; i < FT_CNT; i++)
+	{
 		cfg_settings.pod.flt_interval_pertype[i].type = FTMO_LOG2_SECONDS;
 		cfg_settings.pod.flt_interval_pertype[i].val = 4;
 	}
 
-	/* Process the command line arguments. */
+	// Add the single eth0 interface 
+	char ifname[] = "eth0";
 	config_create_interface(ifname, &cfg_settings);
 
-	if (!cfg_settings.dds.grand_master_capable &&
-	    ds->flags & DDS_SLAVE_ONLY) {
-		fprintf(stderr,
-			"Cannot mix 1588 slaveOnly with 802.1AS !gmCapable.\n");
+	// Cannot be a slave and a grand master
+	if (!cfg_settings.dds.grand_master_capable && ds->flags & DDS_SLAVE_ONLY)
+	{
+		fprintf(stderr,"Cannot mix 1588 slaveOnly with 802.1AS !gmCapable.\n");
 		return -1;
 	}
-	if (!cfg_settings.dds.grand_master_capable ||
-	    ds->flags & DDS_SLAVE_ONLY) {
+	if (!cfg_settings.dds.grand_master_capable || ds->flags & DDS_SLAVE_ONLY)
 		ds->clockQuality.clockClass = 255;
-	}
-	if (cfg_settings.clock_servo == CLOCK_SERVO_NTPSHM) {
+	
+	// Set some servo values
+	if (cfg_settings.clock_servo == CLOCK_SERVO_NTPSHM)
+	{
 		cfg_settings.dds.kernel_leap = 0;
 		cfg_settings.dds.sanity_freq_limit = 0;
 	}
@@ -197,6 +196,12 @@ int Synchronization::SyncThread(int phc_index)
 	print_set_verbose(cfg_settings.verbose);
 	print_set_syslog(cfg_settings.use_syslog);
 	print_set_level(cfg_settings.print_level);
+
+	if (STAILQ_EMPTY(&cfg_settings.interfaces))
+	{
+		fprintf(stderr, "no interface specified\n");
+		return -1;
+	}
 
 	// If we have requested one step, then we need to pick hardware timestamping
 	if (!(ds->flags & DDS_TWO_STEP_FLAG))
@@ -239,6 +244,7 @@ int Synchronization::SyncThread(int phc_index)
 	// Probe interfaces
 	STAILQ_FOREACH(iface, &cfg_settings.interfaces, list)
 	{
+		fprintf(stderr, "Configuring interface '%s'\n", iface->name);	
 		config_init_interface(iface, &cfg_settings);
 		if (iface->ts_info.valid && ((iface->ts_info.so_timestamping & required_modes) != required_modes))
 		{
