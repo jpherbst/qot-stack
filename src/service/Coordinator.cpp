@@ -49,21 +49,24 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 	// Iterate over all samples
 	for (auto& s : dr.read())
 	{
-		BOOST_LOG_TRIVIAL(info) << "Message received on timeline" << s->data().uuid();
-
 		// If this is the timeline of interest
 		if (s->data().uuid().compare(timeline.uuid()) == 0)
 		{
 			// This message is from somebody else
 			if (s->data().name().compare(timeline.name()) != 0)
 			{
-				BOOST_LOG_TRIVIAL(info) << "Message received from peer" << s->data().name();
+				BOOST_LOG_TRIVIAL(info) << "Message received from peer " << s->data().name();
 
 				// If I currently think that I am the master
 				if (timeline.master().compare(timeline.name())==0)
 				{
+					// If the same accuracy is desired at both ends, then there is a collision
+					// that we need to resolve. We use a string comparison on the name.
+					int collision = s->data().name().compare(timeline.name());
+
 					// But I shouldn't be, because this peer needs better accuracy...
-					if (s->data().accuracy() < timeline.accuracy());
+					if (  	(s->data().accuracy() < timeline.accuracy()) 
+						||	(s->data().accuracy() < timeline.accuracy() && collision > 0))
 					{
 						BOOST_LOG_TRIVIAL(info) << "The master role should be handed to slave "  
 							<< s->data().name() << ":" << s->data().domain();
