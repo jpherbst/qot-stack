@@ -262,6 +262,7 @@ int Synchronization::SyncThread(int phc_index)
 	}
 
 	// Create the clock
+	phc_index = 0; // For now ...
 	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, *timestamping, 
 		&cfg_settings.dds, cfg_settings.clock_servo);
 	if (!clock)
