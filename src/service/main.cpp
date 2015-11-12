@@ -66,6 +66,11 @@ std::string RandomString(uint32_t length)
 // Main entry point of application
 int main(int argc, char **argv)
 {
+	// Seed the random number generated with a nanosecond count
+	struct timespec t={0,0};
+    clock_gettime(CLOCK_REALTIME, &t);
+	srand(t.tv_nsec);
+
 	// Parse command line options
 	boost::program_options::options_description desc("Allowed options");
 	desc.add_options()
