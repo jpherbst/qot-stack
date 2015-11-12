@@ -41,7 +41,6 @@ int assume_two_step = 0;
 
 static struct config cfg_settings = {
 	.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces),
-
 	.dds = {
 		.dds = {
 			.flags = DDS_TWO_STEP_FLAG,
@@ -77,7 +76,6 @@ static struct config cfg_settings = {
 		.delay_filter_length = 10,
 		.boundary_clock_jbod = 0,
 	},
-
 	.pod = {
 		.logAnnounceInterval = 1,
 		.logSyncInterval = 0,
@@ -96,21 +94,16 @@ static struct config cfg_settings = {
 		.tx_timestamp_offset = 0,
 		.rx_timestamp_offset = 0,
 	},
-
 	.timestamping = TS_HARDWARE,
-	.dm = DM_E2E,
-	.transport = TRANS_UDP_IPV4,
-
+	.dm = DM_P2P,
+	.transport = TRANS_IEEE_802_3,
 	.assume_two_step = &assume_two_step,
 	.tx_timestamp_timeout = &sk_tx_timeout,
 	.check_fup_sync = &sk_check_fupsync,
-
 	.clock_servo = CLOCK_SERVO_PI,
-
 	.step_threshold = &servo_step_threshold,
 	.first_step_threshold = &servo_first_step_threshold,
 	.max_frequency = &servo_max_frequency,
-
 	.pi_proportional_const = &configured_pi_kp,
 	.pi_integral_const = &configured_pi_ki,
 	.pi_proportional_scale = &configured_pi_kp_scale,
@@ -120,16 +113,13 @@ static struct config cfg_settings = {
 	.pi_integral_exponent = &configured_pi_ki_exponent,
 	.pi_integral_norm_max = &configured_pi_ki_norm_max,
 	.ntpshm_segment = &ntpshm_segment,
-
 	.ptp_dst_mac = ptp_dst_mac,
 	.p2p_dst_mac = p2p_dst_mac,
 	.udp6_scope = &udp6_scope,
 	.uds_address = uds_path,
-
 	.print_level = LOG_INFO,
 	.use_syslog = 1,
-	.verbose = 0,
-
+	.verbose = 1,
 	.cfg_ignore = 0,
 };
 
@@ -187,93 +177,6 @@ int main(int argc, char *argv[])
 		cfg_settings.pod.flt_interval_pertype[i].val = 4;
 	}
 
-	/* Process the command line arguments. */
-	progname = strrchr(argv[0], '/');
-	progname = progname ? 1+progname : argv[0];
-	while (EOF != (c = getopt(argc, argv, "AEP246HSLf:i:p:sl:mqvh"))) {
-		switch (c) {
-		case 'A':
-			*dm = DM_AUTO;
-			*cfg_ignore |= CFG_IGNORE_DM;
-			break;
-		case 'E':
-			*dm = DM_E2E;
-			*cfg_ignore |= CFG_IGNORE_DM;
-			break;
-		case 'P':
-			*dm = DM_P2P;
-			*cfg_ignore |= CFG_IGNORE_DM;
-			break;
-		case '2':
-			*transport = TRANS_IEEE_802_3;
-			*cfg_ignore |= CFG_IGNORE_TRANSPORT;
-			break;
-		case '4':
-			*transport = TRANS_UDP_IPV4;
-			*cfg_ignore |= CFG_IGNORE_TRANSPORT;
-			break;
-		case '6':
-			*transport = TRANS_UDP_IPV6;
-			*cfg_ignore |= CFG_IGNORE_TRANSPORT;
-			break;
-		case 'H':
-			*timestamping = TS_HARDWARE;
-			*cfg_ignore |= CFG_IGNORE_TIMESTAMPING;
-			break;
-		case 'S':
-			*timestamping = TS_SOFTWARE;
-			*cfg_ignore |= CFG_IGNORE_TIMESTAMPING;
-			break;
-		case 'L':
-			*timestamping = TS_LEGACY_HW;
-			*cfg_ignore |= CFG_IGNORE_TIMESTAMPING;
-			break;
-		case 'f':
-			config = optarg;
-			break;
-		case 'i':
-			if (!config_create_interface(optarg, &cfg_settings))
-				return -1;
-			break;
-		case 'p':
-			req_phc = optarg;
-			break;
-		case 's':
-			ds->flags |= DDS_SLAVE_ONLY;
-			*cfg_ignore |= CFG_IGNORE_SLAVEONLY;
-			break;
-		case 'l':
-			if (get_arg_val_i(c, optarg, &cfg_settings.print_level,
-					  PRINT_LEVEL_MIN, PRINT_LEVEL_MAX))
-				return -1;
-			*cfg_ignore |= CFG_IGNORE_PRINT_LEVEL;
-			break;
-		case 'm':
-			cfg_settings.verbose = 1;
-			*cfg_ignore |= CFG_IGNORE_VERBOSE;
-			break;
-		case 'q':
-			cfg_settings.use_syslog = 0;
-			*cfg_ignore |= CFG_IGNORE_USE_SYSLOG;
-			break;
-		case 'v':
-			version_show(stdout);
-			return 0;
-		case 'h':
-			usage(progname);
-			return 0;
-		case '?':
-			usage(progname);
-			return -1;
-		default:
-			usage(progname);
-			return -1;
-		}
-	}
-
-	if (config && (c = config_read(config, &cfg_settings))) {
-		return c;
-	}
 	if (!cfg_settings.dds.grand_master_capable &&
 	    ds->flags & DDS_SLAVE_ONLY) {
 		fprintf(stderr,
@@ -293,12 +196,6 @@ int main(int argc, char *argv[])
 	print_set_verbose(cfg_settings.verbose);
 	print_set_syslog(cfg_settings.use_syslog);
 	print_set_level(cfg_settings.print_level);
-
-	if (STAILQ_EMPTY(&cfg_settings.interfaces)) {
-		fprintf(stderr, "no interface specified\n");
-		usage(progname);
-		return -1;
-	}
 
 	if (!(ds->flags & DDS_TWO_STEP_FLAG)) {
 		switch (*timestamping) {

@@ -28,9 +28,9 @@
 #define COORDINATOR_HPP
 
 // Boost includes
-#include <boost/log/trivial.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/log/trivial.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
  // Timeline Message
@@ -56,7 +56,7 @@ namespace qot
 			const dds::core::status::LivelinessChangedStatus& status);
 	
 		// Initialize this coordinator with a name
-		public: void Start(const char* uuid, double acc, double res);
+		public: void Start(int id, const char* uuid, double acc, double res);
 
 		// Update the target metrics
 		public: void Update(double acc, double res);
@@ -73,6 +73,7 @@ namespace qot
 		private: boost::asio::deadline_timer timer;
 
 		// Coordinator state
+		private: int phc;
 		private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines

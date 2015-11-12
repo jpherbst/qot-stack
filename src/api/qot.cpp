@@ -56,7 +56,7 @@ using namespace qot;
 
 // Bind to a timeline
 Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
-	: name(RandomString(32)), fd_qot(-1), lk(this->m), kill(false),
+	: name(RandomString(QOT_MAX_NAMELEN)), fd_qot(-1), lk(this->m), kill(false),
 		thread(std::bind(&Timeline::CaptureThread, this))
 {
 	// Open the QoT scheduler
@@ -71,7 +71,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 
 	// Package up a request	to send over ioctl
 	struct qot_message msg;
-	msg.tid = 0;
+	msg.tid = -1;				// This tells the qot core that this is a user
 	msg.request.acc = acc;
 	msg.request.res = res;
 	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_NAMELEN);
@@ -159,21 +159,23 @@ int64_t Timeline::GetTime()
 // Get the achieved accuracy
 uint64_t Timeline::GetAccuracy()
 {
-	// Package up a rewuest
-	struct qot_metric msg;
-	if (ioctl(this->fd_clk, QOT_GET_ACTUAL_METRIC, &msg) == 0)
-		return msg.acc;
-	throw CommunicationWithPOSIXClockException();
+	// Package up a request
+	//struct qot_metric msg;
+	//if (ioctl(this->fd_qot, QOT_GET_ACTUAL_METRIC, &msg) == 0)
+	//	return msg.acc;
+	//throw CommunicationWithPOSIXClockException();
+	return 0;
 }
 
 // Get the achieved resolutions
 uint64_t Timeline::GetResolution()
 {
 	// Package up a rewuest
-	struct qot_metric msg;
-	if (ioctl(this->fd_clk, QOT_GET_ACTUAL_METRIC, &msg) == 0)
-		return msg.res;
-	throw CommunicationWithPOSIXClockException();
+	//struct qot_metric msg;
+	//if (ioctl(this->fd_qot, QOT_GET_ACTUAL_METRIC, &msg) == 0)
+	//	return msg.res;
+	//throw CommunicationWithPOSIXClockException();
+	return 0;
 }
 
 // Get the name of the application
@@ -259,6 +261,9 @@ void Timeline::CaptureThread()
 
     if (DEBUG) std::cout << "Polling for activity" << std::endl;
 
+    // Sto store message data 
+	struct qot_message msg;
+
     // Start polling
     while (!kill)
     {
@@ -266,35 +271,35 @@ void Timeline::CaptureThread()
 		struct pollfd pfd[1];
 		memset(pfd,0,sizeof(pfd));
 		pfd[0].fd = this->fd_qot;
-		pfd[0].events = QOT_ACTION_CAPTURE | QOT_ACTION_EVENT;
+		pfd[0].events = POLLIN;
 
 		if (DEBUG) std::cout << "Polling..." << std::endl;
 
 		// Wait until an asynchronous data push from the kernel module
 		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
 		{
-			// We have received notification of a capture event
-			if (pfd[0].revents & QOT_ACTION_CAPTURE)
+			// Some event just occured on the timeline
+			if (pfd[0].revents & POLLIN)
 			{
-				if (DEBUG) std::cout << "Capture..." << std::endl;
-
-				// Keep querying for capture events until there are none left
-				qot_message msg;
-				while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
-					if (cb_capture) 
-						this->cb_capture(msg.capture.name, msg.capture.edge);
-			}
-
-			// We have received notification of a device bind/unbind
-			if (pfd[0].revents & QOT_ACTION_EVENT)
-			{
-				if (DEBUG) std::cout << "Event..." << std::endl;
-
-				// Keep querying for capture events until there are none left
-				qot_message msg;
+				if (DEBUG) std::cout << "Timeline Event..." << std::endl;
 				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
+				{
+					// Callback with the event
 					if (cb_event) 
-						this->cb_event(msg.event.name, msg.event.type);
+						this->cb_event(msg.event.info, msg.event.type);
+
+					// Special callback for capture events to
+					if (msg.event.type == EVENT_CAPTURE)
+					{
+						if (DEBUG) std::cout << "Capture Event..." << std::endl;
+						while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
+						{
+							// Callback with the capture pin name and time
+							if (cb_capture)
+								this->cb_capture(msg.capture.name, msg.capture.edge);
+						}
+					}
+				}
 			}
 		}
 	}

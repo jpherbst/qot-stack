@@ -36,15 +36,23 @@
 	#include <sys/ioctl.h>
 #endif
 
-// Various system parameters
+// Various system parameters -- name length is bounded by PTP
 #define QOT_MAX_NAMELEN 	(32)
-#define QOT_HASHTABLE_BITS	(16)
-#define QOT_IOCTL_CORE		"qot"
-#define QOT_IOCTL_TIMELINE	"timeline"
-#define QOT_POLL_TIMEOUT_MS  (1000)
-#define QOT_ACTION_CAPTURE	POLLIN
-#define QOT_ACTION_EVENT	POLLOUT
-#define QOT_ACTION_TIMELINE POLLIN
+#define QOT_MAX_DATALEN 	(128)
+#define QOT_IOCTL_BASE		"/dev"
+#define QOT_IOCTL_QOT		"qot"
+#define QOT_IOCTL_TIMELINE	"ptp"
+#define QOT_IOCTL_FORMAT	"%3s%d" 
+#define QOT_POLL_TIMEOUT_MS (1000)
+
+// Timeline events
+#define EVENT_CREATE		(0)
+#define EVENT_DESTROY		(1)
+#define EVENT_JOIN			(2)
+#define EVENT_LEAVE			(3)
+#define EVENT_SYNC			(4)
+#define EVENT_CAPTURE		(5)
+#define EVENT_UPDATE		(6)
 
 // QoT message type 
 typedef struct qot_metric {
@@ -54,8 +62,8 @@ typedef struct qot_metric {
 
 // QoT capture information
 typedef struct qot_event {
-	char name[QOT_MAX_NAMELEN];			// Name of the pin, eg. timer1, timer2, etc...
-	int64_t type;						// Event type code
+	char info[QOT_MAX_DATALEN];			// Event data
+	uint8_t type;						// Event type code
 } qot_event_t;
 
 // QoT capture information
@@ -87,19 +95,18 @@ typedef struct qot_message {
 // Magic code specific to our ioctl code
 #define MAGIC_CODE 0xEF
 
-// IOCTL with /dev/qot
+// Used by the QoT API
 #define QOT_BIND_TIMELINE	    _IOWR(MAGIC_CODE,  0, struct qot_message*)
 #define QOT_SET_ACCURACY 		 _IOW(MAGIC_CODE,  1, struct qot_message*)
 #define QOT_SET_RESOLUTION 		 _IOW(MAGIC_CODE,  2, struct qot_message*)
 #define QOT_UNBIND_TIMELINE		 _IOW(MAGIC_CODE,  3, struct qot_message*)
-#define QOT_GET_CAPTURE 		 _IOR(MAGIC_CODE,  4, struct qot_message*)
-#define QOT_SET_COMPARE 		 _IOW(MAGIC_CODE,  5, struct qot_message*)
+#define QOT_SET_COMPARE 		 _IOW(MAGIC_CODE,  4, struct qot_message*)
+#define QOT_GET_CAPTURE 		 _IOR(MAGIC_CODE,  5, struct qot_message*)
 #define QOT_GET_EVENT 			 _IOR(MAGIC_CODE,  6, struct qot_message*)
 
-// IOCTL with /dev/timeline*
-#define QOT_GET_INFORMATION 	 _IOR(MAGIC_CODE,  7, struct qot_message*)
-#define QOT_GET_ACTUAL_METRIC 	 _IOR(MAGIC_CODE,  8, struct qot_metric*)
-#define QOT_SET_ACTUAL_METRIC 	 _IOW(MAGIC_CODE,  9, struct qot_metric*)
-#define QOT_SET_EVENT 	 		 _IOW(MAGIC_CODE, 10, struct qot_event*)
+// Used by the QoT daemon (all indexed on id)
+#define QOT_GET_TARGET 			 _IOR(MAGIC_CODE,  7, struct qot_message*)
+#define QOT_SET_ACTUAL 			 _IOW(MAGIC_CODE,  8, struct qot_message*)
+#define QOT_PUSH_EVENT 			 _IOW(MAGIC_CODE,  9, struct qot_message*)
 
 #endif

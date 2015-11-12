@@ -40,11 +40,32 @@
 #define OFFSET_MSEC      1000
 
 // This function is called by the QoT API when a capture event occus
-void callback(const std::string &name, int8_t event)
+void callback(const std::string &name, uint8_t event)
 {
-	std::cout << "Some other device " << name << " just ";
-	std::cout << (event == qot::EVENT_BIND ? "bound to" : "unbound from");
-	std::cout << " the timeline" << std::endl;
+	switch(event)
+	{
+		case qot::TIMELINE_EVENT_CREATE : 
+			std::cout << "Timeline created"; 
+			break;
+		case qot::TIMELINE_EVENT_DESTROY : 
+			std::cout << "Timeline destroyed"; 
+			break;
+		case qot::TIMELINE_EVENT_JOIN : 
+			std::cout << "Peer joined timeline"; 
+			break;
+		case qot::TIMELINE_EVENT_LEAVE : 
+			std::cout << "Peer left timeline"; 
+			break;
+		case qot::TIMELINE_EVENT_SYNC : 
+			std::cout << "Timeline synchronization update"; 
+			break;
+		case qot::TIMELINE_EVENT_CAPTURE : 
+			std::cout << "Capture event on this timeline"; 
+			break;
+		case qot::TIMELINE_EVENT_UDPATE  : 
+			std::cout << "Local timeline parameters updated"; 
+			break;
+	}
 }
 
 // Main entry point of application

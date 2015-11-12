@@ -106,6 +106,7 @@ ADD_LIBRARY(ptp SHARED
 	linuxptp/uds.c
 	linuxptp/util.c
 	linuxptp/version.c
+	linuxptp/ptp.c
 )
 TARGET_LINK_LIBRARIES(ptp m)
 
