@@ -828,7 +828,8 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// Perform the projection into remore time
 		ns = timespec64_to_ns(&ts);
-		ts = ns_to_timespec64(qot_loc2rem(binding->timeline, 0, &ns));
+		qot_loc2rem(binding->timeline, 0, &ns);
+		ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
 		if (copy_to_user((struct timespec*)arg, &ts, sizeof(struct timespec)))
