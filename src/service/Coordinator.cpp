@@ -105,8 +105,8 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 				// If I am a slave and this node thinks that it is the master
 				else if (s->data().name().compare(s->data().master()) == 0)
 				{
-					BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
-						<< s->data().name() << ":" << s->data().domain();
+					//BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
+					//	<< s->data().name() << ":" << s->data().domain();
 
 					// If the master's domain is different to what I'd expect
 					if (s->data().domain() != timeline.domain())
