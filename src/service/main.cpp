@@ -108,6 +108,10 @@ int main(int argc, char **argv)
 	boost::asio::io_service io;
 	boost::asio::io_service::work work(io);
 
+	// Some friendly debug
+	BOOST_LOG_TRIVIAL(info) << "My UNIQUE name is " << vm["name"].as<std::string>() 
+		<< " and I will perform synchronization over interface " << vm["iface"].as<std::string>();
+
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
 	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>());
 
