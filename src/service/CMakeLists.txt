@@ -110,12 +110,6 @@ ADD_LIBRARY(ptp SHARED
 )
 TARGET_LINK_LIBRARIES(ptp m)
 
-# ptp4l app
-ADD_EXECUTABLE(ptp4l 
-	linuxptp/ptp4l.c
-)
-TARGET_LINK_LIBRARIES(ptp4l ptp)
-
 #########################################################################################################
 
 ADD_EXECUTABLE(qotdaemon 

@@ -56,7 +56,7 @@ namespace qot
 			const dds::core::status::LivelinessChangedStatus& status);
 	
 		// Initialize this coordinator with a name
-		public: void Start(int id, const char* uuid, double acc, double res);
+		public: void Start(int id, int fd, const char* uuid, double acc, double res);
 
 		// Update the target metrics
 		public: void Update(double acc, double res);
@@ -74,6 +74,7 @@ namespace qot
 
 		// Coordinator state
 		private: int phc;
+		private: int qotfd;
 		private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines

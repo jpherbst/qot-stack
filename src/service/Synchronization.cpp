@@ -114,7 +114,7 @@ Synchronization::~Synchronization()
 	this->Stop();
 }
 
-void Synchronization::Start(int phc_index, short domain, bool master, uint64_t accuracy)
+void Synchronization::Start(int phc_index, int qotfd, short domain, bool master, uint64_t accuracy)
 {	
 	// First stop any sync that is currently underway
 	this->Stop();
@@ -129,7 +129,7 @@ void Synchronization::Start(int phc_index, short domain, bool master, uint64_t a
 	else
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
-	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index));
+	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index, qotfd));
 }
 
 void Synchronization::Stop()
@@ -139,9 +139,9 @@ void Synchronization::Stop()
 	thread.join();
 }
 
-int Synchronization::SyncThread(int phc_index)
+int Synchronization::SyncThread(int phc_index, int qotfd)
 {
-	BOOST_LOG_TRIVIAL(info) << "L1 listen thread started ";
+	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL;
 	int c, i;
 	struct interface *iface;
@@ -251,9 +251,8 @@ int Synchronization::SyncThread(int phc_index)
 	}
 
 	// Create the clock
-	//phc_index = 0; // For now ...
-	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, *timestamping, 
-		&cfg_settings.dds, cfg_settings.clock_servo);
+	clock = clock_create(phc_index, qotfd, (struct interfaces_head*)&cfg_settings.interfaces, 
+		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo);
 	if (!clock)
 	{
 		fprintf(stderr, "failed to create a clock\n");

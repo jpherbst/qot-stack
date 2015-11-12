@@ -280,10 +280,6 @@ int sk_receive(int fd, void *buf, int buflen,
 		memset(&hwts->ts, 0, sizeof(hwts->ts));
 		return cnt;
 	}
-
-	// This is where I now do a sneaky time shift where I project th
-	pr_info("TS_SOFTWARE: %lld.%.9ld",(long long)ts[0].tv_sec, ts[0].tv_nsec);
-	pr_info("TS_HARDWARE: %lld.%.9ld",(long long)ts[2].tv_sec, ts[2].tv_nsec);
 	switch (hwts->type) {
 	case TS_SOFTWARE:
 		hwts->ts = ts[0];

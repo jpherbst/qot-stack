@@ -84,7 +84,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						timeline.master() = s->data().name();
 
 						// (Re)start the synchronization service as master
-						sync.Start(phc, timeline.domain(), false, timeline.accuracy());
+						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
 					}
 				}
 
@@ -99,7 +99,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					timeline.master() = timeline.name();
 
 					// (Re)start the synchronization service as master
-					sync.Start(phc, timeline.domain(), true, timeline.accuracy());
+					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 				}
 
 				// If I am a slave and this node thinks that it is the master
@@ -118,7 +118,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						timeline.domain() = s->data().domain();
 
 						// (Re)start the synchronization service
-						sync.Start(phc, timeline.domain(), false, timeline.accuracy());
+						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
 					}
 
 					// Make sure that we are on the right domain
@@ -144,7 +144,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					BOOST_LOG_TRIVIAL(info) << "Switching to " << timeline.domain();
 
 					// (Re)start the synchronization service as master
-					sync.Start(phc, timeline.domain(), true, timeline.accuracy());
+					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 				}
 			}
 		}
@@ -167,10 +167,11 @@ Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, c
 Coordinator::~Coordinator() {}
 
 // Initialize this coordinator with a name
-void Coordinator::Start(int id, const char* uuid, double acc, double res)
+void Coordinator::Start(int id, int fd, const char* uuid, double acc, double res)
 {
-	// Set the phc index
+	// Set the phc index and file decriptor to qot ioctl
 	phc = id;
+	qotfd = fd;
 
 	// Set the timeline information
 	timeline.uuid() = (std::string) uuid;	
@@ -208,7 +209,7 @@ void Coordinator::Update(double acc, double res)
 
 	// If I am a slave then my accuracy may change the sync rate
 	if (timeline.master().compare(timeline.name()))
-		sync.Start(phc, timeline.domain(), true, timeline.accuracy());
+		sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 }
 
 void Coordinator::Heartbeat(const boost::system::error_code& err)
@@ -248,7 +249,7 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	}
 	
 	// (Re)start the synchronization service as master
-	sync.Start(phc, timeline.domain(), true, timeline.accuracy());
+	sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));

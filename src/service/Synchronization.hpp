@@ -72,11 +72,11 @@ namespace qot
 	public: ~Synchronization();
 
 	// Control dunctions
-	public: void Start(int phc_index, short domain, bool master, uint64_t accuracy);
+	public: void Start(int phc_index, int qotfd, short domain, bool master, uint64_t accuracy);
 	public: void Stop();						// Stop
 
 	// This thread performs rhe actual syncrhonization
-	private: int SyncThread(int phc_index);
+	private: int SyncThread(int phc_index, int qotfd);
 
 	// Boost ASIO
 	private: boost::asio::io_service *asio;
