@@ -28,39 +28,38 @@
 /* This file header */
 #include "Timeline.hpp"
 
-/* Include our QOT API */
-extern "C"
-{
-	#include "../../module/qot.h"
-}
+#include <sstream>
 
 using namespace qot;
 
-Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const std::string &file)
-	: 	coordinator(io, name), lk(this->m), kill(false), thread(std::bind(&Timeline::MonitorThread, this))
+Timeline::Timeline(boost::asio::io_service *io, const std::string &name, int id)
+	: 	coordinator(io, name), kill(false)
 {
-	// Try and open the file
-	BOOST_LOG_TRIVIAL(info) << "Opening IOCTL to timeline" << file;
-	fd = open(file.c_str(), O_RDWR);
+	// First, save the id to the message data structure. Having this present
+	// in the data structure will cause us to bind without affecting metrics
+	this->msg.tid = id;
+
+	// Second, bind to the timeline to get the base requirements
+	std::ostringstream oss("");
+	oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_QOT;
+	this->fd = open(oss.str().c_str(), O_RDWR);
 	if (fd < 0)
 	{
-		BOOST_LOG_TRIVIAL(error) << "Could not open the timeline " << file;
-		return;
-	}	
-
-	BOOST_LOG_TRIVIAL(info) << "Extracting information from timeline";
-	struct qot_message msg;
-	if (ioctl(this->fd, QOT_GET_INFORMATION, &msg))
-	{
-		BOOST_LOG_TRIVIAL(error) << "Could not extract information from timeline";
+		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
 		return;
 	}
+	if (ioctl(fd, QOT_BIND_TIMELINE, &msg))
+	{
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << this->msg.tid << " was not added by the QoT stack. Ignoring.";
+		return;
+	}
+	BOOST_LOG_TRIVIAL(info) << "Timeline opened successfully";
 
 	// Initialize the coordinator
 	coordinator.Start(msg.uuid, msg.request.acc, msg.request.res);
 
 	// We can now start polling, because the timeline is setup
-	cv.notify_one();
+	thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
 }
 
 Timeline::~Timeline()
@@ -70,8 +69,6 @@ Timeline::~Timeline()
 
 	// Kill the thread
 	this->kill = true;
-
-	// Threads must now exit
     this->thread.join();
 
 	// Close ioctl
@@ -82,9 +79,6 @@ Timeline::~Timeline()
 void Timeline::MonitorThread()
 {
 	// Wait until the main thread sets up the binding and posix clock
-    while (this->fd < 0) 
-    	this->cv.wait(this->lk);
-
     BOOST_LOG_TRIVIAL(info) << "Polling for activity";
 
     // Start polling
@@ -94,22 +88,25 @@ void Timeline::MonitorThread()
 		struct pollfd pfd[1];
 		memset(pfd,0,sizeof(pfd));
 		pfd[0].fd = this->fd;
-		pfd[0].events = QOT_ACTION_TIMELINE;
+		pfd[0].events = POLLIN;
 
 		// Wait until an asynchronous data push from the kernel module
 		if (poll(pfd,1, QOT_POLL_TIMEOUT_MS) && !kill)
 		{
-			BOOST_LOG_TRIVIAL(info) << "Polled by timeline";
-			if (pfd[0].revents & QOT_ACTION_TIMELINE)
+			// Some event just occured on the timeline
+			if (pfd[0].revents & POLLIN)
 			{
-				BOOST_LOG_TRIVIAL(info) << "Extracting new accuracy/resolution parameters";
-				struct qot_message msg;
-				if (ioctl(this->fd, QOT_GET_INFORMATION, &msg))
+				BOOST_LOG_TRIVIAL(info) << "Timeline Event...";
+				while (ioctl(this->fd, QOT_GET_EVENT, &msg) == 0)
 				{
-					BOOST_LOG_TRIVIAL(error) << "Could not extract information from timeline";
-					return;
+					// Special callback for capture events to
+					if (msg.event.type == EVENT_UPDATE)
+					{
+						BOOST_LOG_TRIVIAL(info) << "Timeline metrics updated...";
+						if (ioctl(this->fd, QOT_GET_TARGET, &msg) == 0)
+							coordinator.Update(msg.request.acc, msg.request.res);
+					}
 				}
-				coordinator.Update(msg.request.acc, msg.request.res);
 			}
 		}
 	}

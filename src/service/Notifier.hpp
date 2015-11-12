@@ -44,20 +44,25 @@ namespace qot
 	{
 
 	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &dir);
+	public: Notifier(boost::asio::io_service *io, const std::string &name);
 	public: ~Notifier();
 
 	// Private methods
-	private: void add(const char *name);
-	private: void del(const char *name);
+	private: void add(int id);
+	private: void del(int id);
 	private: void watch(const char* dir);
 
-	// Private variables
+	// Asynhronous funcitonality
 	private: boost::asio::io_service *asio;
 	private: boost::thread thread;
-	private: std::map<std::string,Timeline*> timelines;
+
+	// Private variables
+	private: int fd;
 	private: std::string basedir;
 	private: std::string basename;
+
+	// Data structure to store timelines
+	private: std::map<int,Timeline*> timelines;
 	};
 }
 

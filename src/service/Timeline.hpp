@@ -34,18 +34,24 @@
 
 // Boost includes
 #include <boost/log/trivial.hpp>
+#include <boost/thread.hpp>
 #include <boost/asio.hpp>
 
 // Network coordination
 #include "Coordinator.hpp"
 
+// Include the QOT api
+extern "C"
+{
+	#include "../../module/qot.h"
+}
+
 namespace qot
 {
 	class Timeline
 	{
-
 	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &name, const std::string &file);
+	public: Timeline(boost::asio::io_service *io, const std::string &name, int id);
 	public: ~Timeline();
 
 	// Heartbeat timer
@@ -54,15 +60,13 @@ namespace qot
 
 	// Asynchronous service
 	private: boost::asio::io_service *asio;
+	private: boost::thread thread;				// Worker thread for capture
 
 	// Communication with local timeline
 	private: int fd;							// IOCTL link
+	private: struct qot_message msg;			// Information about the timeline
 	private: bool kill;							// Kill flag
 	private: std::string basename;				// Name of service
-	private: std::thread thread;				// Worker thread for capture
-	private: std::mutex m;						// Mutex
-	private: std::condition_variable cv;		// Conditional variable
-	private: std::unique_lock<std::mutex> lk;	// Lock
 
 	// Network (DDS) coordinator
 	private: Coordinator coordinator;

@@ -34,6 +34,7 @@
 /* System dependencies */
 extern "C"
 {
+	// Standard C includes
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <errno.h>
@@ -41,6 +42,9 @@ extern "C"
 	#include <dirent.h>
 	#include <sys/types.h>
 	#include <sys/inotify.h>
+
+	// So that we know the character device for the timelin
+	#include "../../module/qot.h"
 }
 
 /* Convenience declarations */
@@ -52,16 +56,17 @@ extern "C"
 using namespace qot;
 
 // Constructor
-Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &dir)
-	: asio(io), basedir(dir), basename(name)
+Notifier::Notifier(boost::asio::io_service *io, const std::string &name) 
+	: asio(io), basename(name)
 {
-	BOOST_LOG_TRIVIAL(info) << "Starting the notifier at directory " << dir;
+	BOOST_LOG_TRIVIAL(info) << "Starting the notifier";
 
 	/* First, add all existing timelines in the system */
-  	DIR * d = opendir(dir.c_str());
+  	DIR * d = opendir(QOT_IOCTL_BASE);
     if (!d)
     {
-    	BOOST_LOG_TRIVIAL(error) << "Could not open the directory " << dir;
+    	BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
+    	return;
     }
     else
     {
@@ -72,21 +77,21 @@ Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const s
 	        if (!entry)
 	            break;
 
-			// If this event is the creation or delation of a character device
-			char str[8]; 
+			// If this event is the creation or deletion of a character device
+			char str[QOT_MAX_NAMELEN]; 
 			int ret, val;	
-			ret = sscanf(entry->d_name, "%8s%d", str, &val);
-	        if ((ret==2) && (strcmp(str,"timeline")==0))
-    			this->add(entry->d_name);
+			ret = sscanf(entry->d_name, QOT_IOCTL_FORMAT, str, &val);
+	        if ((ret==2) && (strncmp(str,QOT_IOCTL_TIMELINE,QOT_MAX_NAMELEN)==0))
+    			this->add(val);
   	     }
     }
     
     /* After going through all the entries, close the directory. */
     if (closedir(d))
-    	BOOST_LOG_TRIVIAL(error) << "Could not close the directory " << dir;
+    	BOOST_LOG_TRIVIAL(error) << "Could not close the directory " << QOT_IOCTL_BASE;
 
-	BOOST_LOG_TRIVIAL(info) << "Watching directory " << dir;
-	thread = boost::thread(boost::bind(&Notifier::watch, this, dir.c_str()));
+	BOOST_LOG_TRIVIAL(info) << "Watching directory " << QOT_IOCTL_BASE;
+	thread = boost::thread(boost::bind(&Notifier::watch, this, QOT_IOCTL_BASE));
 }
 
 Notifier::~Notifier()
@@ -95,30 +100,28 @@ Notifier::~Notifier()
 	thread.join();
 }
 
-void Notifier::add(const char *name)
+void Notifier::add(int id)
 {
-	std::ostringstream oss("");
-	oss << basedir << "/" << name;
-	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " << oss.str();
-	std::map<std::string,Timeline*>::iterator it = timelines.find(oss.str());
+	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " 
+		<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+
+	// If we get to this point then this is a valid timeline
+	std::map<int,Timeline*>::iterator it = timelines.find(id);
 	if (it == timelines.end())
-		timelines[oss.str()] = new Timeline(asio, basename, oss.str());
+		timelines[id] = new Timeline(asio, basename, id);
 	else
-		BOOST_LOG_TRIVIAL(warning) << "The timeline has already been added";
+		BOOST_LOG_TRIVIAL(warning) << "The timeline already exists in our data structure";
 }
 
-void Notifier::del(const char *name)
+void Notifier::del(int id)
 {
-	std::ostringstream oss("");
-	oss << basedir << "/" << name;
-	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " << oss.str();
-	std::map<std::string,Timeline*>::iterator it = timelines.find(oss.str());
+	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " 
+		<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+
+	std::map<int,Timeline*>::iterator it = timelines.find(id);
 	if (it != timelines.end())
 	{
-		// Delete the timeline (shutting it down safely)
 		delete it->second;
-		
-		// Remove the reference from the list
 		timelines.erase(it);
 	}
 	else
@@ -153,7 +156,7 @@ void Notifier::watch(const char* dir)
 			BOOST_LOG_TRIVIAL(warning) << "Warning: poll error ";
 			break;
 		}
-		//else if (pfds.revents & POLLIN)
+		else if (pfds.revents & POLLIN)
 		{
 			// Read to determine the event change happens on watched directory
 			int length = read(fd, buffer, EVENT_BUF_LEN); 
@@ -171,18 +174,18 @@ void Notifier::watch(const char* dir)
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];    
 
 				// If this event is the creation or delation of a character device
-				char str[8]; 
+				char str[QOT_MAX_NAMELEN]; 
 				int ret, val;	
-				ret = sscanf(event->name, "%8s%d", str, &val);
-				if (event->len && (ret==2) && (strcmp(str,"timeline")==0))
+				ret = sscanf(event->name, QOT_IOCTL_FORMAT, str, &val);
+				if (event->len && (ret==2) && (strncmp(str,QOT_IOCTL_TIMELINE,QOT_MAX_NAMELEN)==0))
 				{
 					// Creation
 					if (event->mask & IN_CREATE)
-						this->add(event->name);
+						this->add(val);
 
 					// Deletion
 					if (event->mask & IN_DELETE) 
-						this->del(event->name);
+						this->del(val);
 				}
 
 				// Append size to determine when one should end

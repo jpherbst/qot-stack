@@ -40,20 +40,23 @@
 namespace qot
 {
 	/**
-	 * @brief Timeline events
+	 * @brief Timeline events (must match those defined in QoT module)
 	 */
 	typedef enum {
-		EVENT_BIND,		/* Some peer bound to a timeline 		*/
-		EVENT_UNBIND,	/* Some peer unbount from a timeline 	*/
-		EVENT_READY,	/* The timeline is ready for use 		*/
-		EVENT_SYNC		/* A synchronization event just occured */
+		TIMELINE_EVENT_CREATE  = 0,		/* Timeline created 					*/
+		TIMELINE_EVENT_DESTROY = 1,		/* Timeline destroyed 					*/
+		TIMELINE_EVENT_JOIN    = 2,		/* Peer joined timeline 				*/
+		TIMELINE_EVENT_LEAVE   = 3,		/* Peer left timeline 					*/
+		TIMELINE_EVENT_SYNC    = 4,		/* Timeline synchronization update 		*/
+		TIMELINE_EVENT_CAPTURE = 5,		/* Capture event on this timeline  		*/
+		TIMELINE_EVENT_UDPATE  = 6,		/* Local timeline parameters updated 	*/
 	} TimelineEventType;
 
 	/**
 	 * @brief Convenience decalaration
 	 */
 	typedef std::function<void(const std::string &pname, int64_t val)> CaptureCallbackType;
-	typedef std::function<void(const std::string &name, int8_t event)> EventCallbackType;
+	typedef std::function<void(const std::string &data, uint8_t event)> EventCallbackType;
 
 	/**
 	 * @brief Various exceptions

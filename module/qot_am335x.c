@@ -70,6 +70,7 @@ struct qot_am335x_data {
 	struct delayed_work overflow_work;	// CORE: scheduled work for overflow housekeeping
 	struct rb_root pin_root;			// Red-black tree of pins
 	spinlock_t lock;					// Spinlock
+	struct workqueue_struct *wq;		// WOrk queue for captures
 };
 
 // Basic information about a timer
@@ -83,6 +84,12 @@ struct qot_am335x_pin {
 	uint32_t low;				   		// COMPARE: Low cycle time (clock ticks)
 	uint64_t repeat;					// COMPARE: Number of repetition (0 = infinite)
     struct rb_node node;				// Red-black tree is used to store timers based on id
+};
+
+struct qot_am335x_work {
+	struct qot_am335x_pin *pin;			// Pointer to puin
+	uint32_t edge;						// Edge value at interrupt
+	struct work_struct work;			// Work
 };
 
 // We need to store a reference to the platform data to service incoming calls from QoT cotre
@@ -241,7 +248,7 @@ static void omap_dm_timer_setup_compare(struct omap_dm_timer *timer)
 // you want it to. The driver simply assumes that you are doing this management in core already.
 static void qot_am335x_compare_start(struct qot_am335x_pin *pin)
 {
-	uint64_t mintime, maxtime, c_cycle, f_cycle, m_cycle;
+	uint64_t c_cycle, f_cycle, m_cycle;
 	uint32_t load, match, value;
 
 	// First, using pdata->tc and pdata->cc, determine if the starting edge (pdata->start) is
@@ -296,12 +303,23 @@ static void qot_am335x_compare_stop(struct qot_am335x_pin *pin)
 
 ////////////////////////// INTERRUPT HANDLING ////////////////////////////////////////////////
 
+static void qot_am335x_capture_push(struct work_struct *ws)
+{
+	struct qot_am335x_work *work = container_of(ws, struct qot_am335x_work, work);
+	if (work)
+	{
+		qot_push_capture(work->pin->name, timecounter_cyc2time(&pdata->tc,work->edge));
+		kfree(work);
+	}
+} 
+
 // Interrupt handler for compare timers
 static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 {
 	unsigned long flags;
 	unsigned int irq_status;
 	struct qot_am335x_pin *pin = data;
+	struct qot_am335x_work *work;
 
 	spin_lock_irqsave(&pdata->lock, flags);	
 	
@@ -313,8 +331,18 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	{
 		// If we (somehow) get a capture event from a COMPARE or CORE pin
    		if (pin && pin->type == AM335X_TYPE_CAPTURE)
-			qot_push_capture(pin->name, timecounter_cyc2time(&pdata->tc, 
-				__omap_dm_timer_read(pin->timer, OMAP_TIMER_CAPTURE_REG, pin->timer->posted)));
+   		{
+			// Allocate memory for the pin
+			work = kzalloc(sizeof(struct qot_am335x_work), GFP_KERNEL);
+			if (work)
+			{
+				INIT_WORK(&work->work, qot_am335x_capture_push);
+				work->pin = pin;
+				work->edge = __omap_dm_timer_read(pin->timer, 
+					OMAP_TIMER_CAPTURE_REG, pin->timer->posted);
+				queue_work(pdata->wq, &work->work);
+			}
+   		}
 
 		// Clear interrupt
 		__omap_dm_timer_write_status(pin->timer, OMAP_TIMER_INT_CAPTURE);
@@ -401,9 +429,11 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	if (!pdata)
 		return NULL;
 
-	pr_info("qot_am335x: Setting up core timer...");
+	// Create a workquw
+	pr_info("qot_am335x: Creating workqueue...");
+	pdata->wq = create_workqueue("events");
 
-	// Setup the core timer
+	pr_info("qot_am335x: Setting up core timer...");
 	phandle = of_get_property(np, "core", NULL);
 	if (!phandle)
 	{

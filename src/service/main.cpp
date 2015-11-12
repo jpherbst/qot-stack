@@ -61,8 +61,6 @@ int main(int argc, char **argv)
 			->default_value("../cfg/default.conf"), "configuration file for linuxptp") 
 		("name,n", 		boost::program_options::value<std::string>()
 			->default_value("default"), "name of this node") 
-		("dir,d", 		boost::program_options::value<std::string>()
-			->default_value("/dev"), "devfs directory for timelines") 
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(
@@ -97,7 +95,7 @@ int main(int argc, char **argv)
 	boost::asio::io_service::work work(io);
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["dir"].as<std::string>());
+	qot::Notifier notifier(&io, vm["name"].as<std::string>());
 
 	// Run the io service
 	io.run();
