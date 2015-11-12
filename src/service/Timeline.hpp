@@ -33,9 +33,9 @@
 #include <condition_variable>
 
 // Boost includes
-#include <boost/log/trivial.hpp>
-#include <boost/thread.hpp>
 #include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#include <boost/log/trivial.hpp>
 
 // Network coordination
 #include "Coordinator.hpp"

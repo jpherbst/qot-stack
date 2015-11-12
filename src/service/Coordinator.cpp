@@ -65,7 +65,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						this->timeline.master() = s->data().name();
 
 						// Become a slave
-						this->sync.Slave();
+						// this->sync.Slave();
 					}
 				}
 
@@ -77,14 +77,14 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					this->timeline.master() = this->timeline.name();
 
 					// Become the master
-					this->sync.Master();
+					// this->sync.Master();
 				}
 
 				// If I am a slave and this node thinks that it is the master
 				else if (s->data().name().compare(s->data().master()) == 0)
 				{
 					// Make sure that we are on the right domain
-					this->sync.Start(s->data().domain());
+					// this->sync.Start(s->data().domain());
 				}
 			}
 		}
@@ -102,7 +102,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					this->timeline.domain() = rand() % 128;
 
 					// Switch PTP domain
-					this->sync.Start(this->timeline.domain());
+					// this->sync.Start(this->timeline.domain());
 				}
 			}
 		}
@@ -125,7 +125,7 @@ Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
 Coordinator::~Coordinator() {}
 
 // Initialize this coordinator with a name
-void Coordinator::Start(const char* uuid, double acc, double res)
+void Coordinator::Start(int id, const char* uuid, double acc, double res)
 {
 	// Set the timeline information
 	timeline.uuid() = (std::string) uuid;	
@@ -184,10 +184,10 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 		this->timeline.domain() = rand() % 128;
 
 		// Switch PTP domain
-		this->sync.Start(this->timeline.domain());
+		//this->sync.Start(this->timeline.domain());
 
 		// Switch PTP domain
-		this->sync.Master();
+		//this->sync.Master();
 	}
 
 	// Reset the heartbeat timer to be 1s from last firing

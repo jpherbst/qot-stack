@@ -34,6 +34,7 @@
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
+#include <boost/log/trivial.hpp>
 
 // Project includes
 #include "Timeline.hpp"

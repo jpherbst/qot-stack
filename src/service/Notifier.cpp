@@ -28,9 +28,6 @@
 /* This file header */
 #include "Notifier.hpp"
 
-/* Trivial logging */
-#include <boost/log/trivial.hpp>
-
 /* System dependencies */
 extern "C"
 {

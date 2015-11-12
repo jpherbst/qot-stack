@@ -34,6 +34,33 @@
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
+#include <boost/log/trivial.hpp>
+
+/* Linuxptp includes */
+extern "C"
+{
+	// Standard includes
+	#include <limits.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
+	#include <linux/net_tstamp.h>
+
+	// Linuxptp includes
+	#include "linuxptp/clock.h"
+	#include "linuxptp/config.h"
+	#include "linuxptp/ntpshm.h"
+	#include "linuxptp/pi.h"
+	#include "linuxptp/print.h"
+	#include "linuxptp/raw.h"
+	#include "linuxptp/sk.h"
+	#include "linuxptp/transport.h"
+	#include "linuxptp/udp6.h"
+	#include "linuxptp/uds.h"
+	#include "linuxptp/util.h"
+	#include "linuxptp/version.h"
+}
 
 namespace qot
 {
@@ -44,13 +71,24 @@ namespace qot
 	public: Synchronization(boost::asio::io_service *io);
 	public: ~Synchronization();
 
-	// Basic functions supported by this synchronization mechanism
-	public: int Start(short domain);
-	public: void Master();
-	public: void Slave();
+	// Control dunctions
+	public: void Start(int phc_index, short domain, uint64_t acc);	// Start syncrhonizing
+	public: void Stop();											// Stop
+	public: void Domain(short domain);								// Set domain
+	public: void Accuracy(uint64_t acc);							// Set accuracy (slave)
+	public: void Master();											// Set master
+	public: void Slave();											// Set slave
+
+	// This thread performs rhe actual syncrhonization
+	private: int SyncThread(int phc_index);
 
 	// Boost ASIO
 	private: boost::asio::io_service *asio;
+	private: boost::thread thread;
+	private: bool kill;
+
+	// PTP settings
+	private: struct config cfg_settings;
 
 	};
 }
