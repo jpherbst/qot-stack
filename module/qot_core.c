@@ -110,17 +110,26 @@ static struct qot_driver *driver = NULL;
 
 static int qot_push_event(struct qot_timeline *timeline, uint8_t type, const char *data)
 {
+	struct rb_node *node;
 	struct qot_binding *binding;
 	struct qot_event_item *event_item;
+
 	if (!timeline)
 	{
 		pr_err("qot_core: tried to push event to a timeline that doesn't exsit");
 		return 1;
 	}
 
-	// Iterate over all bindings attached to this timeline using the resolution list
-	list_for_each_entry(binding, &timeline->head_res, res_list)
-	{
+	// Yes, it would be more efficient to iterate over a res or acc list directly on a 
+	// binding struct. However, since daemon bindings are not put on this list, they
+	// would never be polled. This is obviously an issue.
+  	for (node = rb_first(&binding_root); node; node = rb_next(node))
+  	{
+  		// Get the binding container of this red-black tree node
+  		binding = container_of(node, struct qot_binding, node);
+  		if (!binding || (binding->timeline != timeline))
+  			continue;
+
 		// Allocate the memory to store the event for this binding
 		event_item = kzalloc(sizeof(struct qot_event_item), GFP_KERNEL);
 		if (!event_item)
