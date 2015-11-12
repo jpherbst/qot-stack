@@ -66,7 +66,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 					// But I shouldn't be, because this peer needs better accuracy...
 					if (  	(s->data().accuracy() < timeline.accuracy()) 
-						||	(s->data().accuracy() < timeline.accuracy() && collision > 0))
+						||	(s->data().accuracy() == timeline.accuracy() && collision > 0))
 					{
 						BOOST_LOG_TRIVIAL(info) << "The master role should be handed to slave "  
 							<< s->data().name() << ":" << s->data().domain();
