@@ -49,18 +49,25 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 	// Iterate over all samples
 	for (auto& s : dr.read())
 	{
+		BOOST_LOG_TRIVIAL(info) << "Message received on timeline" << s->data().uuid();
+
 		// If this is the timeline of interest
 		if (s->data().uuid().compare(timeline.uuid()) == 0)
 		{
 			// This message is from somebody else
 			if (s->data().name().compare(timeline.name()) != 0)
 			{
+				BOOST_LOG_TRIVIAL(info) << "Message received from peer" << s->data().name();
+
 				// If I currently think that I am the master
 				if (timeline.master().compare(timeline.name())==0)
 				{
 					// But I shouldn't be, because this peer needs better accuracy...
 					if (s->data().accuracy() < timeline.accuracy());
 					{
+						BOOST_LOG_TRIVIAL(info) << "The master role should be handed to slave "  
+							<< s->data().name() << ":" << s->data().domain();
+
 						// Handover the master ownership to the peer
 						timeline.master() = s->data().name();
 
@@ -72,6 +79,9 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 				// If I am a slave, but this node thinks I should be the master
 				else if (s->data().master().compare(timeline.name()) == 0)
 				{
+					BOOST_LOG_TRIVIAL(info) << "Some slave " << s->data().name() <<
+						 " thinks that I should be the master on domain " << s->data().domain();
+
 					// Make myself the master and copy over the domain
 					timeline.domain() = s->data().domain();
 					timeline.master() = timeline.name();
@@ -83,6 +93,9 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 				// If I am a slave and this node thinks that it is the master
 				else if (s->data().name().compare(s->data().master()) == 0)
 				{
+					BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
+						<< s->data().name() << ":" << s->data().domain();
+
 					// Make sure that we are on the right domain
 					timeline.domain() = s->data().domain();
 					timeline.master() = s->data().name();
@@ -102,8 +115,12 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 				// And our domains collide (this is a bad thing)
 				if (s->data().domain() == timeline.domain())
 				{
+					BOOST_LOG_TRIVIAL(info) << "I am the master and ther is a domain clash on " << s->data().domain();
+
 					// Pick a new random domain in the interval [0, 127]
 					timeline.domain() = rand() % 128;
+
+					BOOST_LOG_TRIVIAL(info) << "Switching to " << timeline.domain();
 
 					// Switch PTP domain
 					sync.Domain(timeline.domain());
@@ -177,6 +194,8 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 	// Fail graciously
 	if (err) return;
 
+	BOOST_LOG_TRIVIAL(info) << "Heartbeat";
+
 	// Send out the timeline information
 	dw.write(timeline);
 
@@ -187,12 +206,16 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 
 void Coordinator::Timeout(const boost::system::error_code& err)
 {
+	BOOST_LOG_TRIVIAL(info) << "Initiliaization timeout";
+
 	// Fail graciously
 	if (err) return;
 
 	// No master advertised themselve before the timeout period
 	if (timeline.master().compare("") == 0)
 	{
+		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am master";
+
 		// Pick a new random domain in the interval [0, 127]
 		timeline.domain() = rand() % 128;
 
@@ -201,12 +224,14 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	}
 	else
 	{
-		// Set the sync accuracy
-		sync.Accuracy(timeline.accuracy());
+		BOOST_LOG_TRIVIAL(info) << "I heard a peer, so I am starting as a slave.";
 
 		// Switch PTP domain
 		sync.Slave();
 	}
+
+	// Set the sync accuracy
+	sync.Accuracy(timeline.accuracy());
 
 	// Set the sync accuracy
 	sync.Domain(timeline.domain());

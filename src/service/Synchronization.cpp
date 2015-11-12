@@ -124,6 +124,7 @@ void Synchronization::Start(int phc_index)
 
 void Synchronization::Stop()
 {
+	BOOST_LOG_TRIVIAL(info) << "Stopping synchronization ";
 	kill = true;
 	threadL1.join();
 	threadL2.join();
@@ -156,6 +157,7 @@ void Synchronization::Slave()
 
 int Synchronization::L1SyncThread(int phc_index)
 {
+	BOOST_LOG_TRIVIAL(info) << "L1 listen thread started ";
 	char *config = NULL;
 	int c, i;
 	struct interface *iface;
