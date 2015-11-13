@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 	// Bind to a timeline
 	try
 	{
-		qot::Timeline timeline(u, 1e9, 1e9);	
+		qot::Timeline timeline(u, 1, 1);	
 		timeline.SetEventCallback(callback);
 		timeline.SetName(m);
 		for (int i = 0; i < n; i++)
