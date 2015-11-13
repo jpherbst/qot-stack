@@ -2232,24 +2232,6 @@ enum fsm_event port_event(struct port *p, int fd_index)
 		return EV_NONE;
 	}
 
-	/////////////////////////////////////////////////////////////////////////////////////////////
-	// The phc_index being used by this clock does not in fact match the one on the adapter. This
-	// is intentional, as it allows us to discipline several logical clocks in parallel using a
-	// single source of hardware timestamps. The only trick is that we need to project the HW/SW
-	// timestamps coming in from the hardware into the timeline in order to close the servo loop.
-	// 
-	// This is not as straightforward as I'd like it to be, as the ioctl() to a PTP clock does not
-	// provide a mechanism for extracting the mult / shift / nsec, or even performing projection
-	// of an arbitrary value. If I could extract these, I could just perform a simple projection
-	// right here and the job would be done.
-	//
-	// So, what I am going to do is pass in a pointer to a file descriptor representing a ioctl
-	// link to the qt core. We can use the QOT_PROJECT calling code to perform the actual 
-	// projection. 
-	if (clock_qot(p->clock, &msg->hwts.ts))
-		pr_warning("Could not project time");
-	////////////////////////////////////////////////////////////////////////////////////////////
-	
 	switch (msg_type(msg)) {
 	case SYNC:
 		process_sync(p, msg);
@@ -2316,6 +2298,11 @@ int port_prepare_and_send(struct port *p, struct ptp_message *msg, int event)
 		return -1;
 	}
 	if (msg_sots_valid(msg)) {
+
+		// Little hack to project into timeline frame of reference
+		if (clock_qot(p->clock, &msg->hwts.ts))
+			pr_warning("Could not project time");		
+
 		ts_add(&msg->hwts.ts, p->pod.tx_timestamp_offset);
 	}
 	return 0;
