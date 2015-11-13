@@ -1601,5 +1601,10 @@ double clock_rate_ratio(struct clock *c)
 
 int clock_qot(struct clock *c, struct timespec *ts)
 {
-	return ioctl(c->qotfd, QOT_PROJECT_TIME, ts);
+	int64_t ns = ts->tv_sec * NS_PER_SEC + (int64_t) ts->tv_nsec;
+	if (ioctl(c->qotfd, QOT_PROJECT_TIME, &ns))
+	{
+		ts->tv_nsec = ns % NS_PER_SEC;
+		ts->tv_sec  = ns / NS_PER_SEC;
+	}
 }

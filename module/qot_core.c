@@ -536,7 +536,6 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_binding *binding;
 	struct qot_capture_item *capture_item;
 	struct qot_event_item *event_item;
-	struct timespec64 ts;
 	int64_t ns;
 	
 	// Check that a hardware driver has registered itself with the QoT core
@@ -818,7 +817,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	case QOT_PROJECT_TIME:
 
 		// Get the parameters passed into the ioctl
-		if (copy_from_user(&ts, (struct timespec*)arg, sizeof(struct timespec)))
+		if (copy_from_user(&ns, (int64_t*)arg, sizeof(int64_t)))
 			return -EACCES;
 
 		// mMake sure the timeline exists
@@ -826,14 +825,14 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Project the time forward
-		pr_info("qot_core: project [0] %lld\n", timespec64_to_ns(&ts));
+		pr_info("qot_core: project [0] %lld\n", ns);
 		//ns = timespec64_to_ns(&ts) - binding->timeline->last;
 		//ns = binding->timeline->nsec + ns 
 		//   + div_s64(binding->timeline->mult * ns,1000000000ULL);
 		//ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
-		if (copy_to_user((struct timespec*)arg, &ts, sizeof(struct timespec)))
+		if (copy_to_user((int64_t*)arg, &ns, sizeof(int64_t)))
 			return -EACCES;
 
 		break;

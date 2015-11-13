@@ -111,6 +111,6 @@ typedef struct qot_message {
 #define QOT_PUSH_EVENT 			 _IOW(MAGIC_CODE,  9, struct qot_message*)
 
 // Used by linuxptp 
-#define QOT_PROJECT_TIME 		_IOWR(MAGIC_CODE, 10, struct timespec*)
+#define QOT_PROJECT_TIME 		_IOWR(MAGIC_CODE, 10, int64_t*)
 
 #endif
