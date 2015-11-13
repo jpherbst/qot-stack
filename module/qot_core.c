@@ -420,7 +420,7 @@ static int qot_clock_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL);
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
 	timeline->mult += ppb;
 	timeline->last  = ns;
 	return 0;
@@ -434,7 +434,7 @@ static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());		
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
 	timeline->last  = ns;
 	return 0;
 }
@@ -447,7 +447,7 @@ static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL);
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
 	timeline->last  = ns;
 	*ts = ns_to_timespec64(timeline->nsec);
 	return 0;
@@ -828,7 +828,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		// Project the time forward
 		ns = timespec64_to_ns(&ts) - binding->timeline->last;
 		ns = binding->timeline->nsec + ns 
-		   + div_u64(binding->timeline->mult*ns,1000000000ULL);
+		   + div_s64(binding->timeline->mult * ns,1000000000ULL);
 		ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
