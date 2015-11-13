@@ -116,6 +116,7 @@ struct clock {
 	struct clockcheck *sanity_check;
 	struct interface uds_interface;
 	LIST_HEAD(clock_subscribers_head, clock_subscriber) subscribers;
+	int qotfd;	// qot ioctl link	
 };
 
 struct clock the_clock;
@@ -791,7 +792,7 @@ static void clock_remove_port(struct clock *c, struct port *p)
 	port_close(p);
 }
 
-struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
+struct clock *clock_create(int phc_index, int qotfd, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
 			   enum servo_type servo)
 {
@@ -813,6 +814,7 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	udsif->transport = TRANS_UDS;
 	udsif->delay_filter_length = 1;
 
+	c->qotfd = qotfd;
 	c->free_running = dds->free_running;
 	c->freq_est_interval = dds->freq_est_interval;
 	c->grand_master_capable = dds->grand_master_capable;
@@ -1595,4 +1597,14 @@ void clock_check_ts(struct clock *c, struct timespec ts)
 double clock_rate_ratio(struct clock *c)
 {
 	return servo_rate_ratio(c->servo);
+}
+
+int clock_qot(struct clock *c, struct timespec *ts)
+{
+	int64_t ns =  (int64_t) ts->tv_sec * 1000000000LL + (int64_t) ts->tv_nsec;
+	if (ioctl(c->qotfd, QOT_PROJECT_TIME, &ns))
+	{
+		ts->tv_nsec = ns % NS_PER_SEC;
+		ts->tv_sec  = ns / NS_PER_SEC;
+	}
 }

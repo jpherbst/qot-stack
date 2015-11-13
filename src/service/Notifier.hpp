@@ -45,7 +45,7 @@ namespace qot
 	{
 
 	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name);
+	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface);
 	public: ~Notifier();
 
 	// Private methods
@@ -59,7 +59,7 @@ namespace qot
 
 	// Private variables
 	private: int fd;
-	private: std::string basedir;
+	private: std::string baseiface;
 	private: std::string basename;
 
 	// Data structure to store timelines

@@ -33,8 +33,8 @@
 
 using namespace qot;
 
-Synchronization::Synchronization(boost::asio::io_service *io)
-	: asio(io)
+Synchronization::Synchronization(boost::asio::io_service *io, const std::string &iface)
+	: asio(io), baseiface(iface)
 {
 	// Default settings...
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
@@ -80,8 +80,8 @@ Synchronization::Synchronization(boost::asio::io_service *io)
 	cfg_settings.pod.min_neighbor_prop_delay = -20000000;
 	cfg_settings.pod.tx_timestamp_offset = 0;
 	cfg_settings.pod.rx_timestamp_offset = 0;
-	cfg_settings.timestamping = TS_HARDWARE;
-	cfg_settings.dm = DM_P2P;
+	cfg_settings.timestamping = TS_SOFTWARE;
+	cfg_settings.dm = DM_E2E;
 	cfg_settings.transport = TRANS_IEEE_802_3;
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;
@@ -114,46 +114,34 @@ Synchronization::~Synchronization()
 	this->Stop();
 }
 
-void Synchronization::Start(int phc_index)
-{
-	BOOST_LOG_TRIVIAL(info) << "Starting synchronization with PHC index " << phc_index;
+void Synchronization::Start(int phc_index, int qotfd, short domain, bool master, uint64_t accuracy)
+{	
+	// First stop any sync that is currently underway
+	this->Stop();
+
+	// Restart sync
+	BOOST_LOG_TRIVIAL(info) << "Starting synchronization as " << (master ? "master" : "slave") 
+		<< " on domain " << domain << " with PHC index " << phc_index << " and accuracy " << accuracy;
+	cfg_settings.dds.dds.domainNumber = domain;	
+	cfg_settings.pod.logSyncInterval = (int) floor(log2(accuracy/20.0));
+	if (master)
+		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	else
+		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
-	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index));
+	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index, qotfd));
 }
 
 void Synchronization::Stop()
 {
+	BOOST_LOG_TRIVIAL(info) << "Stopping synchronization ";
 	kill = true;
 	thread.join();
 }
 
-void Synchronization::Domain(short domain)
+int Synchronization::SyncThread(int phc_index, int qotfd)
 {
-	BOOST_LOG_TRIVIAL(info) << "Switching to domain " << domain;
-	cfg_settings.dds.dds.domainNumber = domain;
-}
-
-void Synchronization::Accuracy(uint64_t acc)
-{
-	int l2f = (int) floor(log2(acc/20.0));
-	BOOST_LOG_TRIVIAL(info) << "Accuracy request of " << acc << " ns requires log2(hz) of " << l2f;
-	cfg_settings.pod.logSyncInterval = l2f;
-}
-
-void Synchronization::Master()
-{
-	BOOST_LOG_TRIVIAL(info) << "Switching to master";
-	cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-}
-
-void Synchronization::Slave()
-{
-	BOOST_LOG_TRIVIAL(info) << "Switching to slave";
-	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
-}
-
-int Synchronization::SyncThread(int phc_index)
-{
+	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL;
 	int c, i;
 	struct interface *iface;
@@ -172,8 +160,9 @@ int Synchronization::SyncThread(int phc_index)
 		cfg_settings.pod.flt_interval_pertype[i].val = 4;
 	}
 
-	// Add the single eth0 interface 
-	char ifname[] = "eth0";
+	// Add the single eth0 interface
+	char ifname[16];
+	strncpy(ifname, baseiface.c_str(), 16);
 	config_create_interface(ifname, &cfg_settings);
 
 	// Cannot be a slave and a grand master
@@ -262,9 +251,8 @@ int Synchronization::SyncThread(int phc_index)
 	}
 
 	// Create the clock
-	phc_index = 0; // For now ...
-	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, *timestamping, 
-		&cfg_settings.dds, cfg_settings.clock_servo);
+	clock = clock_create(phc_index, qotfd, (struct interfaces_head*)&cfg_settings.interfaces, 
+		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo);
 	if (!clock)
 	{
 		fprintf(stderr, "failed to create a clock\n");

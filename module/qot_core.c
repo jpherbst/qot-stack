@@ -62,7 +62,7 @@ struct qot_timeline {
     struct qot_metric actual;			// The actual accuracy/resolution
 	int32_t dialed_frequency; 			// Discipline: dialed frequency
 	uint32_t cc_mult; 					// Discipline: mult carry
-	uint64_t last; 						// Discipline: last cycle count of discipline
+	int64_t last; 						// Discipline: last cycle count of discipline
 	int64_t mult; 						// Discipline: ppb multiplier for errors
 	int64_t nsec; 						// Discipline: global time offset
 };
@@ -414,62 +414,60 @@ static int qot_rem2loc(struct qot_timeline *timeline, int period, int64_t *val)
 
 static int qot_clock_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 {
-	int64_t core_t, core_n;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_t = driver->read();
-	core_n = core_t - timeline->last;
-	timeline->nsec += (core_n + timeline->mult * core_n);
-	timeline->mult += ppb;
-	timeline->last = core_t;
+	ns = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
+	timeline->mult += ppb;
+	timeline->last  = ns;
 	return 0;
 }
 
 static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
-	int64_t core_t, core_n;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_t = driver->read();
-	core_n = core_t - timeline->last;
-	timeline->nsec += (core_n + timeline->mult * core_n) + delta;
-	timeline->last = core_t;
+	ns = ktime_to_ns(ktime_get_real());		
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
+	timeline->last  = ns;
 	return 0;
 }
 
 static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
-	uint64_t core_n;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_n = driver->read() - timeline->last;
+	ns = ktime_to_ns(ktime_get_real());
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	*ts = ns_to_timespec64(timeline->nsec + core_n + timeline->mult * core_n);
+	timeline->nsec += (ns - timeline->last) + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
+	timeline->last  = ns;
+	*ts = ns_to_timespec64(timeline->nsec);
 	return 0;
 }
 
-static int qot_clock_settime(struct ptp_clock_info *ptp,
-			    const struct timespec64 *ts)
+static int qot_clock_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
-	uint64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
-	ns = timespec64_to_ns(ts);
 	spin_lock_irqsave(&timeline->lock, flags);
-	timeline->last = driver->read();
-	timeline->nsec = ns;
+	timeline->last = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec = timespec64_to_ns(ts);
 	return 0;
 }
 
 static int qot_clock_enable(struct ptp_clock_info *ptp,
 			   struct ptp_clock_request *rq, int on)
 {
+	pr_info("qot_core: clock_enable\n");
 	return -EOPNOTSUPP;
 }
 
@@ -538,7 +536,8 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 	struct qot_binding *binding;
 	struct qot_capture_item *capture_item;
 	struct qot_event_item *event_item;
-
+	int64_t ns;
+	
 	// Check that a hardware driver has registered itself with the QoT core
 	binding = qot_binding_search(&binding_root, f);
 	if (!binding)
@@ -809,6 +808,30 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 		// Iterate over all bindings attached to this timeline using the resolution list
 		qot_push_event(binding->timeline, msg.event.type, msg.event.info);
+
+		break;
+
+	///////////////////////////// USED BY LINUX PTP ///////////////////////////////////////////
+
+	// The userspace PTP daemon 
+	case QOT_PROJECT_TIME:
+
+		// Get the parameters passed into the ioctl
+		if (copy_from_user(&ns, (int64_t*)arg, sizeof(int64_t)))
+			return -EACCES;
+
+		// mMake sure the timeline exists
+		if (!binding->timeline)
+			return -EACCES;
+
+		// Project the time forward
+		ns = ns - binding->timeline->last;
+		ns = binding->timeline->nsec + ns 
+		   + div_s64(binding->timeline->mult * ns,1000000000ULL);
+
+		// Send back the data structure with the updated timespec
+		if (copy_to_user((int64_t*)arg, &ns, sizeof(int64_t)))
+			return -EACCES;
 
 		break;
 

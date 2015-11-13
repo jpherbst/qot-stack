@@ -55,40 +55,74 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 			// This message is from somebody else
 			if (s->data().name().compare(timeline.name()) != 0)
 			{
+				//BOOST_LOG_TRIVIAL(info) << "Message received from peer " << s->data().name();
+
 				// If I currently think that I am the master
 				if (timeline.master().compare(timeline.name())==0)
 				{
-					// But I shouldn't be, because this peer needs better accuracy...
-					if (s->data().accuracy() < timeline.accuracy());
+					// If the same accuracy is desired at both ends, then there is a collision
+					// that we need to resolve. We use a string comparison on the name.
+					bool handover = (s->data().accuracy() < timeline.accuracy());
+					if (s->data().accuracy() == timeline.accuracy())
 					{
+						//BOOST_LOG_TRIVIAL(info) << "Same desired accuracy. Resolving conflict";  
+					 	if (s->data().name().compare(timeline.name()) < 0)
+					 	{
+					 		//BOOST_LOG_TRIVIAL(info) << "Peer chosen"; 
+					 		handover = true;
+					 	}
+					 	//else BOOST_LOG_TRIVIAL(info) << "Self chosen"; 
+					}
+
+					// But I shouldn't be, because this peer needs better accuracy...
+					if (handover)
+					{
+						BOOST_LOG_TRIVIAL(info) << "The master role should be handed to slave "  
+							<< s->data().name() << ":" << s->data().domain();
+
 						// Handover the master ownership to the peer
 						timeline.master() = s->data().name();
 
-						// Become a slave
-						sync.Slave();
+						// (Re)start the synchronization service as master
+						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
 					}
 				}
 
 				// If I am a slave, but this node thinks I should be the master
 				else if (s->data().master().compare(timeline.name()) == 0)
 				{
+					BOOST_LOG_TRIVIAL(info) << "Some slave " << s->data().name() <<
+						 " thinks that I should be the master on domain " << s->data().domain();
+
 					// Make myself the master and copy over the domain
 					timeline.domain() = s->data().domain();
 					timeline.master() = timeline.name();
 
-					// Become the master
-					sync.Master();
+					// (Re)start the synchronization service as master
+					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 				}
 
 				// If I am a slave and this node thinks that it is the master
 				else if (s->data().name().compare(s->data().master()) == 0)
 				{
-					// Make sure that we are on the right domain
-					timeline.domain() = s->data().domain();
-					timeline.master() = s->data().name();
+					//BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
+					//	<< s->data().name() << ":" << s->data().domain();
 
-					// Update the domain in case it has changed
-					sync.Domain(timeline.domain());
+					// If the master's domain is different to what I'd expect
+					if (s->data().domain() != timeline.domain())
+					{
+						BOOST_LOG_TRIVIAL(info) << "The domain does not match what I think it is "  
+							<< " and so I am restarting the sync service";
+
+						// Set the new domain
+						timeline.domain() = s->data().domain();
+
+						// (Re)start the synchronization service
+						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
+					}
+
+					// Make sure that we are on the right domain
+					timeline.master() = s->data().name();
 				}
 			}
 		}
@@ -102,11 +136,15 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 				// And our domains collide (this is a bad thing)
 				if (s->data().domain() == timeline.domain())
 				{
+					BOOST_LOG_TRIVIAL(info) << "I am the master and ther is a domain clash on " << s->data().domain();
+
 					// Pick a new random domain in the interval [0, 127]
 					timeline.domain() = rand() % 128;
 
-					// Switch PTP domain
-					sync.Domain(timeline.domain());
+					BOOST_LOG_TRIVIAL(info) << "Switching to " << timeline.domain();
+
+					// (Re)start the synchronization service as master
+					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 				}
 			}
 		}
@@ -119,9 +157,9 @@ void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::Timeline
 	// Not sure what to do with this...
 }
 
-Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
+Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface)
 	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic), 
-		timer(*io), sync(io)
+		timer(*io), sync(io, iface)
 {
 	timeline.name() = (std::string) name;	// Our name
 }
@@ -129,10 +167,11 @@ Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name)
 Coordinator::~Coordinator() {}
 
 // Initialize this coordinator with a name
-void Coordinator::Start(int id, const char* uuid, double acc, double res)
+void Coordinator::Start(int id, int fd, const char* uuid, double acc, double res)
 {
-	// Set the phc index
+	// Set the phc index and file decriptor to qot ioctl
 	phc = id;
+	qotfd = fd;
 
 	// Set the timeline information
 	timeline.uuid() = (std::string) uuid;	
@@ -168,14 +207,17 @@ void Coordinator::Update(double acc, double res)
 	timeline.accuracy() = acc;
 	timeline.resolution() = res;
 
-	// Change the accuracy in the sync algorithm
-	sync.Accuracy(acc);
+	// If I am a slave then my accuracy may change the sync rate
+	if (timeline.master().compare(timeline.name()))
+		sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 }
 
 void Coordinator::Heartbeat(const boost::system::error_code& err)
 {
 	// Fail graciously
 	if (err) return;
+
+	// BOOST_LOG_TRIVIAL(info) << "Heartbeat";
 
 	// Send out the timeline information
 	dw.write(timeline);
@@ -187,32 +229,27 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 
 void Coordinator::Timeout(const boost::system::error_code& err)
 {
+	BOOST_LOG_TRIVIAL(info) << "Initiliaization timeout";
+
 	// Fail graciously
 	if (err) return;
 
 	// No master advertised themselve before the timeout period
 	if (timeline.master().compare("") == 0)
 	{
+		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am starting as master";
+
 		// Pick a new random domain in the interval [0, 127]
 		timeline.domain() = rand() % 128;
-
-		// Switch PTP domain
-		sync.Master();
+		timeline.master() = timeline.name();
 	}
 	else
 	{
-		// Set the sync accuracy
-		sync.Accuracy(timeline.accuracy());
-
-		// Switch PTP domain
-		sync.Slave();
+		BOOST_LOG_TRIVIAL(info) << "I heard another master, so I am starting as a slave.";
 	}
-
-	// Set the sync accuracy
-	sync.Domain(timeline.domain());
-
-	// Switch PTP domain
-	sync.Start(phc);
+	
+	// (Re)start the synchronization service as master
+	sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));

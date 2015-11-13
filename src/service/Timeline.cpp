@@ -32,8 +32,8 @@
 
 using namespace qot;
 
-Timeline::Timeline(boost::asio::io_service *io, const std::string &name, int id)
-	: 	coordinator(io, name), kill(false)
+Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const std::string &iface, int id)
+	: 	coordinator(io, name, iface), kill(false)
 {
 	// First, save the id to the message data structure. Having this present
 	// in the data structure will cause us to bind without affecting metrics
@@ -56,7 +56,7 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name, int id)
 	BOOST_LOG_TRIVIAL(info) << "Timeline opened successfully";
 
 	// Initialize the coordinator with the given PHC id, UUID, accuracy and resolution
-	coordinator.Start(id, msg.uuid, msg.request.acc, msg.request.res);
+	coordinator.Start(id, this->fd, msg.uuid, msg.request.acc, msg.request.res);
 
 	// We can now start polling, because the timeline is setup
 	thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
