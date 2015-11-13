@@ -434,7 +434,7 @@ static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());		
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += ns + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
+	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
 	timeline->last  = ns;
 	return 0;
 }
