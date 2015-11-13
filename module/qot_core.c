@@ -420,7 +420,7 @@ static int qot_clock_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += (ns - timeline->last) + timeline->mult * (ns - timeline->last);
+	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL);
 	timeline->mult += ppb;
 	timeline->last  = ns;
 	return 0;
