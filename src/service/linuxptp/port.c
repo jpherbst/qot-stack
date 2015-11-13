@@ -2223,6 +2223,15 @@ enum fsm_event port_event(struct port *p, int fd_index)
 		return EV_NONE;
 	}
 
+	if (msg_sots_valid(msg)) {
+		ts_add(&msg->hwts.ts, -p->pod.rx_timestamp_offset);
+		clock_check_ts(p->clock, msg->hwts.ts);
+	}
+	if (port_ignore(p, msg)) {
+		msg_put(msg);
+		return EV_NONE;
+	}
+
 	/////////////////////////////////////////////////////////////////////////////////////////////
 	// The phc_index being used by this clock does not in fact match the one on the adapter. This
 	// is intentional, as it allows us to discipline several logical clocks in parallel using a
@@ -2240,16 +2249,7 @@ enum fsm_event port_event(struct port *p, int fd_index)
 	if (clock_qot(p->clock, &msg->hwts.ts))
 		pr_warning("Could not project time");
 	////////////////////////////////////////////////////////////////////////////////////////////
-
-	if (msg_sots_valid(msg)) {
-		ts_add(&msg->hwts.ts, -p->pod.rx_timestamp_offset);
-		clock_check_ts(p->clock, msg->hwts.ts);
-	}
-	if (port_ignore(p, msg)) {
-		msg_put(msg);
-		return EV_NONE;
-	}
-
+	
 	switch (msg_type(msg)) {
 	case SYNC:
 		process_sync(p, msg);
