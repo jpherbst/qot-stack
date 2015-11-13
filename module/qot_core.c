@@ -417,6 +417,7 @@ static int qot_clock_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 	int64_t core_t, core_n;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
+	pr_info("qot_core: clock_adjfreq\n");
 	spin_lock_irqsave(&timeline->lock, flags);
 	core_t = driver->read();
 	core_n = core_t - timeline->last;
@@ -432,6 +433,7 @@ static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	int64_t core_t, core_n;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
+	pr_info("qot_core: clock_adjtime\n");
 	spin_lock_irqsave(&timeline->lock, flags);
 	core_t = driver->read();
 	core_n = core_t - timeline->last;
@@ -446,6 +448,7 @@ static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	uint64_t core_n;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
+	pr_info("qot_core: clock_gettime\n");
 	spin_lock_irqsave(&timeline->lock, flags);
 	core_n = driver->read() - timeline->last;
 	spin_unlock_irqrestore(&timeline->lock, flags);
@@ -459,6 +462,7 @@ static int qot_clock_settime(struct ptp_clock_info *ptp,
 	uint64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
+	pr_info("qot_core: clock_settime\n");
 	ns = timespec64_to_ns(ts);
 	spin_lock_irqsave(&timeline->lock, flags);
 	timeline->last = driver->read();
@@ -470,6 +474,7 @@ static int qot_clock_settime(struct ptp_clock_info *ptp,
 static int qot_clock_enable(struct ptp_clock_info *ptp,
 			   struct ptp_clock_request *rq, int on)
 {
+	pr_info("qot_core: clock_enable\n");
 	return -EOPNOTSUPP;
 }
 
