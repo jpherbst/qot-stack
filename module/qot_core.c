@@ -62,7 +62,7 @@ struct qot_timeline {
     struct qot_metric actual;			// The actual accuracy/resolution
 	int32_t dialed_frequency; 			// Discipline: dialed frequency
 	uint32_t cc_mult; 					// Discipline: mult carry
-	uint64_t last; 						// Discipline: last cycle count of discipline
+	int64_t last; 						// Discipline: last cycle count of discipline
 	int64_t mult; 						// Discipline: ppb multiplier for errors
 	int64_t nsec; 						// Discipline: global time offset
 };
