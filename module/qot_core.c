@@ -434,20 +434,22 @@ static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	spin_lock_irqsave(&timeline->lock, flags);
 	ns = ktime_to_ns(ktime_get_real());		
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	timeline->nsec += ns + timeline->mult * (ns - timeline->last) + delta;
+	timeline->nsec += ns + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
 	timeline->last  = ns;
 	return 0;
 }
 
 static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
-	uint64_t delta;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
 	spin_lock_irqsave(&timeline->lock, flags);
-	delta = ktime_to_ns(ktime_get_real()) - timeline->last;	
+	ns = ktime_to_ns(ktime_get_real());
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	*ts = ns_to_timespec64(timeline->nsec + delta + timeline->mult * delta);
+	timeline->nsec += (ns - timeline->last) + div_u64(timeline->mult * (ns - timeline->last),1000000000ULL);
+	timeline->last  = ns;
+	*ts = ns_to_timespec64(timeline->nsec);
 	return 0;
 }
 
