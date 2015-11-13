@@ -80,8 +80,8 @@ Synchronization::Synchronization(boost::asio::io_service *io, const std::string 
 	cfg_settings.pod.min_neighbor_prop_delay = -20000000;
 	cfg_settings.pod.tx_timestamp_offset = 0;
 	cfg_settings.pod.rx_timestamp_offset = 0;
-	cfg_settings.timestamping = TS_HARDWARE;
-	cfg_settings.dm = DM_P2P;
+	cfg_settings.timestamping = TS_SOFTWARE;
+	cfg_settings.dm = DM_E2E;
 	cfg_settings.transport = TRANS_IEEE_802_3;
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;

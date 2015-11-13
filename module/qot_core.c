@@ -414,60 +414,51 @@ static int qot_rem2loc(struct qot_timeline *timeline, int period, int64_t *val)
 
 static int qot_clock_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 {
-	int64_t core_t, core_n;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
-	pr_info("qot_core: clock_adjfreq\n");
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_t = driver->read();
-	core_n = core_t - timeline->last;
-	timeline->nsec += (core_n + timeline->mult * core_n);
-	timeline->mult += ppb;
-	timeline->last = core_t;
+	ns = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec += (ns - timeline->last) + timeline->mult * (ns - timeline->last);
+	timeline->mult += ppb;
+	timeline->last  = ns;
 	return 0;
 }
 
 static int qot_clock_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
-	int64_t core_t, core_n;
+	int64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
-	pr_info("qot_core: clock_adjtime\n");
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_t = driver->read();
-	core_n = core_t - timeline->last;
-	timeline->nsec += (core_n + timeline->mult * core_n) + delta;
-	timeline->last = core_t;
+	ns = ktime_to_ns(ktime_get_real());		
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec += ns + timeline->mult * (ns - timeline->last) + delta;
+	timeline->last  = ns;
 	return 0;
 }
 
 static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
-	uint64_t core_n;
+	uint64_t delta;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
-	pr_info("qot_core: clock_gettime\n");
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_n = driver->read() - timeline->last;	// Number of elapsed nanoseconds
+	delta = ktime_to_ns(ktime_get_real()) - timeline->last;	
 	spin_unlock_irqrestore(&timeline->lock, flags);
-	*ts = ns_to_timespec64(timeline->nsec + core_n + timeline->mult * core_n);
+	*ts = ns_to_timespec64(timeline->nsec + delta + timeline->mult * delta);
 	return 0;
 }
 
-static int qot_clock_settime(struct ptp_clock_info *ptp,
-			    const struct timespec64 *ts)
+static int qot_clock_settime(struct ptp_clock_info *ptp, const struct timespec64 *ts)
 {
-	uint64_t ns;
 	unsigned long flags;
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
-	pr_info("qot_core: clock_settime\n");
-	ns = timespec64_to_ns(ts);
 	spin_lock_irqsave(&timeline->lock, flags);
-	timeline->last = driver->read();
-	timeline->nsec = ns;
+	timeline->last = ktime_to_ns(ktime_get_real());	
 	spin_unlock_irqrestore(&timeline->lock, flags);
+	timeline->nsec = timespec64_to_ns(ts);
 	return 0;
 }
 
@@ -821,6 +812,7 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 
 	///////////////////////////// USED BY LINUX PTP ///////////////////////////////////////////
 
+	// The userspace PTP daemon 
 	case QOT_PROJECT_TIME:
 
 		// Get the parameters passed into the ioctl
@@ -831,9 +823,10 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 		if (!binding->timeline)
 			return -EACCES;
 
-		// Perform the projection into remore time
+		// Project the time forward
 		ns = timespec64_to_ns(&ts);
-		qot_loc2rem(binding->timeline, 0, &ns);
+		ns = binding->timeline->nsec + (ns - binding->timeline->last) 
+		   + binding->timeline->mult * (ns - binding->timeline->last);
 		ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
