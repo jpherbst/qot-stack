@@ -450,7 +450,7 @@ static int qot_clock_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	struct qot_timeline *timeline = container_of(ptp, struct qot_timeline, info);
 	pr_info("qot_core: clock_gettime\n");
 	spin_lock_irqsave(&timeline->lock, flags);
-	core_n = driver->read() - timeline->last;
+	core_n = driver->read() - timeline->last;	// Number of elapsed nanoseconds
 	spin_unlock_irqrestore(&timeline->lock, flags);
 	*ts = ns_to_timespec64(timeline->nsec + core_n + timeline->mult * core_n);
 	return 0;

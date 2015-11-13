@@ -492,8 +492,8 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pdata->timer = timer;
 	pdata->cc.read = qot_am335x_core_timer_read;
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
-	pdata->cc.mult = 0x80000000;
-	pdata->cc.shift = 29;
+	pdata->cc.mult = 2796202667;
+	pdata->cc.shift = 26;
 	timecounter_init(&pdata->tc, &pdata->cc, 0);
 	INIT_DELAYED_WORK(&pdata->overflow_work, qot_am335x_overflow_check);
 	schedule_delayed_work(&pdata->overflow_work, AM335X_OVERFLOW_PERIOD);
