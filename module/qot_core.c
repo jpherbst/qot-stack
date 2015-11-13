@@ -826,9 +826,9 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Project the time forward
-		ns = timespec64_to_ns(&ts);
-		ns = binding->timeline->nsec + (ns - binding->timeline->last) 
-		   + binding->timeline->mult * (ns - binding->timeline->last);
+		ns = timespec64_to_ns(&ts) - binding->timeline->last;
+		ns = binding->timeline->nsec + ns 
+		   + div_u64(binding->timeline->mult*ns,1000000000ULL);
 		ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
