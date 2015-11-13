@@ -826,11 +826,13 @@ static long qot_ioctl_access(struct file *f, unsigned int cmd, unsigned long arg
 			return -EACCES;
 
 		// Project the time forward
+		pr_info("qot_core: project [0] %lld\n", timespec64_to_ns(&ts));
+		pr_info("qot_core: project [1] %lld\n", binding->timeline->last);
 		ns = timespec64_to_ns(&ts) - binding->timeline->last;
-		pr_info("qot_core: project [a] %lld\n", ns);
+		pr_info("qot_core: project [2] %lld\n", ns);
 		ns = binding->timeline->nsec + ns 
 		   + div_s64(binding->timeline->mult * ns,1000000000ULL);
-	   	pr_info("qot_core: project [b] %lld\n", ns);
+	   	pr_info("qot_core: project [3] %lld\n", ns);
 		ts = ns_to_timespec64(ns);
 
 		// Send back the data structure with the updated timespec
