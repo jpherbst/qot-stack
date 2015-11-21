@@ -1,0 +1,5 @@
+obj-m += qot_core.o
+# qot_core-y := qot_timeline.o
+obj-m += qot_timeline.o
+obj-m += qot_am335x.o
+obj-m += pwm_test.o
