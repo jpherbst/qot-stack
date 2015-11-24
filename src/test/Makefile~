@@ -1,4 +1,4 @@
-APP1  = helloworld_gpio
+APP1  = helloworld
 APP2 = qot
 # APP2  = test-multitask
 # APP3  = test-clone
@@ -12,7 +12,7 @@ CC = $(CROSS_COMPILE)g++
 
 ARCH = arm 
 
-CCFLAGS := -I$(KERNEL_DIR) -I$(KERNEL_DIR)qot-stack/module -lrt -DARCH_$(ARCH) -std=c++11 -pthread -fpermissive
+CCFLAGS := -I$(KERNEL_DIR) -I$(KERNEL_DIR)qot-stack/module -lrt -DARCH_$(ARCH) -std=c++11 -pthread
 CCFLAGS += -O3
 
 all: 

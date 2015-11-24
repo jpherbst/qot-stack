@@ -36,8 +36,8 @@
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
 #define WAIT_TIME_SECS   1
-#define NUM_ITERATIONS   10
-#define OFFSET_MSEC      1000
+#define NUM_ITERATIONS   100
+#define PERIOD_MSEC      3000
 
 // This function is called by the QoT API when a capture event occus
 void callback(const std::string &name, uint8_t event)
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 	const char *m = APPLICATION_NAME;
 	if (argc > 3)
 		m = argv[3];
-    std::cout << "Starting Helloworld\n"; 
+    std::cout << "Starting Helloworld  WaitUntilNextPeriod\n"; 
 	// Bind to a timeline
 	try
 	{
@@ -99,8 +99,8 @@ int main(int argc, char *argv[])
 		{
 			int64_t tval = timeline.GetTime();
 			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
-			std::cout << "WAITING FOR " << OFFSET_MSEC << "ms AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << " ns" << std::endl;
-			timeline.Sleep(OFFSET_MSEC * 1e6);
+			std::cout << "WAITING UNTIL NEXT PERIOD, PERIOD = " << PERIOD_MSEC << "ms AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << " ns" << std::endl;
+			timeline.WaitUntilNextPeriod(PERIOD_MSEC * 1e6, 0);
 			tval = timeline.GetTime();
 			std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
 		}

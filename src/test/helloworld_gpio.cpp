@@ -29,15 +29,22 @@
 // C++ includes
 #include <iostream>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h> 
+
 // Include the QoT API
 #include "qot.hpp"
+#include "beaglebone_gpio.h"
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
 #define WAIT_TIME_SECS   1
-#define NUM_ITERATIONS   10
-#define OFFSET_MSEC      1000
+#define NUM_ITERATIONS   100
+#define PERIOD_MSEC      10
 
 // This function is called by the QoT API when a capture event occus
 void callback(const std::string &name, uint8_t event)
@@ -71,6 +78,37 @@ void callback(const std::string &name, uint8_t event)
 // Main entry point of application
 int main(int argc, char *argv[])
 {
+	// GPIO Stuff
+	volatile void *gpio_addr = NULL;
+    volatile unsigned int *gpio_oe_addr = NULL;
+    volatile unsigned int *gpio_setdataout_addr = NULL;
+    volatile unsigned int *gpio_cleardataout_addr = NULL;
+    unsigned int reg;
+    int fd = open("/dev/mem", O_RDWR);
+
+    printf("Mapping %X - %X (size: %X)\n", GPIO1_START_ADDR,  GPIO1_END_ADDR, GPIO1_SIZE);
+
+    gpio_addr = mmap(0, GPIO1_SIZE, PROT_READ | PROT_WRITE,  MAP_SHARED, fd, GPIO1_START_ADDR);
+
+    gpio_oe_addr = gpio_addr + GPIO_OE;
+    gpio_setdataout_addr = gpio_addr + GPIO_SETDATAOUT;
+    gpio_cleardataout_addr = gpio_addr + GPIO_CLEARDATAOUT;
+
+    if(gpio_addr == MAP_FAILED) {
+        printf("Unable to map GPIO\n");
+        exit(1);
+    }
+    printf("GPIO mapped to %p\n", gpio_addr);
+    printf("GPIO OE mapped to %p\n", gpio_oe_addr);
+    printf("GPIO SETDATAOUTADDR mapped to %p\n", gpio_setdataout_addr);
+    printf("GPIO CLEARDATAOUT mapped to %p\n", gpio_cleardataout_addr);
+
+    reg = *gpio_oe_addr;
+    printf("GPIO1 configuration: %X\n", reg);
+    reg = reg & (0xFFFFFFFF - PIN);
+    *gpio_oe_addr = reg;
+    printf("GPIO1 configuration: %X\n", reg);
+	
 	// Allow this to go on for a while
 	int n = NUM_ITERATIONS;
 	if (argc > 1)
@@ -85,7 +123,7 @@ int main(int argc, char *argv[])
 	const char *m = APPLICATION_NAME;
 	if (argc > 3)
 		m = argv[3];
-    std::cout << "Starting Helloworld\n"; 
+    std::cout << "Starting Helloworld  WaitUntilNextPeriod with GPIO pins going off\n"; 
 	// Bind to a timeline
 	try
 	{
@@ -97,12 +135,21 @@ int main(int argc, char *argv[])
 		
 		for (int i = 0; i < n; i++)
 		{
-			int64_t tval = timeline.GetTime();
-			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
-			std::cout << "WAITING FOR " << OFFSET_MSEC << "ms AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << " ns" << std::endl;
-			timeline.Sleep(OFFSET_MSEC * 1e6);
-			tval = timeline.GetTime();
-			std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
+			//int64_t tval = timeline.GetTime();
+			//std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
+			//std::cout << "WAITING UNTIL NEXT PERIOD, PERIOD = " << PERIOD_MSEC << "ms AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << " ns" << std::endl;
+			timeline.WaitUntilNextPeriod(PERIOD_MSEC * 1e6, 0);
+			//tval = timeline.GetTime();
+			//std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
+			*gpio_setdataout_addr= PIN;
+
+			//tval = timeline.GetTime();
+			//std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
+			//std::cout << "WAITING UNTIL NEXT PERIOD, PERIOD = " << PERIOD_MSEC << "ms AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << " ns" << std::endl;
+			timeline.WaitUntilNextPeriod(PERIOD_MSEC * 1e6, 0);
+			//tval = timeline.GetTime();
+			//std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
+			*gpio_cleardataout_addr = PIN;
 		}
 	}
 	catch (std::exception &e)

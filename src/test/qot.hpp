@@ -194,6 +194,13 @@ namespace qot
 		public: int64_t WaitUntil(int64_t val);
 
 		/**
+		 * @brief Wait until next period on some global time (if in past calls back immediately)
+		 * @param val Task Period in nanoseconds, epoch in ns (reference value from which task refers to time)
+		 * @return Predicted error 
+		 **/
+		public: int64_t WaitUntilNextPeriod(int64_t period, int64_t epoch);
+
+		/**
 		 * @brief Sleep for a given number of nanoseconds relative to the call time
 		 * @param val Number of nanoseconds
 		 * @return Predicted error 

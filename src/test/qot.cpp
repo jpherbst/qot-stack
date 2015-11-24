@@ -50,7 +50,7 @@
 // }
 
 
-#define DEBUG true
+#define DEBUG false
 
 using namespace qot;
 
@@ -227,6 +227,31 @@ int64_t Timeline::WaitUntil(int64_t val)
 		return -1;
 	uint64_t dif = (uint64_t)(val - cur);
 	// struct timespec ts, ret;
+	msg.wait_until.tv_sec  = val / 1e9;
+	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
+	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
+		return 0;
+	//nanosleep(&ts, &ret);
+	return -2;
+}
+
+// Wait until some global time
+int64_t Timeline::WaitUntilNextPeriod(int64_t period, int64_t epoch)
+{
+	// TODO: Adwait to improve this -> Changes made by Sandeep
+	struct qot_message msg;
+	int64_t cur = this->GetTime();
+	int64_t periods_since_epoch = 0;
+	int64_t val;
+	
+	if (cur < val || cur < epoch)
+		return -1;
+	
+	uint64_t dif = (uint64_t)(val - cur);
+	periods_since_epoch = cur/period;
+	if(periods_since_epoch == 0)
+		return 0;
+	val = period*(periods_since_epoch + 1);
 	msg.wait_until.tv_sec  = val / 1e9;
 	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
 	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
