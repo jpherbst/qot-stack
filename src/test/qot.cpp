@@ -91,7 +91,8 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 	
 	// Open the clock
 	if (DEBUG) std::cout << "Opening clock " << oss.str() << std::endl;
-	this->fd_clk = open(oss.str().c_str(), O_RDWR);
+	// this->fd_clk = open(oss.str().c_str(), O_RDWR);
+	this->fd_clk = open("/dev/ptp0", O_RDWR);
 	if (this->fd_clk < 0)
 		throw CannotOpenPOSIXClockException();
 

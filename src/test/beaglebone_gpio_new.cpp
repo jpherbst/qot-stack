@@ -44,7 +44,7 @@
 #define APPLICATION_NAME "default"
 #define WAIT_TIME_SECS   1
 #define NUM_ITERATIONS   100
-#define PERIOD_MSEC      1000
+#define PERIOD_MSEC      1500
 
 // This function is called by the QoT API when a capture event occus
 void callback(const std::string &name, uint8_t event)
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
     reg = *gpio_oe_addr;
     printf("GPIO1 configuration: %X\n", reg);
-    reg = reg & (0xFFFFFFFF - PIN);
+    reg = reg & (0xFFFFFFFF - PIN19);
     *gpio_oe_addr = reg;
     printf("GPIO1 configuration: %X\n", reg);
 	
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 			timeline.WaitUntilNextPeriod((int64_t)period_msec * 1e6, 0);
 			//tval = timeline.GetTime();
 			//std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
-			*gpio_setdataout_addr= PIN;
+			*gpio_setdataout_addr= PIN19;
 
 			//tval = timeline.GetTime();
 			//std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 			timeline.WaitUntilNextPeriod((int64_t)period_msec * 1e6, 0);
 			//tval = timeline.GetTime();
 			//std::cout << "RESUMED AT " << tval/1000000000LL << " seconds "<< tval % 1000000000LL << "ns" << std::endl;
-			*gpio_cleardataout_addr = PIN;
+			*gpio_cleardataout_addr = PIN19;
 		}
 	}
 	catch (std::exception &e)

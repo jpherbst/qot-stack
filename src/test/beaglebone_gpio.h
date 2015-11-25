@@ -9,7 +9,9 @@
 #define GPIO_CLEARDATAOUT 0x190
 
 
-#define PIN (1<<19) 
+#define PIN19 (1<<19) 
+#define PIN28 (1<<28)
+#define PIN (1<<28)
 
 
 #endif

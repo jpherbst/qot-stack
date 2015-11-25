@@ -1,5 +1,6 @@
 APP1  = helloworld_gpio
 APP2 = qot
+APP3 = beaglebone_gpio_new
 # APP2  = test-multitask
 # APP3  = test-clone
 # APP4  = test-clone-manual
@@ -18,6 +19,7 @@ CCFLAGS += -O3
 all: 
 	# $(CC) -o $(APP1)  $(APP1).c $(CCFLAGS) 
 	$(CC) -o $(APP1)  $(APP1).cpp $(APP2).cpp  $(CCFLAGS) 
+	$(CC) -o $(APP3)  $(APP3).cpp $(APP2).cpp  $(CCFLAGS) 
 	# $(CC) -o $(APP3)  $(APP3).c $(CCFLAGS) 
 	# $(CC) -o $(APP4)  $(APP4).c $(CCFLAGS) 
 
