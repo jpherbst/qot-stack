@@ -1,7 +1,9 @@
 SHELL := /bin/bash
 
+obj-m += qot_timeline.o
 obj-m += qot_core.o
 obj-m += qot_am335x.o
+obj-m += chronos.o
 obj-m += pwm_test.o
 
 KERNELDIR ?= /export/bb-kernel/KERNEL
@@ -13,6 +15,7 @@ all:
 	dtc -O dtb -o ROSELINE-QOT-00A0.dtbo -b 0 -@ ROSELINE-QOT-00A0.dts
 	dtc -O dtb -o ROSELINE-QOT-ATMEL-00A0.dtbo -b 0 -@ ROSELINE-QOT-ATMEL-00A0.dts
 	dtc -O dtb -o ROSELINE-QOT-DECAWAVE-00A0.dtbo -b 0 -@ ROSELINE-QOT-DECAWAVE-00A0.dts
+	dtc -O dtb -o ROSELINE-QOT-CHRONOS-00A0.dtbo -b 0 -@ ROSELINE-QOT-CHRONOS-00A0.dts
 
 clean:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" clean

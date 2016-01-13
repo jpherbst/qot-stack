@@ -23,6 +23,16 @@
                     0x94  0x02      /* P8.8   MODE2 TIMER7 - CAPTURE */
                 >;
             };
+            chronos_pins: chronos_pins {
+                pinctrl-single,pins = <
+                    0x038 0x17      /* RESET P8.16 O_PULLUP | MODE7-GPIO1[14] */
+                    0x03c 0x37      /* IRQ P8.15 I_PULLUP | MODE7-GPIO1[15] */
+                    0x190 0x33      /* P9.31 CLK INPUT_PULLUP | MODE3 */
+                    0x194 0x33      /* P9.29 MISO INPUT_PULLUP | MODE3 */
+                    0x198 0x13      /* P9.30 MOSI OUTPUT_PULLUP | MODE3 */
+                    0x19c 0x13      /* P9.28 CS0  OUTPUT_PULLUP | MODE3 */
+                >;
+            };
         };
     };
  
@@ -40,6 +50,12 @@
                 hwio3 = <&timer7>;
                 pinctrl-names = "default";
                 pinctrl-0 = <&qot_pins>;
+            };
+            chronos {
+                compatible = "chronos";
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&chronos_pins>;
             };
         };
     };
