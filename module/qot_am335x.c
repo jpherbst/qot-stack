@@ -35,8 +35,9 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/clk.h>
-#include <linux/clocksource.h>
 #include <linux/timecounter.h>
+#include <linux/clocksource.h>
+#include <linux/gpio.h>
 
 /* We are going to export the whol am335x as a PTP clock */
 #include <linux/ptp_clock_kernel.h>
@@ -104,39 +105,66 @@ static void qot_am335x_core(struct qot_am335x_channel *channel, int event)
 
 static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 {
-	u32 ctrl, value;
+	u32 ctrl, value, gpio;
 	struct omap_dm_timer *timer = channel->timer;
 	switch (event) {
+	
 	case EVENT_MATCH:
+
 		break;
+	
 	case EVENT_OVERFLOW:
+
 		break;
+
 	case EVENT_START:
+
+		/* Set the I/O pin associated with the IRQ to output */
+		gpio = irq_to_gpio(timer->irq);
+		gpio_direction_output(irq_to_gpio(timer->irq), 0);
+
+		/* Enable the timer */
 		omap_dm_timer_enable(timer);
+		
+		/* Setup compare mode */
 		__omap_dm_timer_write(timer, OMAP_TIMER_LOAD_REG, 0, timer->posted);
 		ctrl = __omap_dm_timer_read(timer, OMAP_TIMER_CTRL_REG, timer->posted);
 		ctrl &= ~(OMAP_TIMER_CTRL_PRE | (0x07 << 2));
 		ctrl |= (OMAP_TIMER_CTRL_AR|OMAP_TIMER_CTRL_ST|OMAP_TIMER_CTRL_GPOCFG);
 		__omap_dm_timer_load_start(timer, ctrl, 0, timer->posted);
+
+		/* Bootstrap timer */
 		value = __omap_dm_timer_read(channel->parent->core.timer,
 			OMAP_TIMER_COUNTER_REG, channel->parent->core.timer->posted);
 		__omap_dm_timer_write(timer, OMAP_TIMER_COUNTER_REG,
 			timer->context.tcrr + AM335X_KLUDGE_FACTOR, timer->posted);
+		
+		/* Save context */
 		timer->context.tclr = ctrl;
 		timer->context.tldr = 0;
 		timer->context.tcrr = value;
+
 		break;
+
 	case EVENT_STOP:
+		
+		/* Set the I/O pin associated with the IRQ to input */
+		gpio = irq_to_gpio(timer->irq);
+		gpio_direction_input(irq_to_gpio(timer->irq));
+
+		/* Enable the timer */
 		omap_dm_timer_disable(timer);
+		
 		break;
 	}
 }
 
 static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 {
-	u32 ctrl, value, irqcfg;
+	u32 ctrl, value, irqcfg, gpio;
 	struct omap_dm_timer *timer = channel->timer;
 	switch (event) {
+
 	case EVENT_START:
 
 		/* Determine interrupt polarity */
@@ -149,6 +177,13 @@ static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 		else if (channel->state.extts.flags & PTP_FALLING_EDGE)
 			irqcfg |= OMAP_TIMER_CTRL_TCM_HIGHTOLOW;
 
+		/* Set the I/O pin associated with the IRQ to input */
+		gpio = irq_to_gpio(timer->irq);
+		gpio_direction_input(irq_to_gpio(timer->irq));
+
+		/* Enable the timer */
+		omap_dm_timer_enable(timer);
+		
 		/* Setup capture on the timer pin */
 		omap_dm_timer_enable(timer);
 		__omap_dm_timer_write(timer, OMAP_TIMER_LOAD_REG, 0, timer->posted);
@@ -156,12 +191,15 @@ static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 		ctrl &= ~(OMAP_TIMER_CTRL_PRE | (0x07 << 2));
 		ctrl |= (OMAP_TIMER_CTRL_AR | OMAP_TIMER_CTRL_ST);
 		ctrl |= (irqcfg | OMAP_TIMER_CTRL_GPOCFG);
-		__omap_dm_timer_load_start(timer, ctrl, 0, timer->posted);
+
+		/* Bootstrap timer */
 		value = __omap_dm_timer_read(channel->parent->core.timer,
 			OMAP_TIMER_COUNTER_REG, channel->parent->core.timer->posted);
 		__omap_dm_timer_write(timer, OMAP_TIMER_COUNTER_REG,
 			timer->context.tcrr + AM335X_KLUDGE_FACTOR, timer->posted);
-	    timer->context.tclr = ctrl;
+		
+		/* Save context */
+		timer->context.tclr = ctrl;
 		timer->context.tldr = 0;
 		timer->context.tcrr = value;
 		
@@ -238,7 +276,7 @@ static int qot_am335x_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 	unsigned long flags;
 	int neg_adj = 0;
 	struct qot_am335x_data *pdata = container_of(
-	                                    ptp, struct qot_am335x_data, info);
+		ptp, struct qot_am335x_data, info);
 	if (ppb < 0) {
 		neg_adj = 1;
 		ppb = -ppb;
@@ -258,7 +296,7 @@ static int qot_am335x_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	unsigned long flags;
 	struct qot_am335x_data *pdata = container_of(
-	                                    ptp, struct qot_am335x_data, info);
+        ptp, struct qot_am335x_data, info);
 	spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_adjtime(&pdata->tc, delta);
 	spin_unlock_irqrestore(&pdata->lock, flags);
@@ -270,7 +308,7 @@ static int qot_am335x_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	u64 ns;
 	unsigned long flags;
 	struct qot_am335x_data *pdata = container_of(
-	                                    ptp, struct qot_am335x_data, info);
+    	ptp, struct qot_am335x_data, info);
 	spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
 	spin_unlock_irqrestore(&pdata->lock, flags);
@@ -284,7 +322,7 @@ static int qot_am335x_settime(struct ptp_clock_info *ptp,
 	u64 ns;
 	unsigned long flags;
 	struct qot_am335x_data *pdata = container_of(
-	                                    ptp, struct qot_am335x_data, info);
+        ptp, struct qot_am335x_data, info);
 	ns = timespec64_to_ns(ts);
 	spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_init(&pdata->tc, &pdata->cc, ns);
@@ -444,6 +482,9 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
 	}
 
+	/* Set the parent struct */
+	pdata->core.parent = pdata;
+
 	/* Clean up device tree node */
 	of_node_put(timer_node);
 
@@ -522,6 +563,34 @@ problem:
 	return NULL;
 }
 
+static void qot_am335x_cleanup(struct qot_am335x_data *pdata)
+{
+	int i;
+
+	/* Free the PTP clock */
+	if (pdata->clock)
+		ptp_clock_unregister(pdata->clock);
+
+	/* Free up the GPIO timers */
+	for (i = 0; i < 4; i++) {
+		if (!pdata->gpio[i].timer)
+			continue;
+		omap_dm_timer_set_source(pdata->gpio[i].timer, OMAP_TIMER_SRC_SYS_CLK);
+		omap_dm_timer_set_int_disable(pdata->gpio[i].timer, 
+			OMAP_TIMER_INT_MATCH|OMAP_TIMER_INT_CAPTURE|OMAP_TIMER_INT_OVERFLOW);
+		free_irq(pdata->gpio[i].timer->irq, &pdata->gpio[i]);
+		omap_dm_timer_stop(pdata->gpio[i].timer);
+		omap_dm_timer_free(pdata->gpio[i].timer);
+		pdata->gpio[i].timer = NULL;
+	}
+
+	/* Free the core timer */
+	omap_dm_timer_set_source(pdata->core.timer, OMAP_TIMER_SRC_SYS_CLK);
+	omap_dm_timer_stop(pdata->core.timer);
+	omap_dm_timer_free(pdata->core.timer);
+	pdata->core.timer = NULL;
+}
+
 // MODULE LOADING AND UNLOADING  ///////////////////////////////////////////////
 
 static const struct of_device_id qot_am335x_dt_ids[] = {
@@ -549,6 +618,7 @@ static int qot_am335x_probe(struct platform_device *pdev)
 static int qot_am335x_remove(struct platform_device *pdev)
 {
 	if (pdev->dev.platform_data) {
+		qot_am335x_cleanup(pdev->dev.platform_data);
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);
 		pdev->dev.platform_data = NULL;
 	}
@@ -572,4 +642,3 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington");
 MODULE_DESCRIPTION("Linux PTP Driver for AM335x");
 MODULE_VERSION("0.5.0");
-

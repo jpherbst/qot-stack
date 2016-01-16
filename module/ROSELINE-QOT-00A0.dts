@@ -34,10 +34,10 @@
                 compatible = "qot_am335x";
                 status = "okay";
                 core  = <&timer3>;
-                hwio0 = <&timer4>;
-                hwio1 = <&timer5>;
-                hwio2 = <&timer6>;
-                hwio3 = <&timer7>;
+                gpio0 = <&timer4>;
+                gpio1 = <&timer5>;
+                gpio2 = <&timer6>;
+                gpio3 = <&timer7>;
                 pinctrl-names = "default";
                 pinctrl-0 = <&qot_pins>;
             };

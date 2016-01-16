@@ -1,10 +1,10 @@
 SHELL := /bin/bash
 
-obj-m += qot_timeline.o
-obj-m += qot_core.o
+#obj-m += qot_timeline.o
+#obj-m += qot_core.o
 obj-m += qot_am335x.o
-obj-m += chronos.o
-obj-m += pwm_test.o
+#obj-m += chronos.o
+#obj-m += pwm_test.o
 
 KERNELDIR ?= /export/bb-kernel/KERNEL
 KERNELVER ?= 4.1.12-bone-rt-r16
