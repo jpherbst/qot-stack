@@ -9,9 +9,13 @@ obj-m += qot_am335x.o
 KERNELDIR ?= /export/bb-kernel/KERNEL
 KERNELVER ?= 4.1.12-bone-rt-r16
 CROSSCOMP ?= ../dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
+IP_SERVER ?= root@172.17.5.7
+IP_CLIENT ?= root@172.17.11.11
 
 all:
 	make -C $(KERNELDIR) M=$(PWD) ARCH=arm CROSS_COMPILE="${CROSSCOMP}" modules
+
+overlays:
 	dtc -O dtb -o ROSELINE-QOT-00A0.dtbo -b 0 -@ ROSELINE-QOT-00A0.dts
 	dtc -O dtb -o ROSELINE-QOT-ATMEL-00A0.dtbo -b 0 -@ ROSELINE-QOT-ATMEL-00A0.dts
 	dtc -O dtb -o ROSELINE-QOT-DECAWAVE-00A0.dtbo -b 0 -@ ROSELINE-QOT-DECAWAVE-00A0.dts
@@ -22,12 +26,30 @@ clean:
 	rm *.dtbo
 
 install:
-	sudo cp -v *.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
-	sudo cp -v *.dtbo /export/rootfs/lib/firmware
-	sudo cp 80-qot.rules /export/rootfs/etc/udev/rules.d/
-	sudo cp capes /export/rootfs/usr/bin/
-	sudo chmod 755 /export/rootfs/usr/bin/capes
-
+	chmod 755 capes
+	scp *.ko $(IP_SERVER):/export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	scp *.dtbo $(IP_SERVER):/export/rootfs/lib/firmware
+	scp 80-qot.rules $(IP_SERVER):/export/rootfs/etc/udev/rules.d/
+	scp capes $(IP_SERVER):/export/rootfs/usr/bin/
+	
 reload:
-	ssh root@172.17.11.0 depmod
-	ssh root@172.17.11.0 ldconfig
+	ssh $(IP_CLIENT) depmod
+	ssh $(IP_CLIENT) ldconfig
+	ssh $(IP_CLIENT) reboot
+	sleep 20
+	ssh $(IP_CLIENT)
+
+client:
+	ssh $(IP_CLIENT)
+
+server:
+	ssh $(IP_SERVER)
+
+kill:
+	ssh $(IP_SERVER) ntbkill
+
+spawn:
+	ssh $(IP_SERVER) ntbspawn
+
+minicom:
+	minicom
