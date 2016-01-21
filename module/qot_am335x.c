@@ -172,6 +172,7 @@ static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 		/* Configure timer */
 		omap_dm_timer_stop(timer);
+		omap_dm_timer_set_prescaler(timer, 0);
 		omap_dm_timer_set_load(timer, 1, load);		/* 1 = autoreload */
 		omap_dm_timer_set_match(timer, 1, match);	/* 1 = enable */
 		omap_dm_timer_start(timer);
@@ -244,6 +245,7 @@ static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 			pr_err("Cannot set the direction of the GPIO to output\n");
 
 		/* Determine interrupt polarity */
+		omap_dm_timer_set_prescaler(timer,0);
 		if (   (channel->state.extts.flags & PTP_RISING_EDGE)
 			&& (channel->state.extts.flags & PTP_FALLING_EDGE))
 			omap_dm_timer_setup_capture(timer,OMAP_TIMER_CTRL_TCM_BOTHEDGES);
@@ -295,6 +297,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	unsigned int irq_status;
 	struct ptp_clock_event pevent;
 	struct qot_am335x_channel *channel = data;
+	pr_info("Excuse me!\n");
 	spin_lock_irqsave(&channel->parent->lock, flags);
 	irq_status = omap_dm_timer_read_status(channel->timer);
 	switch (channel->state.type) {
