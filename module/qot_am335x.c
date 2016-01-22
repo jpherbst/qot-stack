@@ -58,7 +58,9 @@ enum qot_am335x_events {
 /* Useful definitions */
 #define MODULE_NAME 			"qot_am335x"
 #define AM335X_REWRITE_DELAY 	13
-#define AM335X_NO_PRESCALER 	0x08
+#define AM335X_NO_PRESCALER 	0xFFFFFFFF
+#define MIN_PERIOD_NS			1000ULL
+#define MAX_PERIOD_NS			10000000000ULL
 
 // PLATFORM DATA ///////////////////////////////////////////////////////////////
 
@@ -104,7 +106,7 @@ static s64 ptp_to_s64(struct ptp_clock_time *t) {
 
 // TIMER MANAGEMENT ////////////////////////////////////////////////////////////
 
-static void qot_am335x_core(struct qot_am335x_channel *channel, int event)
+static int qot_am335x_core(struct qot_am335x_channel *channel, int event)
 {
 	struct omap_dm_timer *timer = channel->timer;
 	switch (event) {
@@ -118,22 +120,26 @@ static void qot_am335x_core(struct qot_am335x_channel *channel, int event)
 		omap_dm_timer_stop(timer);
 		break;
 	}
+
+	return 0;
 }
 
-static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
+static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 {
+	s64 ts, tp;
 	u32 load, match, offset;
+	unsigned long flags;
 	struct omap_dm_timer *timer, *core;
 	
 	/* Check if the channel is valid */
 	if (!channel)
-		return;
+		return -EINVAL;
 
 	/* Get references to timer and core */
 	timer = channel->timer;
 	core  = channel->parent->core.timer;
 	if (!timer || !core)
-		return;
+		return -EINVAL;
 
 	/* What event is needed */
 	switch (event) {
@@ -152,10 +158,24 @@ static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 	case EVENT_START:
 
+		/* Get the signed ns start time and period */
+		ts = ptp_to_s64(&channel->state.perout.start);
+		tp = ptp_to_s64(&channel->state.perout.period);
+
+		/* Some basic checks for sanity */
+		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
+			return -EINVAL;
+
+		/* Use the cyclecounter mult at shift to scale */
+		spin_lock_irqsave(&channel->parent->lock, flags);
+		tp = div_u64((tp << channel->parent->cc.shift)
+			+ channel->parent->tc.frac, channel->parent->cc.mult);
+		spin_unlock_irqrestore(&channel->parent->lock, flags);
+
 		/* Hack for now */
-		offset = 50; // (start)
-		load   = 20; // (low+high)
-		match  = 10; // (low)
+		offset = 0xFFFFFFFF; 	// (start)
+		load   = tp; 			// (low+high)
+		match  = tp/2; 			// (low)
 
 		/* Configure timer */
 		omap_dm_timer_enable(timer);
@@ -167,7 +187,7 @@ static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 		/* Bootstrap timer to core time */
 		omap_dm_timer_start(timer);	
-		omap_dm_timer_write_counter(timer, -offset);
+		omap_dm_timer_write_counter(timer, 0xFFFFFFFF);
 
 		break;
 
@@ -179,21 +199,23 @@ static void qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		
 		break;
 	}
+
+	return 0;
 }
 
-static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
+static int qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 {
 	struct omap_dm_timer *timer, *core;
 	
 	/* Check if the channel is valid */
 	if (!channel)
-		return;
+		return -EINVAL;
 
 	/* Get references to timer and core */
 	timer = channel->timer;
 	core  = channel->parent->core.timer;
 	if (!timer || !core)
-		return;
+		return -EINVAL;
 
 	/* Determine action */
 	switch (event) {
@@ -226,6 +248,8 @@ static void qot_am335x_extts(struct qot_am335x_channel *channel, int event)
 	
 		break;
 	}
+
+	return 0;
 }
 
 static cycle_t qot_am335x_read(const struct cyclecounter *cc)
@@ -351,19 +375,13 @@ static int qot_am335x_enable(struct ptp_clock_info *ptp,
 	case PTP_CLK_REQ_EXTTS:
 		memcpy(&pdata->pins[rq->extts.index].state, rq, 
 			sizeof(struct ptp_clock_request));
-		if (on)
-			qot_am335x_extts(&pdata->pins[rq->extts.index], EVENT_START);
-		else
-			qot_am335x_extts(&pdata->pins[rq->extts.index], EVENT_STOP);
-		return 0;
+		return qot_am335x_extts(&pdata->pins[rq->extts.index], 
+			(on ? EVENT_START : EVENT_STOP));
 	case PTP_CLK_REQ_PEROUT:
 		memcpy(&pdata->pins[rq->perout.index].state, rq, 
 			sizeof(struct ptp_clock_request));
-		if (on)
-			qot_am335x_perout(&pdata->pins[rq->perout.index], EVENT_START);
-		else
-			qot_am335x_perout(&pdata->pins[rq->perout.index], EVENT_STOP);
-		return 0;
+		return qot_am335x_perout(&pdata->pins[rq->perout.index], 
+			(on ? EVENT_START : EVENT_STOP));
 	default:
 		break;
 	}
@@ -495,7 +513,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 	/* Setup clock source for core */
 	pr_info("qot_am335x: Configuring core timer...\n");
-	omap_dm_timer_set_source(pdata->core.timer, timer_source);
+	omap_dm_timer_set_source(pdata->core.timer, OMAP_TIMER_SRC_SYS_CLK);
 	qot_am335x_core(&pdata->core, EVENT_START);
 
 	/* Create a time counter */
@@ -579,7 +597,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 		/* Configure the timer and set input clock source */
 		omap_dm_timer_set_source(pdata->pins[pdata->num_pins].timer, 
-			timer_source);
+			OMAP_TIMER_SRC_SYS_CLK);
 		qot_am335x_extts(&pdata->pins[pdata->num_pins], EVENT_STOP);
 
 		/* Print some debug information */
