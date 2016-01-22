@@ -43,25 +43,25 @@
                 pinctrl-names = "default";
                 pinctrl-0 = <&qot_am335x_pins>;
                 core  = <&timer3 0>; /* 0 = SYS, 1 = RTC, 2 = TCLKIN */
-                pin0 {
-                    label = "TIMER4";
-                    timer = <&timer4>;
-                    gpios = <&gpio2 2 0>;
-                };
-                pin1 {
-                    label = "TIMER5";
-                    timer = <&timer5>;
-                    gpios = <&gpio2 5 0>;
+                pin3 {
+                    label = "TIMER7";
+                    timer = <&timer7>;
+                    gpios = <&gpio2 3 0>;
                 };
                 pin2 {
                     label = "TIMER6";
                     timer = <&timer6>;
                     gpios = <&gpio2 4 0>;
                 };
-                pin3 {
-                    label = "TIMER7";
-                    timer = <&timer7>;
-                    gpios = <&gpio2 3 0>;
+                pin1 {
+                    label = "TIMER5";
+                    timer = <&timer5>;
+                    gpios = <&gpio2 5 0>;
+                };
+                pin0 {
+                    label = "TIMER4";
+                    timer = <&timer4>;
+                    gpios = <&gpio2 2 0>;
                 };
             };
         };
