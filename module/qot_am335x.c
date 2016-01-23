@@ -127,7 +127,7 @@ static int qot_am335x_core(struct qot_am335x_channel *channel, int event)
 static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 {
 	s64 ts, tp;
-	u32 load, match, offset;
+	u32 load, match, tc, offset;
 	unsigned long flags;
 	struct omap_dm_timer *timer, *core;
 	
@@ -152,8 +152,6 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 	
 	case EVENT_OVERFLOW:
 	
-		/* Do nothing - can be used to change load/match */
-
 		break;
 
 	case EVENT_START:
@@ -162,20 +160,33 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		ts = ptp_to_s64(&channel->state.perout.start);
 		tp = ptp_to_s64(&channel->state.perout.period);
 
-		/* Some basic checks for sanity */
+		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
 			return -EINVAL;
 
-		/* Use the cyclecounter mult at shift to scale */
+		
 		spin_lock_irqsave(&channel->parent->lock, flags);
+
+		/* Work out the cycle count corresponding to this edge */
+		ts = ts - channel->parent->tc.nsec;
+		ts = div_u64((ts << channel->parent->cc.shift)
+			+ channel->parent->tc.frac, channel->parent->cc.mult);
+		tc = ts;
+		tc = tc + channel->parent->tc.cycle_last;
+
+		/* Use the cyclecounter mult at shift to scale */
 		tp = div_u64((tp << channel->parent->cc.shift)
 			+ channel->parent->tc.frac, channel->parent->cc.mult);
+
 		spin_unlock_irqrestore(&channel->parent->lock, flags);
 
-		/* Hack for now */
-		offset = 0xFFFFFFFF; 	// (start)
-		load   = tp; 			// (low+high)
-		match  = tp/2; 			// (low)
+		/* Map to an offset, load and match */
+		offset = tc; 		// (start)
+		load   = tp; 		// (low+high)
+		match  = tp/2; 		// (low)
+
+		pr_info("qot_am335x: PWM offset...%u\n",offset);
+		pr_info("qot_am335x: PWM period...%u\n",load);
 
 		/* Configure timer */
 		omap_dm_timer_enable(timer);
@@ -187,7 +198,8 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 		/* Bootstrap timer to core time */
 		omap_dm_timer_start(timer);	
-		omap_dm_timer_write_counter(timer, 0xFFFFFFFF);
+		omap_dm_timer_write_counter(timer, 
+			omap_dm_timer_read_counter(core) - offset + AM335X_REWRITE_DELAY);
 
 		break;
 
