@@ -56,4 +56,19 @@ minicom:
 
 apps:
 	$(KERNELDIR)/${CROSSCOMP}gcc -o testptp testptp.c -lrt
-	$(KERNELDIR)/${CROSSCOMP}gcc -o phc2phc phc2phc.c -lrt -lm
+	$(KERNELDIR)/${CROSSCOMP}gcc -o phc2phc -Ilinuxptp-code \
+		-D_GNU_SOURCE -DHAVE_CLOCK_ADJTIME \
+		-DHAVE_POSIX_SPAWN -DHAVE_ONESTEP_SYNC \
+		linuxptp-code/sk.c \
+		linuxptp-code/util.c \
+		linuxptp-code/config.c \
+		linuxptp-code/hash.c \
+		linuxptp-code/nullf.c \
+		linuxptp-code/pi.c \
+		linuxptp-code/ntpshm.c \
+		linuxptp-code/linreg.c \
+		linuxptp-code/print.c \
+		linuxptp-code/servo.c \
+		linuxptp-code/clockadj.c \
+		phc2phc.c \
+		-lrt -lm

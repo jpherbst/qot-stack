@@ -17,8 +17,6 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#define _GNU_SOURCE
-#define __SANE_USERSPACE_TYPES__        /* For PPC64, to get LL64 types */
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -38,20 +36,23 @@
 
 #include <linux/ptp_clock.h>
 
+/* Add servo and clock adjustment code from LinuxPTP */
+#include "config.h"
+#include "servo.h"
+#include "clockadj.h"
+
+/* Useful definitions */
+#define NSEC_PER_SEC  ((long)1000000000)
 #define NSEC_PER_MSEC ((long)1000000)
-
-#ifndef ADJ_SETOFFSET
-#define ADJ_SETOFFSET 0x0100
-#endif
-
+#define FD_TO_CLOCKID(fd) ((~(clockid_t) (fd) << 3) | 3)
 #ifndef CLOCK_INVALID
 #define CLOCK_INVALID -1
 #endif
 
-#define FD_TO_CLOCKID(fd) ((~(clockid_t) (fd) << 3) | 3)
+////////////////////////////////////////////////////////
 
 /* From: http://web.mit.edu/~tcoffee/Public/rss/common/timespec.c */
-static void timespec_addns(struct ptp_clock_time *ts, long ns)
+static void ptp_clock_addns(struct ptp_clock_time *ts, long ns)
 {
 	int sec = ns / 1000000000;
 	ns = ns - sec * 1000000000;
@@ -60,9 +61,27 @@ static void timespec_addns(struct ptp_clock_time *ts, long ns)
 	ts->nsec = ts->nsec % 1000000000;
 }
 
+static int64_t ptp_clock_diff(struct ptp_clock_time *a, struct ptp_clock_time *b)
+{
+	int64_t tmp = ((int64_t) a->sec - (int64_t) b->sec) * NSEC_PER_SEC;
+	tmp += ((int64_t) a->nsec - (int64_t) b->nsec);
+	return tmp;
+}
+
+static uint64_t ptp_clock_u64(struct ptp_clock_time *ts)
+{
+	return ((uint64_t)ts->sec) * NSEC_PER_SEC + (uint64_t) ts->nsec;
+}
+
+static double ptp_clock_double(struct ptp_clock_time *ts)
+{
+	return ((double)ts->sec) + ((double) ts->nsec) / (double) NSEC_PER_SEC;
+}
+
 static int running = 1;
 
-static void exit_handler(int s) {
+static void exit_handler(int s)
+{
 	printf("Exit requested \n");
   	running = 0;
 }
@@ -72,9 +91,9 @@ static void usage(char *progname)
 	fprintf(stderr,
 		"usage: %s [options]\n"
 		" -m name    master device to open (typically system PHC)\n"
-		" -d name    slave device to open (typically interface PHC)\n"
+		" -s name    slave device to open (typically interface PHC)\n"
 		" -M val     channel index for master (perout)\n"
-		" -D val     channel index for slave (extts)\n"
+		" -S val     channel index for slave (extts)\n"
 		" -p val     sync period (msec)\n"
 		" -e val     error tolerance (nsec)\n"
 		" -h         print help\n",
@@ -101,8 +120,18 @@ int main(int argc, char *argv[])
 	struct ptp_extts_event event;				/* PTP event */
 	struct ptp_extts_request extts_request;		/* External timestamp req */
 	struct ptp_perout_request perout_request;	/* Programmable interrupt */
-	clockid_t clkid;							/* Clock ID */
+	clockid_t clkid_s, clkid_m;					/* Clock ids */
 	struct timespec ts;							/* Time storage */
+
+	/* How we plan to discipline the clock */
+	int max_ppb;
+	double ppb;
+	uint64_t local_ts;
+	int64_t offset;
+	struct servo *servo;
+	struct config *cfg = config_create();
+	if (!cfg)
+		perror("cannot create config");
 
 	/* Argument parsing */
 	progname = strrchr(argv[0], '/');
@@ -150,6 +179,11 @@ int main(int argc, char *argv[])
 	if (ioctl(fd_m, PTP_PIN_SETFUNC, &desc)) {
 		perror("master: PTP_PIN_SETFUNC");
 	}
+	clkid_m = FD_TO_CLOCKID(fd_m);
+	if (CLOCK_INVALID == clkid_m) {
+		perror("master: failed to read clock id\n");
+		return -1;
+	}
 
 	/* Open slave character device */
 	fd_s = open(device_s, O_RDWR);
@@ -164,15 +198,10 @@ int main(int argc, char *argv[])
 	if (ioctl(fd_s, PTP_PIN_SETFUNC, &desc)) {
 		perror("slave: PTP_PIN_SETFUNC");
 	}
-
-	/* Query the current time */
-	clkid = FD_TO_CLOCKID(fd_m);
-	if (CLOCK_INVALID == clkid) {
-		fprintf(stderr, "failed to read master clock id\n");
+	clkid_s = FD_TO_CLOCKID(fd_s);
+	if (CLOCK_INVALID == clkid_s) {
+		perror("slave: failed to read clock id\n");
 		return -1;
-	}
-	if (clock_gettime(clkid, &ts)) {
-		perror("master: clock_gettime");
 	}
 
 	/* Configure master pulse per second to start at deterministic point in future */
@@ -182,11 +211,9 @@ int main(int argc, char *argv[])
 	perout_request.start.nsec = 0;
 	perout_request.period.sec = 0;
 	perout_request.period.nsec = 0;
-	timespec_addns(&perout_request.period, period);
+	ptp_clock_addns(&perout_request.period, period);
 	if (ioctl(fd_m, PTP_PEROUT_REQUEST, &perout_request)) {
-		perror("PTP_PEROUT_REQUEST");
-	} else {
-		puts("periodic output request okay");
+		perror("master: cannot reequest periodic output");
 	}
 
 	/* Request timestamps from the slave */
@@ -194,23 +221,91 @@ int main(int argc, char *argv[])
 	extts_request.index = index_s;
 	extts_request.flags = PTP_ENABLE_FEATURE;
 	if (ioctl(fd_s, PTP_EXTTS_REQUEST, &extts_request)) {
-		perror("PTP_EXTTS_REQUEST");
+		perror("slave: cannot request external timestamp");
 	}
+
+	/* Determine slave max frequency adjustment */
+	if (ioctl(fd_s, PTP_CLOCK_GETCAPS, &caps)) {
+		perror("slave: cannot get capabilities");
+	}
+	max_ppb = caps.max_adj;
+	if (!max_ppb) {
+		perror("slave: clock is not adjustable");
+	}
+
+	/* Initialize clock discipline */
+	clockadj_init(clkid_s);
+
+	/* Get the current ppb error */
+	ppb = clockadj_get_freq(clkid_s);
+	
+	/* Create a servo */
+	servo = servo_create(
+		cfg,			/* Servo configuration */
+		CLOCK_SERVO_PI,	/* Servo type */ 
+		-ppb,			/* Current frequency adjustment */ 
+		max_ppb, 		/* Max frequency adjustment */
+		0				/* 0: hardware, 1: software */
+	);
+
+	/* Set the servo sync interval (in fractional seconds) */
+	servo_sync_interval(
+		servo, 		
+		ptp_clock_double(&perout_request.period)
+	);
+
+	/* This will save the servo state */
+	enum servo_state state;
 
 	/* Keep checking for time stamps */
 	signal(SIGINT, exit_handler);
 	while (running) {
+
+		/* Read events coming in */
 		cnt = read(fd_s, &event, sizeof(event));
 		if (cnt != sizeof(event)) {
-			perror("read");
+			perror("slave: cannot read event");
 			break;
 		}
-		timespec_addns(&perout_request.start, period);
-		printf("EVENT CAPTURED\n");
-		printf("- SYS PHC at %lld.%09u\n", perout_request.start.sec, perout_request.start.nsec);
-		printf("- NIC PHC at %lld.%09u\n", event.t.sec, event.t.nsec);
+		
+		/* Work out the predicted timestamp */
+		ptp_clock_addns(&perout_request.start, period);
+
+		/* Local timestamp and offset */
+		local_ts = ptp_clock_u64(&perout_request.start);
+		offset = ptp_clock_diff(&event.t, &perout_request.start);
+
+		/* Update the clock */
+		ppb = servo_sample(
+			servo, 			/* Servo object */
+			offset,			/* T(slave) - T(master) */
+			local_ts, 		/* T(master) */
+			1.0,			/* Weighting */
+			&state 			/* Next state */
+		);
+		
+		/* What we do depends on the servo state */
+		switch (state) {
+		case SERVO_UNLOCKED:
+			break;
+		case SERVO_JUMP:
+			clockadj_step(clkid_s, -offset);
+		case SERVO_LOCKED:
+			clockadj_set_freq(clkid_s, -ppb);
+			break;
+		}
+
+		/* Print some debug info */
+		printf("EVENT CAPTURED : [%d] offset %9lld freq %+7.0f\n", state, offset, ppb);
+		printf("- SYS PHC at %lld.%09u\n", 
+			perout_request.start.sec, perout_request.start.nsec);
+		printf("- NIC PHC at %lld.%09u\n", 
+			event.t.sec, event.t.nsec);
 		fflush(stdout);
 	}
+
+	/* Destroy the servo */
+	servo_destroy(servo);
 
 	/* Disable the feature again. */
 	extts_request.flags = 0;

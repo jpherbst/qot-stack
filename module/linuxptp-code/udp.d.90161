@@ -1,0 +1,3 @@
+udp.o: udp.c address.h config.h ds.h ddt.h pdt.h fault.h filter.h tmv.h \
+ tsproc.h dm.h transport.h fd.h msg.h tlv.h servo.h sk.h contain.h \
+ print.h ether.h transport_private.h udp.h
