@@ -30,7 +30,7 @@ install:
 	scp *.ko $(IP_SERVER):/export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	scp *.dtbo $(IP_SERVER):/export/rootfs/lib/firmware
 	scp 80-qot.rules $(IP_SERVER):/export/rootfs/etc/udev/rules.d/
-	scp capes $(IP_SERVER):/export/rootfs/usr/bin/
+	scp capes testptp phc2phc $(IP_SERVER):/export/rootfs/usr/bin/
 	
 reload:
 	ssh $(IP_CLIENT) depmod
@@ -53,3 +53,7 @@ spawn:
 
 minicom:
 	minicom
+
+apps:
+	$(KERNELDIR)/${CROSSCOMP}gcc -o testptp testptp.c -lrt
+	$(KERNELDIR)/${CROSSCOMP}gcc -o phc2phc phc2phc.c -lrt -lm

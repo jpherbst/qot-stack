@@ -8,3 +8,5 @@
 /*.o
 /pollclient
 *.dtbo
+/phc2phc
+/testptp
