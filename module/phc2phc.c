@@ -54,11 +54,11 @@
 /* From: http://web.mit.edu/~tcoffee/Public/rss/common/timespec.c */
 static void ptp_clock_addns(struct ptp_clock_time *ts, long ns)
 {
-	int sec = ns / 1000000000;
-	ns = ns - sec * 1000000000;
+	int sec = ns / NSEC_PER_SEC;
+	ns = ns - sec * NSEC_PER_SEC;
 	ts->nsec += ns;
-	ts->sec += ts->nsec / 1000000000 + sec;
-	ts->nsec = ts->nsec % 1000000000;
+	ts->sec += ts->nsec / NSEC_PER_SEC + sec;
+	ts->nsec = ts->nsec % NSEC_PER_SEC;
 }
 
 static int64_t ptp_clock_diff(struct ptp_clock_time *a, struct ptp_clock_time *b)
@@ -202,6 +202,11 @@ int main(int argc, char *argv[])
 	if (CLOCK_INVALID == clkid_s) {
 		perror("slave: failed to read clock id\n");
 		return -1;
+	}
+
+	/* Get the master's time */	
+	if (clock_gettime(clkid_m, &ts)) {
+		perror("master: clock_gettime");
 	}
 
 	/* Configure master pulse per second to start at deterministic point in future */
