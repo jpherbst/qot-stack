@@ -42,8 +42,8 @@
 #include "clockadj.h"
 
 /* Useful definitions */
-#define NSEC_PER_SEC  ((long)1000000000)
-#define NSEC_PER_MSEC ((long)1000000)
+#define NSEC_PER_SEC  ((int64_t)1000000000)
+#define NSEC_PER_MSEC ((int64_t)1000000)
 #define FD_TO_CLOCKID(fd) ((~(clockid_t) (fd) << 3) | 3)
 #ifndef CLOCK_INVALID
 #define CLOCK_INVALID -1
@@ -52,9 +52,9 @@
 ////////////////////////////////////////////////////////
 
 /* From: http://web.mit.edu/~tcoffee/Public/rss/common/timespec.c */
-static void ptp_clock_addns(struct ptp_clock_time *ts, long ns)
+static void ptp_clock_addns(struct ptp_clock_time *ts, int64_t ns)
 {
-	int sec = ns / NSEC_PER_SEC;
+	int64_t sec = ns / NSEC_PER_SEC;
 	ns = ns - sec * NSEC_PER_SEC;
 	ts->nsec += ns;
 	ts->sec += ts->nsec / NSEC_PER_SEC + sec;
@@ -108,8 +108,8 @@ int main(int argc, char *argv[])
 	char *device_s = "/dev/ptp0";				/* PTP device (slave) */
 	int index_m = 0;							/* Channel index (master) */
 	int index_s = 0;							/* Channel index (slave) */
-	long period = NSEC_PER_MSEC*1000;			/* Synchronization period (ms) */
-	long error = 1000;							/* Timestamp tolerance (nsec) */
+	int64_t period = NSEC_PER_MSEC*1000;		/* Synchronization period (ms) */
+	int64_t error = 1000;						/* Timestamp tolerance (nsec) */
 
 	/* Internal variables */
 	int c, cnt;									/* Used by getopt() */
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 
 	/* How we plan to discipline the clock */
 	int max_ppb;
-	double ppb;
+	double ppb, weight;
 	uint64_t local_ts;
 	int64_t offset;
 	struct servo *servo;
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 			error = atoi(optarg);
 			break;
 		case 'p':
-			period = NSEC_PER_MSEC*atoi(optarg);
+			period = NSEC_PER_MSEC * (int64_t) atoi(optarg);
 			break;
 		case 'M':
 			index_m = atoi(optarg);
@@ -279,13 +279,14 @@ int main(int argc, char *argv[])
 		/* Local timestamp and offset */
 		local_ts = ptp_clock_u64(&perout_request.start);
 		offset = ptp_clock_diff(&event.t, &perout_request.start);
+		weight = 1.0;
 
 		/* Update the clock */
 		ppb = servo_sample(
 			servo, 			/* Servo object */
 			offset,			/* T(slave) - T(master) */
 			local_ts, 		/* T(master) */
-			1.0,			/* Weighting */
+			weight,			/* Weighting */
 			&state 			/* Next state */
 		);
 		

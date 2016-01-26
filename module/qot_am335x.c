@@ -60,7 +60,7 @@ enum qot_am335x_events {
 #define AM335X_REWRITE_DELAY 	13
 #define AM335X_NO_PRESCALER 	0xFFFFFFFF
 #define MIN_PERIOD_NS			1000ULL
-#define MAX_PERIOD_NS			10000000000ULL
+#define MAX_PERIOD_NS			100000000000ULL
 
 // PLATFORM DATA ///////////////////////////////////////////////////////////////
 
@@ -100,7 +100,7 @@ static void omap_dm_timer_setup_capture(struct omap_dm_timer *timer, u32 edge) {
 }
 
 static s64 ptp_to_s64(struct ptp_clock_time *t) {
-	return t->sec * 1000000000LL + t->nsec;
+	return (s64) t->sec * (s64) 1000000000 + (s64) t->nsec;
 }
 
 // TIMER MANAGEMENT ////////////////////////////////////////////////////////////
@@ -161,9 +161,15 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 	case EVENT_START:
 
+		//pr_info("qot_am335x: TS s...%lld\n",channel->state.perout.period.sec);
+		//pr_info("qot_am335x: TS ns...%lu\n",channel->state.perout.period.nsec);
+
 		/* Get the signed ns start time and period */
 		ts = ptp_to_s64(&channel->state.perout.start);
 		tp = ptp_to_s64(&channel->state.perout.period);
+
+		//pr_info("qot_am335x: NS offset...%lld\n",ts);
+		//pr_info("qot_am335x: NS period...%lld\n",tp);
 
 		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
@@ -189,8 +195,8 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		load   = tp; 		// (low+high)
 		match  = tp/2; 		// (low)
 
-		pr_info("qot_am335x: PWM offset...%u\n",offset);
-		pr_info("qot_am335x: PWM period...%u\n",load);
+		//pr_info("qot_am335x: PWM offset...%u\n",offset);
+		//pr_info("qot_am335x: PWM period...%u\n",load);
 
 		/* Configure timer */
 		omap_dm_timer_enable(timer);
@@ -583,8 +589,8 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pr_info("qot_am335x: Creating core time counter...\n");
 	pdata->cc.read = qot_am335x_read;
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
-	pdata->cc.mult = 174762667;
-	pdata->cc.shift = 22;
+	pdata->cc.mult = 2796202667;
+	pdata->cc.shift = 26;
 	spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
 	spin_unlock_irqrestore(&pdata->lock, flags);
