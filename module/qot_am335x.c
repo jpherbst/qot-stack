@@ -71,7 +71,6 @@ struct qot_am335x_channel {
 	struct omap_dm_timer *timer;			/* OMAP Timer */
 	struct ptp_clock_request state;			/* PTP state */
 	struct gpio_desc *gpiod;				/* GPIO description */
-	int first;								/* Are we in PWM first edge */
 };
 
 struct qot_am335x_data {
@@ -115,8 +114,12 @@ static int qot_am335x_core(struct qot_am335x_channel *channel, int event)
 		omap_dm_timer_set_prescaler(timer, AM335X_NO_PRESCALER);
 		omap_dm_timer_set_load(timer, 1, 0); /* 1: autoreload, 0: load val */
 		omap_dm_timer_start(timer);
+		omap_dm_timer_set_int_enable(timer, OMAP_TIMER_INT_OVERFLOW);	
+		omap_dm_timer_enable(timer);
 		break;
 	case EVENT_STOP:
+		omap_dm_timer_set_int_disable(timer, OMAP_TIMER_INT_OVERFLOW);
+		omap_dm_timer_enable(timer);
 		omap_dm_timer_stop(timer);
 		break;
 	}
@@ -152,6 +155,8 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 	
 	case EVENT_OVERFLOW:
 	
+		/* Do nothing - can be used to modify PWM */
+
 		break;
 
 	case EVENT_START:
@@ -164,7 +169,6 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
 			return -EINVAL;
 
-		
 		spin_lock_irqsave(&channel->parent->lock, flags);
 
 		/* Work out the cycle count corresponding to this edge */
@@ -448,20 +452,61 @@ static void qot_am335x_cleanup(struct qot_am335x_data *pdata)
 	pr_info("qot_am335x: Cleaning up...\n");
 	if (pdata) {
 		int i;
+
+		/* Remove the PTP clock */
+		ptp_clock_unregister(pdata->clock);
+
+		/* Free GPIO timers */
 		for (i = 0; i < pdata->num_pins; i++) {
-		    omap_dm_timer_set_source(pdata->pins[i].timer, 
-		    	OMAP_TIMER_SRC_SYS_CLK); // TCLKIN is stopped during boot
-			omap_dm_timer_set_int_disable(pdata->pins[i].timer, 
-				OMAP_TIMER_INT_CAPTURE | OMAP_TIMER_INT_OVERFLOW);
+
+			/* Stop the timer */
+			switch(pdata->pins[i].state.type) {
+			case PTP_CLK_REQ_EXTTS:
+				qot_am335x_extts(&pdata->pins[i], EVENT_STOP);
+				break;
+			case PTP_CLK_REQ_PEROUT:
+				qot_am335x_perout(&pdata->pins[i], EVENT_STOP);
+				break;
+			default:
+				continue;
+			}
+
+			/* Destroy the timer */
+			omap_dm_timer_set_source(pdata->pins[i].timer, 
+				OMAP_TIMER_SRC_SYS_CLK); 
 			free_irq(pdata->pins[i].timer->irq, &pdata->pins[i]);
+			omap_dm_timer_enable(pdata->pins[i].timer);
+			omap_dm_timer_stop(pdata->pins[i].timer);
 			omap_dm_timer_free(pdata->pins[i].timer);
 			pdata->pins[i].timer = NULL;
+
+			/* Free the GPIO descriptor */
+			gpiod_put(pdata->pins[i].gpiod);
 		}
+	    
+		/* Free core timer */
+		qot_am335x_core(&pdata->core, EVENT_STOP);
+	    omap_dm_timer_set_source(pdata->core.timer, OMAP_TIMER_SRC_SYS_CLK); 
+		free_irq(pdata->core.timer->irq, &pdata->core);
+		omap_dm_timer_enable(pdata->core.timer);
+		omap_dm_timer_stop(pdata->core.timer);
+		omap_dm_timer_free(pdata->core.timer);
+
+		/* Free pin cofniguration */
 		if (pdata->info.pin_config)
+		{
 			kfree(pdata->info.pin_config);
+			pdata->info.pin_config = NULL;
+		}
 		if (pdata->pins)
+		{
 			kfree(pdata->pins);
+			pdata->pins = NULL;
+		}
+
+		/* Free platform data */
 		kfree(pdata);
+		pdata = NULL;
 	}
 }
 
@@ -499,6 +544,12 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		pr_err("qot_am335x: could not parse core timer arguments\n");
 		goto err;
 	}
+	switch (args.args[0]) {
+	default:
+	case 0: timer_source = OMAP_TIMER_SRC_SYS_CLK; 	break;
+	case 1: timer_source = OMAP_TIMER_SRC_32_KHZ; 	break;
+	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
+	}
 	nodet = of_find_node_by_phandle(be32_to_cpup(phand));
 	if (!nodet) {
 		pr_err("qot_am335x: could not find the timer node\n");
@@ -510,16 +561,16 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		goto err;
 	}
 	pdata->core.parent = pdata;
+	pdata->core.state.type = PTP_CLK_REQ_PPS; /* Flag indicates core */
 	pdata->core.timer = omap_dm_timer_request_by_node(nodet);
 	if (!pdata->core.timer) {
 		pr_err("qot_am335x: request_by_node failed\n");
 		goto err;
 	}
-	switch (args.args[0]) {
-	default:
-	case 0: timer_source = OMAP_TIMER_SRC_SYS_CLK; 	break;
-	case 1: timer_source = OMAP_TIMER_SRC_32_KHZ; 	break;
-	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
+	if (request_irq(pdata->core.timer->irq, qot_am335x_interrupt, IRQF_TIMER, 
+		MODULE_NAME, &pdata->core)) {
+		pr_err("qot_am335x: cannot register core IRQ");
+		goto err;
 	}
 	of_node_put(nodet);
 
