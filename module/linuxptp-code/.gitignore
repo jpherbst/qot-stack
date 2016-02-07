@@ -1,9 +1,0 @@
-/*.d
-/*.o
-/.version
-/hwstamp_ctl
-/phc2sys
-/pmc
-/ptp4l
-/phc_ctl
-/timemaster
