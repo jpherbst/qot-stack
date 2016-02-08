@@ -27,7 +27,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
 
 # Name and version of this project
-PROJECT(qot-stack VERSION 0.1.0.0)
+PROJECT(qot-stack VERSION 0.1.0)
 
 # Basic options
 OPTION(CROSS_COMPILE "Cross-compile for arm-linux-gnueabihf" ON)
