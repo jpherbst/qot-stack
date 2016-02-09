@@ -1,8 +1,8 @@
 SHELL := /bin/bash
 
+obj-m += qot_core.o
+#obj-m += qot_am335x.o
 #obj-m += qot_timeline.o
-#obj-m += qot_core.o
-obj-m += qot_am335x.o
 #obj-m += chronos.o
 #obj-m += pwm_test.o
 
@@ -31,7 +31,7 @@ install:
 	scp *.dtbo $(IP_SERVER):/export/rootfs/lib/firmware
 	scp 80-qot.rules $(IP_SERVER):/export/rootfs/etc/udev/rules.d/
 	scp capes testptp phc2phc $(IP_SERVER):/export/rootfs/usr/bin/
-	
+
 reload:
 	ssh $(IP_CLIENT) depmod
 	ssh $(IP_CLIENT) ldconfig
