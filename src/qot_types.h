@@ -162,8 +162,8 @@ typedef enum {
  * @brief Response codes from the QoT stack
  */
 typedef enum {
-	QOT_RESPONSE_OK   = (0),	/* Everything OK 						*/
-	QOT_RESPONSE_ERR  = (1),	/* There's been an error				*/
+	QOT_RETURN_TYPE_OK   = (0),	/* Everything OK 						*/
+	QOT_RETURN_TYPE_ERR  = (1),	/* There's been an error				*/
 } qot_return_t;
 
 /**
