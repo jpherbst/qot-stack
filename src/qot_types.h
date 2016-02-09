@@ -79,31 +79,22 @@ typedef struct timedemand {
 } timedemand_t;
 
 /* Popular ratios that will be used throughout this file */
-#define MSEC_PER_SEC 1000ULL
-#define USEC_PER_SEC 1000000ULL
-#define PSEC_PER_SEC 1000000000ULL
-#define NSEC_PER_SEC 1000000000000ULL
-#define FSEC_PER_SEC 1000000000000000ULL
-#define ASEC_PER_SEC 1000000000000000000ULL
+#define aSEC_PER_SEC 1000000000000000000ULL
 
 /* Some initializers for efficiency */
-#define WEEKS(t) { .sec=(t)*604800ULL, 	.asec=0, 						}
-#define DAYS(t)  { .sec=(t)*86400ULL,  	.asec=0, 						}
-#define HOURS(t) { .sec=(t)*3600ULL, 	.asec=0, 						}
-#define MINS(t)  { .sec=(t)*60ULL, 	 	.asec=0, 						}
 #define  SEC(t)  { .sec=(t), 			.asec=0, 						}
-#define MSEC(t)  { .sec=0, 				.asec=(t)*1000000000000000ULL, 	}
-#define USEC(t)  { .sec=0, 				.asec=(t)*1000000000000ULL, 	}
-#define PSEC(t)  { .sec=0, 				.asec=(t)*1000000000ULL, 		}
-#define NSEC(t)  { .sec=0, 				.asec=(t)*1000000ULL, 			}
-#define FSEC(t)  { .sec=0, 				.asec=(t)*1000ULL, 				}
-#define ASEC(t)  { .sec=0, 				.asec=(t), 						}
+#define mSEC(t)  { .sec=0, 				.asec=(t)*1000000000000000ULL, 	}
+#define uSEC(t)  { .sec=0, 				.asec=(t)*1000000000000ULL, 	}
+#define pSEC(t)  { .sec=0, 				.asec=(t)*1000000000ULL, 		}
+#define nSEC(t)  { .sec=0, 				.asec=(t)*1000000ULL, 			}
+#define fSEC(t)  { .sec=0, 				.asec=(t)*1000ULL, 				}
+#define aSEC(t)  { .sec=0, 				.asec=(t), 						}
 
 /* Add a length of time to a point in time */
 void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
-	t->sec  += v->sec + t->asec / ASEC_PER_SEC;
-	t->asec %= ASEC_PER_SEC;
+	t->sec  += v->sec + t->asec / aSEC_PER_SEC;
+	t->asec %= aSEC_PER_SEC;
 }
 
 /* Subtract a length of time from a point in time */
@@ -111,7 +102,7 @@ void timepoint_sub(timepoint_t *t, timelength_t *v) {
 	t->sec -= v->sec;
 	if (t->asec < v->asec) { /* Special case */
 		t->sec--;
-		t->asec = ASEC_PER_SEC + t->asec - v->asec;
+		t->asec = aSEC_PER_SEC + t->asec - v->asec;
 	}
 	else
 		t->asec = t->asec - v->asec;
@@ -120,8 +111,8 @@ void timepoint_sub(timepoint_t *t, timelength_t *v) {
 /* Add two lengths of time together */
 void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
-	l1->sec  += l2->sec + l1->asec / ASEC_PER_SEC;
-	l1->asec %= ASEC_PER_SEC;
+	l1->sec  += l2->sec + l1->asec / aSEC_PER_SEC;
+	l1->asec %= aSEC_PER_SEC;
 }
 
 /* Get the difference between two timepoints as a timelength */
@@ -147,6 +138,73 @@ void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
+
+/* Popular ratios that will be used throughout this file */
+#define aHZ_PER_HZ 1000000000000000000ULL
+
+/* Some initializers for efficiency */
+#define EHZ(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
+#define PHZ(t) { .hz=(t)*1000000000000000ULL,  .ahz=0,    }
+#define THZ(t) { .hz=(t)*1000000000000ULL,  .ahz=0,       }
+#define GHZ(t) { .hz=(t)*1000000000ULL,   .ahz=0,         }
+#define MHZ(t) { .hz=(t)*1000000ULL,    .ahz=0,           }
+#define KHZ(t) { .hz=(t)*1000ULL,     .ahz=0,             }
+#define  HZ(t) { .hz=(t),           .ahz=0,               }
+#define mHZ(t) { .hz=0, .ahz=(t)*1000000000000000ULL,     }
+#define uHZ(t) { .hz=0, .ahz=(t)*1000000000000ULL,        }
+#define pHZ(t) { .hz=0, .ahz=(t)*1000000000ULL,           }
+#define nHZ(t) { .hz=0, .ahz=(t)*1000000ULL,              }
+#define fHZ(t) { .hz=0, .ahz=(t)*1000ULL,                 }
+#define aHZ(t) { .hz=0, .ahz=(t),                         }
+
+/* An absolute frequency */
+typedef struct frequency {
+    uint64_t hz;   /* Hertz */
+    uint64_t ahz;  /* Fractional Hertz expressed in attohertz */
+} frequency_t;
+
+/* Add two frequencies together */
+void frequency_add(frequency_t *l1, frequency_t *l2) {
+    l1->ahz += l2->ahz;
+    l1->hz  += l2->hz + l1->ahz / aHZ_PER_HZ;
+    l1->ahz %= aHZ_PER_HZ;
+}
+
+/* Popular ratios that will be used throughout this file */
+#define aWATT_PER_WATT 1000000000000000000ULL
+
+/* Some initializers for efficiency */
+#define EWATT(t) { .watt=(t)*1000000000000000000ULL,  .awatt=0, }
+#define PWATT(t) { .watt=(t)*1000000000000000ULL,  .awatt=0,    }
+#define TWATT(t) { .watt=(t)*1000000000000ULL,  .awatt=0,       }
+#define GWATT(t) { .watt=(t)*1000000000ULL,   .awatt=0,         }
+#define MWATT(t) { .watt=(t)*1000000ULL,    .awatt=0,           }
+#define KWATT(t) { .watt=(t)*1000ULL,     .awatt=0,             }
+#define  WATT(t) { .watt=(t),           .awatt=0,               }
+#define mWATT(t) { .watt=0, .awatt=(t)*1000000000000000ULL,     }
+#define uWATT(t) { .watt=0, .awatt=(t)*1000000000000ULL,        }
+#define pWATT(t) { .watt=0, .awatt=(t)*1000000000ULL,           }
+#define nWATT(t) { .watt=0, .awatt=(t)*1000000ULL,              }
+#define fWATT(t) { .watt=0, .awatt=(t)*1000ULL,                 }
+#define aWATT(t) { .watt=0, .awatt=(t),                         }
+
+/* An absolute frequency */
+typedef struct power {
+    uint64_t watt;   /* Watts */
+    uint64_t awatt;  /* Fractional Watts expressed in attowatt */
+} power_t;
+
+/* Add two frequencies together */
+void power_add(power_t *l1, power_t *l2) {
+    l1->awatt += l2->awatt;
+    l1->watt  += l2->watt + l1->awatt / aWATT_PER_WATT;
+    l1->awatt %= aWATT_PER_WATT;
+}
+
+/**
+ * @brief Scalar type used by the system
+ **/
+typedef int64_t scalar_t;
 
 /**
  * @brief Edge trigger codes from the QoT stack
@@ -179,6 +237,15 @@ typedef enum {
 	QOT_TYPE_UDPATE   = (6),	/* Local timeline parameters updated 	*/
 } qot_type_t;
 
+/**
+ * @brief Clock error types
+ */
+typedef enum {
+    QOT_CLK_ERR_BIAS  = (0),
+    QOT_CLK_ERR_WALK,
+    QOT_CLK_ERR_NUM
+} qot_clk_err_t;
+
 /* QoT external input timestamping */
 typedef struct qot_extts {
 	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
@@ -192,14 +259,14 @@ typedef struct qot_perout {
 	qot_trigger_t edge;					/* Off, rising, falling, toggle */
 	timepoint_t start;					/* Start time */
 	timelength_t period;				/* Period */
-	qot_return_t response;			/* Response */
+	qot_return_t response;			     /* Response */
 } qot_perout_t;
 
 /* Binding request */
 typedef struct qot_bind {
 	char uuid[QOT_MAX_NAMELEN];			/* Timeline UUID */
 	timedemand_t demand;				/* Quality of Time (QoT) demand */
-	qot_return_t response;			/* Response */
+	qot_return_t response;			  /* Response */
 } qot_bind_t;
 
 /* QoT event */
@@ -208,6 +275,22 @@ typedef struct qot_event {
 	utimepoint_t timestamp;				/* Uncertain time of event */
 	char data[QOT_MAX_NAMELEN];			/* Event data */
 } qot_event_t;
+
+/* Platform clock type */
+typedef struct qot_plat_clk {
+    char name[QOT_MAX_NAMELEN];         /* Clock name             */
+    frequency_t nominal_freq;           /* Frequency in Hz        */
+    power_t nominal_power;              /* Power draw in Watts    */
+    timeinterval_t read_latency;        /* Latency in seconds     */
+    timeinterval_t interrupt_latency;   /* Interrupt latency      */
+    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics  */
+} qot_plat_clk_t;
+
+/* Platform clock type */
+typedef struct qot_plat_clkarr {
+    int num_clks;                       /* Number of clocks         */
+    qot_plat_clk_t *clk;                /* Array of num_clks clocks */
+} qot_plat_clkarr_t;
 
 /**
  * @brief Ioctl messages supported by /dev/qotusr
@@ -225,8 +308,10 @@ typedef struct qot_event {
  * @brief Key messages supported by /dev/qotadm
  */
 #define QOTADM_MAGIC_CODE  0xEF
-#define QOTADM_GET_DEMAND _IOWR(QOTADM_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTADM_SET_DEMAND  _IOW(QOTADM_MAGIC_CODE,  1, qot_bind_t*)
-#define QOTADM_GET_EVENT   _IOR(QOTADM_MAGIC_CODE,  2, qot_event_t*)
+#define QOTADM_SET_UNCERTAINTY _IOWR(QOTADM_MAGIC_CODE,  0, qot_bind_t*)
+#define QOTADM_GET_CLOCKS       _IOR(QOTADM_MAGIC_CODE,  1, qot_plat_clkarr*)
+#define QOTADM_SELECT_CLOCK     _IOW(QOTADM_MAGIC_CODE,  2, qot_plat_clk*)
+#define QOTADM_GET_OS_LATENCY   _IOR(QOTADM_MAGIC_CODE,  3, timeinterval_t*)
+#define QOTADM_SET_OS_LATENCY   _IOW(QOTADM_MAGIC_CODE,  4, timeinterval_t*)
 
 #endif
