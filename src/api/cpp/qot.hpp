@@ -1,61 +1,41 @@
 /*
  * @file qot.hpp
  * @brief Userspace C++ API to manage QoT timelines
- * @author Andrew Symington and Fatima Anwar 
- * 
+ * @author Andrew Symington and Fatima Anwar
+ *
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, 
+ * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ * 	1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 ​
-#ifndef QOT_HPP
-#define QOT_HPP
+#ifndef QOT_STACK_SRC_API_CPP_QOT_H
+#define QOT_STACK_SRC_API_CPP_QOT_H
 ​
-#include <string>
-#include <exception>
-#include <thread>
-#include <functional>
-#include <mutex>
-#include <condition_variable>
-#include <map>
-#include <algorithm>
-​
+#include "qot_types.h"
+
 namespace qot
 {
 	/**
-	 * @brief Fundamental time types
-	 */
-	typedef struct {
-		 int64_t sec;	/* Seconds relative to Unix epoch in TAI */
-		uint64_t ysec;	/* Yoctosec */
-	} timepoint_t;				/* Deterministic instant in time */
-	typedef struct {
-
-	} instantest_t;				/* Stochastic instant in time */
-	typedef duration_t;			/* Deterministic duration of time */
-	typedef durationest_t;		/* Stochastic duration of time */
-​
-	/**
 	 * @brief Convenience decalaration
 	 */
-	typedef std::function<void(TimelineEventType event, 
+	typedef std::function<void(TimelineEventType event,
 		const std::string &data, timeest_t eventtime)> EventCallbackType;
 ​
 	/**
@@ -99,7 +79,7 @@ namespace qot
 ​
 	/**
 	 * @brief The timeline class is the primary interface between user-space code and
-	 *        the quality of time stack. 
+	 *        the quality of time stack.
 	 */
 	class Timeline
 	{
@@ -120,7 +100,7 @@ namespace qot
 ​
 		public:
 			Timeline(const std::string &uuid, duration_t resolution, interval_t accuracy);
-			
+
 		//	accuracy_lower_limit: t_true >= t_returned - accuracy_lower_limit
 		//	accuracy_upper_limit: t_true <= t_returned + accuracy_upper_limit
 ​
@@ -136,7 +116,7 @@ namespace qot
 		 **/
 		public:
 			int SetAccuracy(interval_t accuracy);
-	
+
 		/**
 		 * @brief Set the desired binding resolution
 		 * @param res The new resolution
@@ -177,7 +157,7 @@ namespace qot
 		/**
 		 * @brief Request a compare action on a given pin
 		 * @param pname The pin name (must be offered by the driver)
-		 * @param enable Turn compare on or off 
+		 * @param enable Turn compare on or off
 		 * @param start The global start time
 		 * @param high The high time of the duty cycle
 		 * @param low The low time of the duty cycle
@@ -203,52 +183,25 @@ namespace qot
 		/**
 		 * @brief Wait until some global time (if in past calls back immediately)
 		 * @param val Global time
-		 * @return Predicted error 
+		 * @return Predicted error
 		 **/
 		public: timeest_t WaitUntil(timeest_t absolute_time);
 ​
 		public: int CreateTimer(
-			const std::string &name, 
+			const std::string &name,
 			timeest_t start_time, durationest_t period, EventCallbackType TimerCallback, int count);
 		public: int DestroyTimer(const std::string &name);
 ​
 ​
-		// period is 
+		// period is
 ​
 ​
 		/**
 		 * @brief Sleep for a given number of nanoseconds
 		 * @param val Number of nanoseconds
-		 * @return Predicted error 
+		 * @return Predicted error
 		 **/
 		public: timeest_t Sleep(durationest_t delta);
-​
-		/**
-		 * @brief Blocking poll on fd for capture events
-		 **/
-		private: void CaptureThread();
-​
-		/**
-		 * @brief Create a random string of fixed length
-		 * @param length the length of the string
-		 * @return the random string
-		 **/
-		private: static std::string RandomString(uint32_t length);
-​
-		/**
-		 * @brief Internal data structures
-		 **/
-		private: std::string name;					// Unique ID for this application
-		private: bool kill;							// Kill flag for thread
-		private: int fd_qot;						// Descriptor for qot ioctl
-		private: int fd_clk;						// Descriptor for timeline
-		private: clockid_t clk;						// POSIX clock ID
-		private: std::thread thread;				// Worker thread for capture
-		private: CaptureCallbackType cb_capture;	// Callback for captures
-		private: EventCallbackType cb_event;		// Callback for devices
-		private: std::mutex m;						// Mutex
-		private: std::condition_variable cv;		// Conditional variable
-		private: std::unique_lock<std::mutex> lk;	// Lock
 	};
 }
 ​
