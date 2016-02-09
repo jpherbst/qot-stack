@@ -2,28 +2,28 @@
  * @file qot.h
  * @brief Data types, temporal math and ioctl interfaces for the qot-stack
  * @author Andrew Symington
- * 
- * Copyright (c) Regents of the University of California, 2015. 
+ *
+ * Copyright (c) Regents of the University of California, 2015.
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ * 	1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -125,7 +125,7 @@ void timelength_add(timelength_t *l1, timelength_t *l2) {
 }
 
 /* Get the difference between two timepoints as a timelength */
-void timepoint_diff(timelength_t *v, 
+void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
@@ -152,10 +152,10 @@ void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
  * @brief Edge trigger codes from the QoT stack
  */
 typedef enum {
-	QOT_GPIO_NONE    = (0),		/* No edges								*/
-	QOT_GPIO_RISING  = (1),		/* Rising edge only						*/
-	QOT_GPIO_FALLING = (2),		/* Falling edge only					*/
-	QOT_GPIO_BOTH    = (3),		/* Both edges							*/
+	QOT_GPIO_NONE		= (0),		/* No edges								*/
+	QOT_GPIO_RISING		= (1),		/* Rising edge only						*/
+	QOT_GPIO_FALLING	= (2),		/* Falling edge only					*/
+	QOT_GPIO_BOTH		= (3),		/* Both edges							*/
 } qot_trigger_t;
 
 /**
@@ -213,20 +213,20 @@ typedef struct qot_event {
  * @brief Ioctl messages supported by /dev/qotusr
  */
 #define QOTUSR_MAGIC_CODE  0xEE
-#define QOTUSR_BIND       _IOWR(QOT_USR_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTUSR_UNBIND      _IOR(QOT_USR_MAGIC_CODE,  1, qot_response_t*)
-#define QOTUSR_SET_DEMAND  _IOW(QOT_USR_MAGIC_CODE,  2, timedemand_t*)
-#define QOTUSR_GET_DEMAND  _IOR(QOT_USR_MAGIC_CODE,  3, timedemand_t*)
-#define QOTUSR_REQ_PEROUT  _IOW(QOT_USR_MAGIC_CODE,  4, qot_perout_t*)
-#define QOTUSR_REQ_EXTTS   _IOW(QOT_USR_MAGIC_CODE,  5, qot_extts_t*)
-#define QOTUSR_GET_EVENT   _IOR(QOT_USR_MAGIC_CODE,  6, qot_event_t*)
+#define QOTUSR_BIND       _IOWR(QOTUSR_MAGIC_CODE,  0, qot_bind_t*)
+#define QOTUSR_UNBIND      _IOR(QOTUSR_MAGIC_CODE,  1, qot_response_t*)
+#define QOTUSR_SET_DEMAND  _IOW(QOTUSR_MAGIC_CODE,  2, timedemand_t*)
+#define QOTUSR_GET_DEMAND  _IOR(QOTUSR_MAGIC_CODE,  3, timedemand_t*)
+#define QOTUSR_REQ_PEROUT  _IOW(QOTUSR_MAGIC_CODE,  4, qot_perout_t*)
+#define QOTUSR_REQ_EXTTS   _IOW(QOTUSR_MAGIC_CODE,  5, qot_extts_t*)
+#define QOTUSR_GET_EVENT   _IOR(QOTUSR_MAGIC_CODE,  6, qot_event_t*)
 
 /**
  * @brief Key messages supported by /dev/qotadm
  */
 #define QOTADM_MAGIC_CODE  0xEF
-#define QOTADM_GET_DEMAND _IOWR(QOT_ADM_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTADM_SET_DEMAND  _IOW(QOT_ADM_MAGIC_CODE,  1, qot_bind_t*)
-#define QOTADM_GET_EVENT   _IOR(QOT_ADM_MAGIC_CODE,  2, qot_event_t*)
+#define QOTADM_GET_DEMAND _IOWR(QOTADM_MAGIC_CODE,  0, qot_bind_t*)
+#define QOTADM_SET_DEMAND  _IOW(QOTADM_MAGIC_CODE,  1, qot_bind_t*)
+#define QOTADM_GET_EVENT   _IOR(QOTADM_MAGIC_CODE,  2, qot_event_t*)
 
 #endif
