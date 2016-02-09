@@ -152,10 +152,10 @@ void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
  * @brief Edge trigger codes from the QoT stack
  */
 typedef enum {
-	QOT_GPIO_NONE		= (0),		/* No edges								*/
-	QOT_GPIO_RISING		= (1),		/* Rising edge only						*/
-	QOT_GPIO_FALLING	= (2),		/* Falling edge only					*/
-	QOT_GPIO_BOTH		= (3),		/* Both edges							*/
+	QOT_TRIGGER_NONE	= (0),		/* No edges								*/
+	QOT_TRIGGER_RISING	= (1),		/* Rising edge only						*/
+	QOT_TRIGGER_FALLING	= (2),		/* Falling edge only					*/
+	QOT_TRIGGER_BOTH	= (3),		/* Both edges							*/
 } qot_trigger_t;
 
 /**
@@ -164,7 +164,7 @@ typedef enum {
 typedef enum {
 	QOT_RESPONSE_OK   = (0),	/* Everything OK 						*/
 	QOT_RESPONSE_ERR  = (1),	/* There's been an error				*/
-} qot_response_t;
+} qot_return_t;
 
 /**
  * @brief Timeline events
@@ -183,7 +183,7 @@ typedef enum {
 typedef struct qot_extts {
 	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
 	qot_trigger_t edge;					/* Edge to capture */
-	qot_response_t response;			/* Response */
+	qot_return_t response;			/* Response */
 } qot_extts_t;
 
 /* QoT programmable periodic output */
@@ -192,14 +192,14 @@ typedef struct qot_perout {
 	qot_trigger_t edge;					/* Off, rising, falling, toggle */
 	timepoint_t start;					/* Start time */
 	timelength_t period;				/* Period */
-	qot_response_t response;			/* Response */
+	qot_return_t response;			/* Response */
 } qot_perout_t;
 
 /* Binding request */
 typedef struct qot_bind {
 	char uuid[QOT_MAX_NAMELEN];			/* Timeline UUID */
 	timedemand_t demand;				/* Quality of Time (QoT) demand */
-	qot_response_t response;			/* Response */
+	qot_return_t response;			/* Response */
 } qot_bind_t;
 
 /* QoT event */
@@ -214,7 +214,7 @@ typedef struct qot_event {
  */
 #define QOTUSR_MAGIC_CODE  0xEE
 #define QOTUSR_BIND       _IOWR(QOTUSR_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTUSR_UNBIND      _IOR(QOTUSR_MAGIC_CODE,  1, qot_response_t*)
+#define QOTUSR_UNBIND      _IOR(QOTUSR_MAGIC_CODE,  1, qot_return_t*)
 #define QOTUSR_SET_DEMAND  _IOW(QOTUSR_MAGIC_CODE,  2, timedemand_t*)
 #define QOTUSR_GET_DEMAND  _IOR(QOTUSR_MAGIC_CODE,  3, timedemand_t*)
 #define QOTUSR_REQ_PEROUT  _IOW(QOTUSR_MAGIC_CODE,  4, qot_perout_t*)

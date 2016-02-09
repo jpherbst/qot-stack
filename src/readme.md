@@ -8,3 +8,5 @@ This folder contains the QoT stack source code, divided into the following five 
 * **service** - the system daemon responsible for synchronization.
 * **test** - unit tests for the system components.
 * **utils** - user-space tools for introspection and debugging.
+
+All five modules above rely on the file **qot_types.h**, which defines the fundamental time types in the system, basic uncertain time mathematics, and kernel-userspace ioctl message types.

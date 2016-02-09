@@ -1,7 +1,7 @@
 #include <iostream>
 #include <gtest/gtest.h>
 
-#include "../qot.h"
+#include "../qot_types.h"
 
 TEST(TimelineMath, ScaleFactors) {
 	timelength_t ta = ASEC(1);
@@ -58,7 +58,7 @@ TEST(TimelineMath, AdditionOfSecondsAndAttoseconds) {
 	timelength_t t2 = {
 		.sec  = 2,
 		.asec = 2,
-	}; 
+	};
 	timepoint_add(&t1, &t2);
 	EXPECT_EQ(3,t1.sec);
 	EXPECT_EQ(3,t1.asec);
@@ -72,7 +72,7 @@ TEST(TimelineMath, SubtractionOfSecondsAndAttoseconds) {
 	timelength_t t2 = {
 		.sec  = 2,
 		.asec = 2,
-	}; 
+	};
 	timepoint_sub(&t1, &t2);
 	EXPECT_EQ(-2,t1.sec);
 	EXPECT_EQ(1000000000000000000ULL-1ULL,t1.asec);
@@ -86,7 +86,7 @@ TEST(TimelineMath, AddTwoLengthsOfTime) {
 	timelength_t l2 = {
 		.sec  = 2,
 		.asec = 2,
-	}; 
+	};
 	timelength_add(&l1, &l2);
 	EXPECT_EQ(3,l1.sec);
 	EXPECT_EQ(3,l1.asec);
@@ -100,7 +100,7 @@ TEST(TimelineMath, DifferenceBetweenTimepoints) {
 	timepoint_t t2 = {
 		.sec  = 2,
 		.asec = 2,
-	}; 
+	};
 	timelength_t v;
 	timepoint_diff(&v, &t1, &t2);
 	EXPECT_EQ(1,v.sec);

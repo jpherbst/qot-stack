@@ -37,6 +37,9 @@ ENABLE_TESTING()
 # Locate Google Test framework
 FIND_PACKAGE(GTest REQUIRED)
 
+# Everything in our system must know about qot_types.h
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+
 # Run the tests
 ADD_SUBDIRECTORY(test)
 
