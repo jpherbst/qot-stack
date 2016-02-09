@@ -35,7 +35,7 @@
  * @compare:            read the current "core" time value in nanoseconds
  * @compare:            action a pin interrupt for the given period
  */
-struct qot_driver {
+struct qot_clock {
 	uint64_t (*read)(void);
 	int (*compare)(const char *name, uint8_t enable, 
 		uint64_t start, uint32_t high, uint32_t low, uint64_t repeat);
