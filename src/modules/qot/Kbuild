@@ -1,5 +1,2 @@
-obj-m += qot_core.o
-qot_core-y := qot_ioctl.o
-qot_core-y := qot_scheduler.o
-qot_core-y := qot_sysfs.o
-qot_core-y := qot_timeline.o
+obj-m += qot.o
+qot-y := qot_core.o

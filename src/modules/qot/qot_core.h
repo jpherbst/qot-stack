@@ -27,12 +27,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _QOT_CORE_H_
-#define _QOT_CORE_H_
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
 
 #include <linux/ptp_clock_kernel.h>
 
-#include "qot_types.h"
+#include "../../qot_types.h"
 
 /**
  * @brief Information about a platform clock

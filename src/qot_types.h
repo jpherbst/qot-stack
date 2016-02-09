@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef QOT_STACK_SRC_QOT_H
-#define QOT_STACK_SRC_QOT_H
+#ifndef QOT_STACK_SRC_QOT_TYPES_H
+#define QOT_STACK_SRC_QOT_TYPES_H
 
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_MAX_NAMELEN 16
@@ -284,6 +284,7 @@ typedef struct qot_plat_clk {
     timeinterval_t read_latency;        /* Latency in seconds     */
     timeinterval_t interrupt_latency;   /* Interrupt latency      */
     scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics  */
+    int phc;                            /* PHC ID of this clock   */
 } qot_plat_clk_t;
 
 /* Platform clock type */

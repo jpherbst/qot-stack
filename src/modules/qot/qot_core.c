@@ -39,7 +39,12 @@
 #include <linux/rbtree.h>
 #include <linux/timecounter.h>
 
+/* Modular components of QoT core */
 #include "qot_core.h"
+#include "qot_timeline.h"
+#include "qot_scheduler.h"
+#include "qot_sysfs.h"
+#include "qot_ioctl.h"
 
 struct qot_core {
 	u64 placeholder;
@@ -61,15 +66,15 @@ qot_return_t qot_clock_property_update(struct qot_platform_clock_info *info) {
 EXPORT_SYMBOL(qot_clock_property_update);
 
 
-int qot_core_init(void) {
+int qot_init(void) {
 	return 0;
 }
 
-void qot_core_cleanup(void) {
+void qot_cleanup(void) {
 }
 
-module_init(qot_core_init);
-module_exit(qot_core_cleanup);
+module_init(qot_init);
+module_exit(qot_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
