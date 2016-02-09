@@ -1,0 +1,5 @@
+FIND_PACKAGE(Threads REQUIRED)
+ADD_LIBRARY(qot_cpp SHARED qot.hpp qot.cpp)
+TARGET_LINK_LIBRARIES(qot_cpp qot)
+INSTALL(FILES qot.hpp DESTINATION include COMPONENT headers)
+INSTALL(TARGETS qot_cpp DESTINATION lib COMPONENT libraries)
