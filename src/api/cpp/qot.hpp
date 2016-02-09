@@ -24,10 +24,10 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+​
 #ifndef QOT_HPP
 #define QOT_HPP
-
+​
 #include <string>
 #include <exception>
 #include <thread>
@@ -36,28 +36,28 @@
 #include <condition_variable>
 #include <map>
 #include <algorithm>
-
+​
 namespace qot
 {
 	/**
-	 * @brief Timeline events (must match those defined in QoT module)
+	 * @brief Fundamental time types
 	 */
-	typedef enum {
-		TIMELINE_EVENT_CREATE  = 0,		/* Timeline created 					*/
-		TIMELINE_EVENT_DESTROY = 1,		/* Timeline destroyed 					*/
-		TIMELINE_EVENT_JOIN    = 2,		/* Peer joined timeline 				*/
-		TIMELINE_EVENT_LEAVE   = 3,		/* Peer left timeline 					*/
-		TIMELINE_EVENT_SYNC    = 4,		/* Timeline synchronization update 		*/
-		TIMELINE_EVENT_CAPTURE = 5,		/* Capture event on this timeline  		*/
-		TIMELINE_EVENT_UDPATE  = 6,		/* Local timeline parameters updated 	*/
-	} TimelineEventType;
+	typedef struct {
+		 int64_t sec;	/* Seconds relative to Unix epoch in TAI */
+		uint64_t ysec;	/* Yoctosec */
+	} timepoint_t;				/* Deterministic instant in time */
+	typedef struct {
 
+	} instantest_t;				/* Stochastic instant in time */
+	typedef duration_t;			/* Deterministic duration of time */
+	typedef durationest_t;		/* Stochastic duration of time */
+​
 	/**
 	 * @brief Convenience decalaration
 	 */
-	typedef std::function<void(const std::string &pname, int64_t val)> CaptureCallbackType;
-	typedef std::function<void(const std::string &data, uint8_t event)> EventCallbackType;
-
+	typedef std::function<void(TimelineEventType event, 
+		const std::string &data, timeest_t eventtime)> EventCallbackType;
+​
 	/**
 	 * @brief Various exceptions
 	 */
@@ -96,7 +96,7 @@ namespace qot
 			return "The qot core respodned with an error";
 		}
 	};
-
+​
 	/**
 	 * @brief The timeline class is the primary interface between user-space code and
 	 *        the quality of time stack. 
@@ -110,57 +110,70 @@ namespace qot
 		 * @param res Required resolution
 		 * @return Positive: success Negative: error
 		 **/
-		public: Timeline(const std::string &uuid, uint64_t acc, uint64_t res);
-
+​
+//////////////
+		 //////////////
+		 //////////////
+		 ////////////// Use #define msec, usec, nsec in header files and use in calls
+		 ////////////// basic datatypes: time_t (signed), interval_t ({+ve, +ve}), duration_t ({+ve}), durationest_t ({duration_t, interval_t})
+		 //////////////
+​
+		public:
+			Timeline(const std::string &uuid, duration_t resolution, interval_t accuracy);
+			
+		//	accuracy_lower_limit: t_true >= t_returned - accuracy_lower_limit
+		//	accuracy_upper_limit: t_true <= t_returned + accuracy_upper_limit
+​
 		/**
 		 * @brief Unbind from a timeline
 		 **/
 		public: ~Timeline();
-
+​
 		/**
 		 * @brief Set the desired binding accuracy
 		 * @param accuracy The new accuracy
 		 * @return Positive: success Negative: error
 		 **/
-		public: int SetAccuracy(uint64_t acc);
-
+		public:
+			int SetAccuracy(interval_t accuracy);
+	
 		/**
 		 * @brief Set the desired binding resolution
 		 * @param res The new resolution
 		 * @return Positive: success Negative: error
 		 **/
-		public: int SetResolution(uint64_t res);
-
+		public: int SetResolution(duration_t res);
+​
 		/**
 		 * @brief Get the current global timeline
 		 * @return The time (in nanoseconds) since the Unix epoch
 		 **/
-		public: int64_t GetTime();
-
+		public: timeest_t GetTime();
+​
 		/**
 		 * @brief Get the accuracy achieved by the system
 		 * @return The current accuracy
 		 **/
-		public: uint64_t GetAccuracy();
-
+		public: interval_t GetAccuracy();
+​
 		/**
 		 * @brief Get the resolution achieved by the system
 		 * @return The current accuracy
 		 **/
-		public: uint64_t GetResolution();
-
+		public: duration_t GetResolution();
+​
 		/**
 		 * @brief Get the name of this application (how it presents itself to peers)
 		 * @return The name of the binding / application
 		 **/
 		public: std::string GetName();
-
+​
 		/**
 		 * @brief Get the name of this application (how it presents itself to peers)
 		 * @param name the new name for this application
 		 **/
 		public: void SetName(const std::string &name);
-
+​
 		/**
 		 * @brief Request a compare action on a given pin
 		 * @param pname The pin name (must be offered by the driver)
@@ -171,47 +184,57 @@ namespace qot
 		 * @param limit The total number of cycles (0: infinite)
 		 * @return 0+: success, <0: error
 		 **/
-		public: int GenerateInterrupt(const std::string &pname, uint8_t enable, 
-			int64_t start, uint32_t high, uint32_t low, uint32_t repeat);
-
+		public:
+			int ConfigPinInterrupt(const std::string &pname, time_t start, interval_t period);
+			int CancelPinInterrupt(const std::string &pname);
+​
+			int ConfigPinTimestamp(const std::string &pname, transition_t edge, EventCallbackType TimestampCallback);
+			int CancelPinTimestamp(const std::string &pname);
+​
 		/**
 		 * @brief Request to be notified of network events (device, action)
 		 * @param callback Callback funtion for device binding
 		 **/
-		public: void SetEventCallback(EventCallbackType callback);
-
-		/**
-		 * @brief Request to be notified when a capture event occurs
-		 * @param callback Callback funtion for capture
-		 **/
-		public: void SetCaptureCallback(CaptureCallbackType callback);
-
+		public: int TimelineEventCallback(TimelineEventType type, EventCallbackType callback);
+		public: int CancelTimelineEventCallback(TimelineEventType type);
+​
+​
+​
 		/**
 		 * @brief Wait until some global time (if in past calls back immediately)
 		 * @param val Global time
 		 * @return Predicted error 
 		 **/
-		public: int64_t WaitUntil(int64_t val);
-
+		public: timeest_t WaitUntil(timeest_t absolute_time);
+​
+		public: int CreateTimer(
+			const std::string &name, 
+			timeest_t start_time, durationest_t period, EventCallbackType TimerCallback, int count);
+		public: int DestroyTimer(const std::string &name);
+​
+​
+		// period is 
+​
+​
 		/**
-		 * @brief Sleep for a given number of nanoseconds relative to the call time
+		 * @brief Sleep for a given number of nanoseconds
 		 * @param val Number of nanoseconds
 		 * @return Predicted error 
 		 **/
-		public: int64_t Sleep(uint64_t val);
-
+		public: timeest_t Sleep(durationest_t delta);
+​
 		/**
 		 * @brief Blocking poll on fd for capture events
 		 **/
 		private: void CaptureThread();
-
+​
 		/**
 		 * @brief Create a random string of fixed length
 		 * @param length the length of the string
 		 * @return the random string
 		 **/
 		private: static std::string RandomString(uint32_t length);
-
+​
 		/**
 		 * @brief Internal data structures
 		 **/
@@ -228,5 +251,5 @@ namespace qot
 		private: std::unique_lock<std::mutex> lk;	// Lock
 	};
 }
-
+​
 #endif

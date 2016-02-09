@@ -6,4 +6,5 @@ This folder contains the QoT stack source code, divided into the following five 
 * **examples** - example projects showing how to use the QoT stack.
 * **modules** - core and clock kernel modules.
 * **service** - the system daemon responsible for synchronization.
+* **test** - unit tests for the system components.
 * **utils** - user-space tools for introspection and debugging.
