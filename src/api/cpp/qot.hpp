@@ -28,8 +28,6 @@
 #ifndef QOT_STACK_SRC_API_CPP_QOT_H
 #define QOT_STACK_SRC_API_CPP_QOT_H
 ​
-#include "qot_types.h"
-
 namespace qot
 {
 	/**

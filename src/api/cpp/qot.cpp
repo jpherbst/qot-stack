@@ -1,27 +1,27 @@
 /*
  * @file qot.cpp
  * @brief Userspace C++ API to manage QoT timelines
- * @author Andrew Symington and Fatima Anwar 
- * 
+ * @author Andrew Symington and Fatima Anwar
+ *
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, 
+ * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ * 	1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
- * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -36,18 +36,7 @@
 // Private functionality
 extern "C"
 {
-	// Userspeace ioctl
-	#include <unistd.h>
-	#include <fcntl.h>
-	#include <stdio.h>
-	#include <string.h>
-	#include <stdint.h>
-	#include <time.h>
-	#include <sys/ioctl.h>
-	#include <sys/poll.h>
-
-	// Our module communication protocol
-	#include "../../module/qot.h"
+	#include "qot.h"
 }
 
 #define DEBUG false
@@ -86,7 +75,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 	oss << "/dev/";
 	oss << QOT_IOCTL_TIMELINE;
 	oss << msg.tid;
-	
+
 	// Open the clock
 	if (DEBUG) std::cout << "Opening clock " << oss.str() << std::endl;
 	this->fd_clk = open(oss.str().c_str(), O_RDWR);
@@ -112,9 +101,9 @@ Timeline::~Timeline()
     this->thread.join();
 
 	// Close the clock and timeline
-	if (this->fd_clk) 
+	if (this->fd_clk)
 		close(fd_clk);
-	if (this->fd_qot) 
+	if (this->fd_qot)
 		close(fd_qot);
 }
 
@@ -124,7 +113,7 @@ int Timeline::SetAccuracy(uint64_t acc)
 	// Package up a rewuest
 	struct qot_message msg;
 	msg.request.acc = acc;
-	
+
 	// Update this clock
 	if (ioctl(this->fd_qot, QOT_SET_ACCURACY, &msg) == 0)
 		return 0;
@@ -139,7 +128,7 @@ int Timeline::SetResolution(uint64_t res)
 	// Package up a rewuest
 	struct qot_message msg;
 	msg.request.res = res;
-	
+
 	// Update this clock
 	if (ioctl(this->fd_qot, QOT_SET_RESOLUTION, &msg) == 0)
 		return 0;
@@ -150,7 +139,7 @@ int Timeline::SetResolution(uint64_t res)
 
 // Get the current time
 int64_t Timeline::GetTime()
-{	
+{
 	struct timespec ts;
 	int ret = clock_gettime(this->clk, &ts);
 	return (int64_t) ts.tv_sec * 1000000000ULL + (int64_t) ts.tv_nsec;
@@ -191,7 +180,7 @@ void Timeline::SetName(const std::string &name)
 }
 
 // Generate an interrupt on a given timer pin
-int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable, 
+int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
 	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
 {
 	// Check to make sure the pin name is valid
@@ -206,7 +195,7 @@ int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
 	msg.compare.low = low;
 	msg.compare.repeat = repeat;
 	strcpy(msg.compare.name,pname.c_str());
-	
+
 	// Update this clock
 	if (ioctl(this->fd_qot, QOT_SET_COMPARE, &msg) == 0)
 		return 0;
@@ -256,12 +245,12 @@ void Timeline::SetEventCallback(EventCallbackType callback)
 void Timeline::CaptureThread()
 {
 	// Wait until the main thread sets up the binding and posix clock
-    while (fd_qot < 0) 
+    while (fd_qot < 0)
     	this->cv.wait(this->lk);
 
     if (DEBUG) std::cout << "Polling for activity" << std::endl;
 
-    // Sto store message data 
+    // Sto store message data
 	struct qot_message msg;
 
     // Start polling
@@ -285,7 +274,7 @@ void Timeline::CaptureThread()
 				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
 				{
 					// Callback with the event
-					if (cb_event) 
+					if (cb_event)
 						this->cb_event(msg.event.info, msg.event.type);
 
 					// Special callback for capture events to

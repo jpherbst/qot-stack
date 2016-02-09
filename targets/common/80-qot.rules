@@ -1,3 +1,4 @@
 KERNEL=="qot", MODE="0666"
-SUBSYSTEM=="ptp",ATTR{clock_name}=="AM335x timer",SYMLINK+="ptp_core"
-SUBSYSTEM=="ptp",ATTR{clock_name}=="CPTS timer",SYMLINK+="ptp_cpts"
+SUBSYSTEM=="ptp",ATTR{clock_name}=="AM335x timer",SYMLINK+="clock_am335x"
+SUBSYSTEM=="ptp",ATTR{clock_name}=="CPTS timer",SYMLINK+="clock_cpts"
+SUBSYSTEM=="ptp",ATTR{clock_name}=="timeline%n",SYMLINK+="timeline%n"

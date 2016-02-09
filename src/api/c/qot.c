@@ -28,12 +28,14 @@
  */
 
 /* System includes */
+#include <math.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 /* This file includes */
 #include "qot.h"
-
-/* Internal methods */
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -97,7 +99,7 @@ qot_return_t timeline_config_pin_timestamp(timeline_t *timeline,
     qot_extts_t *request, qot_callback_t callback) {
     return QOT_RETURN_TYPE_ERR;
 }
-​
+
 qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
     qot_callback_t callback) {
     return QOT_RETURN_TYPE_ERR;
