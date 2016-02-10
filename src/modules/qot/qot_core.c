@@ -30,10 +30,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
-/* Modular components of QoT core */
-#include "qot_core.h"
-#include "qot_chardev_adm.h"
-#include "qot_chardev_usr.h"
+#include "qot_internal.h"
 
 struct qot_core {
 	u64 placeholder;
@@ -54,14 +51,14 @@ qot_return_t qot_clock_property_update(struct qot_platform_clock_info *info) {
 }
 EXPORT_SYMBOL(qot_clock_property_update);
 
-static int __init qot_init(void) {
+static int qot_init(void) {
     int ret;
-    ret = qot_chardev_adm_init(void);
+    ret = qot_chardev_adm_init();
     if (ret) {
         pr_err("qot_core: problem calling qot_chardev_adm_init\n");
         goto fail_adm;
     }
-    ret = qot_chardev_usr_init(void);
+    ret = qot_chardev_usr_init();
     if (ret) {
         pr_err("qot_core: problem calling qot_chardev_usr_init\n");
         goto fail_usr;
@@ -73,10 +70,13 @@ fail_adm:
 	return 1;
 }
 
-static void __exit qot_cleanup(void) {
+static void qot_cleanup(void) {
     qot_chardev_adm_cleanup();
     qot_chardev_usr_cleanup();
 }
+
+module_init(qot_init);
+module_exit(qot_cleanup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");

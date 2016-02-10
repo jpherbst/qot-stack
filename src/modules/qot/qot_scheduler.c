@@ -25,7 +25,6 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 // include files
 #include <linux/module.h>
 #include <linux/kernel.h>       // printk
@@ -47,9 +46,7 @@
 #include <linux/timecounter.h>
 
 // Local includes
-#include "qot_timeline.h"
-#include "qot_core.h"
-
+#include "qot_internal.h"
 
 // data structures
 // Sleeper data structure for the sleeping task -> encapsulates a pointer to the task struct

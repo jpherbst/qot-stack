@@ -35,7 +35,7 @@
 #include <linux/fs.h>
 #include <linux/string.h>
 
-#include "qot_sysfs.h"
+#include "qot_internal.h"
 
 static struct kobject *qot_kobject;
 static int foo;

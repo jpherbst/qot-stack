@@ -6,6 +6,21 @@ SET(MODULE_SOURCE_FILES
     qot_chardev_adm.c
 )
 
+# Set the source files
+SET(MODULE_BUILD_PRODUCTS
+    ${CMAKE_CURRENT_SOURCE_DIR}/.tmp_versions
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot.ko.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot.mod.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_chardev_adm.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_chardev_usr.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/Module.symvers
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules.order
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot.ko
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.c
+)
+
 # Perform the compilation
 SET(DRIVER_FILE qot.ko)
 
@@ -28,3 +43,5 @@ ADD_CUSTOM_COMMAND( OUTPUT  ${DRIVER_FILE}
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                     COMMENT "Building qot kernel module...")
 ADD_CUSTOM_TARGET(ko_qot ALL DEPENDS ${DRIVER_FILE})
+SET_DIRECTORY_PROPERTIES(PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
+    "${MODULE_BUILD_PRODUCTS}")

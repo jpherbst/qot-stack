@@ -1,1 +1,0 @@
-cmd_/home/roseline/Desktop/qot-stack/src/modules/qot/qot.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/roseline/Desktop/qot-stack/src/modules/qot/qot.ko /home/roseline/Desktop/qot-stack/src/modules/qot/qot.o /home/roseline/Desktop/qot-stack/src/modules/qot/qot.mod.o

@@ -1,6 +1,6 @@
 /*
- * @file qot_chardev_adm.h
- * @brief Administrative ioctl interface (/dev/qotadm) to the QoT core
+ * @file qot_internal.h
+ * @brief Internal functions shared between subcomponents of qot_core
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -27,11 +27,34 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_CHARDEV_ADM_H
-#define QOT_STACK_SRC_MODULES_QOT_QOT_CHARDEV_ADM_H
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
+
+#include "qot_core.h"
+
+/* For qot_chardev_adm */
 
 int qot_chardev_adm_init(void);
 
 void qot_chardev_adm_cleanup(void);
+
+/* For qot_chardev_adm */
+
+int qot_chardev_usr_init(void);
+
+void qot_chardev_usr_cleanup(void);
+
+/* For qot_clock_sysfs */
+
+int qot_clock_sysfs_init(void);
+
+void qot_clock_sysfs_cleanup(void);
+
+/* For qot_scheduler */
+
+// int interface_update(struct rb_root *timeline_root);
+
+//int interface_nanosleep(struct timespec *exp_time, struct qot_timeline *timeline);
+
 
 #endif

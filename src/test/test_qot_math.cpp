@@ -19,43 +19,43 @@ TEST(TimelineMath, TimeInitializers) {
 }
 
 TEST(TimelineMath, FrequencyInitializers) {
-    frequency_t tE = EHZ(1);
+    frequency_t tE = EHz(1);
     EXPECT_EQ(1000000000000000000ULL, tE.hz);
     EXPECT_EQ(0ULL, tE.ahz);
-    frequency_t tP = PHZ(1);
+    frequency_t tP = PHz(1);
     EXPECT_EQ(1000000000000000ULL, tP.hz);
     EXPECT_EQ(0ULL, tP.ahz);
-    frequency_t tT = THZ(1);
+    frequency_t tT = THz(1);
     EXPECT_EQ(1000000000000ULL, tT.hz);
     EXPECT_EQ(0ULL, tT.ahz);
-    frequency_t tG = GHZ(1);
+    frequency_t tG = GHz(1);
     EXPECT_EQ(1000000000ULL, tG.hz);
     EXPECT_EQ(0ULL, tG.ahz);
-    frequency_t tM = MHZ(1);
+    frequency_t tM = MHz(1);
     EXPECT_EQ(1000000ULL, tM.hz);
     EXPECT_EQ(0ULL, tM.ahz);
-    frequency_t tK = KHZ(1);
+    frequency_t tK = KHz(1);
     EXPECT_EQ(1000ULL, tK.hz);
     EXPECT_EQ(0ULL, tK.ahz);
-    frequency_t t = HZ(1);
+    frequency_t t = Hz(1);
     EXPECT_EQ(1ULL, t.hz);
     EXPECT_EQ(0ULL, t.ahz);
-    frequency_t ta = aHZ(1);
+    frequency_t ta = aHz(1);
     EXPECT_EQ(1ULL, ta.ahz);
     EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tf = fHZ(1);
+    frequency_t tf = fHz(1);
     EXPECT_EQ(1000ULL, tf.ahz);
     EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tn = nHZ(1);
+    frequency_t tn = nHz(1);
     EXPECT_EQ(1000000ULL, tn.ahz);
     EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tp = pHZ(1);
+    frequency_t tp = pHz(1);
     EXPECT_EQ(1000000000ULL, tp.ahz);
     EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tu = uHZ(1);
+    frequency_t tu = uHz(1);
     EXPECT_EQ(1000000000000ULL, tu.ahz);
     EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tm = mHZ(1);
+    frequency_t tm = mHz(1);
     EXPECT_EQ(1000000000000000ULL, tm.ahz);
     EXPECT_EQ(0ULL, ta.hz);
 }

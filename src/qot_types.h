@@ -91,14 +91,14 @@ typedef struct timedemand {
 #define aSEC(t)  { .sec=0, 				.asec=(t), 						}
 
 /* Add a length of time to a point in time */
-void timepoint_add(timepoint_t *t, timelength_t *v) {
+static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
 	t->sec  += v->sec + t->asec / aSEC_PER_SEC;
 	t->asec %= aSEC_PER_SEC;
 }
 
 /* Subtract a length of time from a point in time */
-void timepoint_sub(timepoint_t *t, timelength_t *v) {
+static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 	t->sec -= v->sec;
 	if (t->asec < v->asec) { /* Special case */
 		t->sec--;
@@ -109,14 +109,14 @@ void timepoint_sub(timepoint_t *t, timelength_t *v) {
 }
 
 /* Add two lengths of time together */
-void timelength_add(timelength_t *l1, timelength_t *l2) {
+static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
 	l1->sec  += l2->sec + l1->asec / aSEC_PER_SEC;
 	l1->asec %= aSEC_PER_SEC;
 }
 
 /* Get the difference between two timepoints as a timelength */
-void timepoint_diff(timelength_t *v,
+static inline void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
@@ -126,36 +126,36 @@ void timepoint_diff(timelength_t *v,
 }
 
 /* Add a length of uncertain time to an uncertain point in time */
-void utimepoint_add(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_add(utimepoint_t *t, utimelength_t *v) {
 	timepoint_add(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
 
 /* Subtract a length of uncertain time from an uncertain point in time */
-void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 	timepoint_sub(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aHZ_PER_HZ 1000000000000000000ULL
+#define aHZ_PER_Hz 1000000000000000000ULL
 
 /* Some initializers for efficiency */
-#define EHZ(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
-#define PHZ(t) { .hz=(t)*1000000000000000ULL,  .ahz=0,    }
-#define THZ(t) { .hz=(t)*1000000000000ULL,  .ahz=0,       }
-#define GHZ(t) { .hz=(t)*1000000000ULL,   .ahz=0,         }
-#define MHZ(t) { .hz=(t)*1000000ULL,    .ahz=0,           }
-#define KHZ(t) { .hz=(t)*1000ULL,     .ahz=0,             }
-#define  HZ(t) { .hz=(t),           .ahz=0,               }
-#define mHZ(t) { .hz=0, .ahz=(t)*1000000000000000ULL,     }
-#define uHZ(t) { .hz=0, .ahz=(t)*1000000000000ULL,        }
-#define pHZ(t) { .hz=0, .ahz=(t)*1000000000ULL,           }
-#define nHZ(t) { .hz=0, .ahz=(t)*1000000ULL,              }
-#define fHZ(t) { .hz=0, .ahz=(t)*1000ULL,                 }
-#define aHZ(t) { .hz=0, .ahz=(t),                         }
+#define EHz(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
+#define PHz(t) { .hz=(t)*1000000000000000ULL,  .ahz=0,    }
+#define THz(t) { .hz=(t)*1000000000000ULL,  .ahz=0,       }
+#define GHz(t) { .hz=(t)*1000000000ULL,   .ahz=0,         }
+#define MHz(t) { .hz=(t)*1000000ULL,    .ahz=0,           }
+#define KHz(t) { .hz=(t)*1000ULL,     .ahz=0,             }
+#define  Hz(t) { .hz=(t),           .ahz=0,               }
+#define mHz(t) { .hz=0, .ahz=(t)*1000000000000000ULL,     }
+#define uHz(t) { .hz=0, .ahz=(t)*1000000000000ULL,        }
+#define pHz(t) { .hz=0, .ahz=(t)*1000000000ULL,           }
+#define nHz(t) { .hz=0, .ahz=(t)*1000000ULL,              }
+#define fHz(t) { .hz=0, .ahz=(t)*1000ULL,                 }
+#define aHz(t) { .hz=0, .ahz=(t),                         }
 
 /* An absolute frequency */
 typedef struct frequency {
@@ -164,10 +164,10 @@ typedef struct frequency {
 } frequency_t;
 
 /* Add two frequencies together */
-void frequency_add(frequency_t *l1, frequency_t *l2) {
+static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
-    l1->hz  += l2->hz + l1->ahz / aHZ_PER_HZ;
-    l1->ahz %= aHZ_PER_HZ;
+    l1->hz  += l2->hz + l1->ahz / aHZ_PER_Hz;
+    l1->ahz %= aHZ_PER_Hz;
 }
 
 /* Popular ratios that will be used throughout this file */
@@ -195,7 +195,7 @@ typedef struct power {
 } power_t;
 
 /* Add two frequencies together */
-void power_add(power_t *l1, power_t *l2) {
+static inline void power_add(power_t *l1, power_t *l2) {
     l1->awatt += l2->awatt;
     l1->watt  += l2->watt + l1->awatt / aWATT_PER_WATT;
     l1->awatt %= aWATT_PER_WATT;

@@ -32,7 +32,7 @@
 
 #include <linux/ptp_clock_kernel.h>
 
-#include "qot_types.h"
+#include "../../qot_types.h"
 
 /**
  * @brief Information about a platform clock

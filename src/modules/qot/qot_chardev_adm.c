@@ -32,7 +32,7 @@
 #include <linux/cdev.h>
 #include <linux/poll.h>
 
-#include "qot_chardev_adm.h"
+#include "qot_internal.h"
 
 static dev_t dev;
 static struct cdev c_dev;
@@ -72,7 +72,7 @@ int qot_chardev_adm_init(void) {
     cdev_init(&c_dev, &qot_chardev_adm_fops);
     if ((ret = cdev_add(&c_dev, dev, 1)) < 0)
         return ret;
-    if (IS_ERR(cl = class_create(THIS_MODULE, "char"))) {
+    if (IS_ERR(cl = class_create(THIS_MODULE, "qotadm"))) {
         cdev_del(&c_dev);
         unregister_chrdev_region(dev, 1);
         return PTR_ERR(cl);
