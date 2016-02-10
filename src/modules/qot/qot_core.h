@@ -37,33 +37,35 @@
 /**
  * @brief Information about a platform clock
  **/
-struct qot_platform_clock_info {
-    struct qot_plat_clk properties; /* Description of the clock       */
+typedef struct qot_clk_info {
+    struct qot_clk properties;      /* Description of the clock       */
     struct ptp_clock_info ptpclk;   /* The PTP interface to the clock */
     timepoint_t (*read_time)(void);
     long (*program_interrupt)(timepoint_t expiry, long (*callback)(void*));
     long (*cancel_interrupt)(void);
-};
+    long (*sleep)(void);
+    long (*wake)(void);
+} qot_clk_info_t;
 
 /**
  * @brief Register a clock with the QoT core
  * @param info A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_register(struct qot_platform_clock_info *info);
+qot_return_t qot_clock_register(struct qot_clk_info *info);
 
 /**
  * @brief Unregister a clock with the QoT core
  * @param info A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_unregister(struct qot_platform_clock_info *info);
+qot_return_t qot_clock_unregister(struct qot_clk_info *info);
 
 /**
  * @brief Prompt QoT core into updating the clock information
  * @param info A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_property_update(struct qot_platform_clock_info *info);
+qot_return_t qot_clock_property_update(struct qot_clk_info *info);
 
 #endif

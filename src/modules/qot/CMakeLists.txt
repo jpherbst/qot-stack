@@ -19,6 +19,11 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.order
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.ko
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_chardev_adm.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_chardev_usr.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_core.o
 )
 
 # Perform the compilation

@@ -31,7 +31,8 @@
 #define QOT_STACK_SRC_QOT_TYPES_H
 
 /* So that we might expose a meaningful name through PTP interface */
-#define QOT_MAX_NAMELEN 16
+#define QOT_MAX_NAMELEN 64
+#define QOT_MAX_NUMCLKS 8
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
@@ -72,11 +73,11 @@ typedef struct utimelength {
 	timeinterval_t interval;	/* Uncertainty interval around endpoint */
 } utimelength_t;
 
-/* A duration of time with an uncertain end point */
-typedef struct timedemand {
+/* A time quality comprised of a (min, max) accuracy and tick resolution  */
+typedef struct timequality {
 	timelength_t resolution;	/* Time resolution */
 	timeinterval_t accuracy;	/* Time accuracy  */
-} timedemand_t;
+} timequality_t;
 
 /* Popular ratios that will be used throughout this file */
 #define aSEC_PER_SEC 1000000000000000000ULL
@@ -113,6 +114,37 @@ static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
 	l1->sec  += l2->sec + l1->asec / aSEC_PER_SEC;
 	l1->asec %= aSEC_PER_SEC;
+}
+
+/* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
+static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
+    if (l1->sec > l2->sec)
+        return -1;
+    if (l1->sec < l2->sec)
+        return  1;
+    if (l1->asec > l2->asec)
+        return -1;
+    if (l1->asec < l2->asec)
+        return  1;
+    return 0;
+}
+
+/* Copy the maximum value of two timelengths into a third timelength */
+static inline void timelength_max(timelength_t *sol,
+    timelength_t *l1, timelength_t *l2) {
+    if (timelength_cmp(l1,l2) < 0)
+        memcpy(sol,l1,sizeof(timelength_t));
+    else
+        memcpy(sol,l2,sizeof(timelength_t));
+}
+
+/* Copy the minimum value of two timelengths into a third timelength */
+static inline void timelength_min(timelength_t *sol,
+    timelength_t *l1, timelength_t *l2) {
+    if (timelength_cmp(l1,l2) > 0)
+        memcpy(sol,l1,sizeof(timelength_t));
+    else
+        memcpy(sol,l2,sizeof(timelength_t));
 }
 
 /* Get the difference between two timepoints as a timelength */
@@ -228,14 +260,14 @@ typedef enum {
  * @brief Timeline events
  */
 typedef enum {
-	QOT_TYPE_CREATE   = (0),	/* Timeline created 					*/
-	QOT_TYPE_DESTROY  = (1),	/* Timeline destroyed 					*/
-	QOT_TYPE_JOIN     = (2),	/* Peer joined timeline 				*/
-	QOT_TYPE_LEAVE    = (3),	/* Peer left timeline 					*/
-	QOT_TYPE_SYNC     = (4),	/* Timeline synchronization update 		*/
-	QOT_TYPE_CAPTURE  = (5),	/* Capture event on this timeline  		*/
-	QOT_TYPE_UDPATE   = (6),	/* Local timeline parameters updated 	*/
-} qot_type_t;
+	QOT_EVENT_TYPE_TIMELINE_CREATE   = (0),	/* Timeline created 				 */
+	QOT_EVENT_TYPE_TIMELINE_DESTROY  = (1),	/* Timeline destroyed 				 */
+	QOT_EVENT_TYPE_TIMELINE_JOIN     = (2),	/* Peer joined timeline 			 */
+	QOT_EVENT_TYPE_TIMELINE_LEAVE    = (3),	/* Peer left timeline 				 */
+	QOT_EVENT_TYPE_TIMELINE_SYNC     = (4),	/* Timeline synchronization update 	 */
+	QOT_EVENT_TYPE_TIMELINE_CAPTURE  = (5),	/* Capture event on this timeline  	 */
+	QOT_EVENT_TYPE_TIMELINE_UDPATE   = (6),	/* Local timeline parameters updated */
+} qot_event_type_t;
 
 /**
  * @brief Clock error types
@@ -245,6 +277,14 @@ typedef enum {
     QOT_CLK_ERR_WALK,
     QOT_CLK_ERR_NUM
 } qot_clk_err_t;
+
+/**
+ * @brief Clock error types
+ */
+typedef enum {
+    QOT_CLK_STATE_ON  = (0),
+    QOT_CLK_STATE_OFF,
+} qot_clk_state_t;
 
 /* QoT external input timestamping */
 typedef struct qot_extts {
@@ -262,57 +302,45 @@ typedef struct qot_perout {
 	qot_return_t response;			    /* Response */
 } qot_perout_t;
 
-/* Binding request */
-typedef struct qot_bind {
-	char uuid[QOT_MAX_NAMELEN];			/* Timeline UUID */
-	timedemand_t demand;				/* Quality of Time (QoT) demand */
-	qot_return_t response;			    /* Response */
-} qot_bind_t;
-
 /* QoT event */
 typedef struct qot_event {
-	qot_type_t type;					/* Event type */
+	qot_event_type_t type;				/* Event type */
 	utimepoint_t timestamp;				/* Uncertain time of event */
 	char data[QOT_MAX_NAMELEN];			/* Event data */
 } qot_event_t;
 
-/* Platform clock type */
-typedef struct qot_plat_clk {
+/* QoT clock type */
+typedef struct qot_clk {
     char name[QOT_MAX_NAMELEN];         /* Clock name              */
+    qot_clk_state_t state;              /* Clock state             */
     frequency_t nominal_freq;           /* Frequency in Hz         */
     power_t nominal_power;              /* Power draw in Watts     */
     timeinterval_t read_latency;        /* Latency in seconds      */
     timeinterval_t interrupt_latency;   /* Interrupt latency       */
     scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics   */
     int phc;                            /* PHC index of this clock */
-} qot_plat_clk_t;
+} qot_clk_t;
 
-/* Platform clock type */
-typedef struct qot_plat_clkarr {
-    int num_clks;                       /* Number of clocks         */
-    qot_plat_clk_t *clk;                /* Array of num_clks clocks */
-} qot_plat_clkarr_t;
+/* QoT timeline type */
+typedef struct qot_timeline {
+    char name[QOT_MAX_NAMELEN];         /* Timeline name           */
+    timequality_t demand;                /* Dominating demand       */
+} qot_timeline_t;
 
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
 #define QOTUSR_MAGIC_CODE  0xEE
-#define QOTUSR_BIND       _IOWR(QOTUSR_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTUSR_UNBIND      _IOR(QOTUSR_MAGIC_CODE,  1, qot_return_t*)
-#define QOTUSR_SET_DEMAND  _IOW(QOTUSR_MAGIC_CODE,  2, timedemand_t*)
-#define QOTUSR_GET_DEMAND  _IOR(QOTUSR_MAGIC_CODE,  3, timedemand_t*)
-#define QOTUSR_REQ_PEROUT  _IOW(QOTUSR_MAGIC_CODE,  4, qot_perout_t*)
-#define QOTUSR_REQ_EXTTS   _IOW(QOTUSR_MAGIC_CODE,  5, qot_extts_t*)
-#define QOTUSR_GET_EVENT   _IOR(QOTUSR_MAGIC_CODE,  6, qot_event_t*)
+#define QOTUSR_GET_TIMELINE_INFO  _IOR(QOTUSR_MAGIC_CODE, 1, qot_timeline_t*)
+#define QOTUSR_BIND_TO_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
 
 /**
  * @brief Key messages supported by /dev/qotadm
  */
-#define QOTADM_MAGIC_CODE  0xEF
-#define QOTADM_SET_UNCERTAINTY _IOWR(QOTADM_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTADM_GET_CLOCKS       _IOR(QOTADM_MAGIC_CODE,  1, qot_plat_clkarr*)
-#define QOTADM_SELECT_CLOCK     _IOW(QOTADM_MAGIC_CODE,  2, qot_plat_clk*)
-#define QOTADM_GET_OS_LATENCY   _IOR(QOTADM_MAGIC_CODE,  3, timeinterval_t*)
-#define QOTADM_SET_OS_LATENCY   _IOW(QOTADM_MAGIC_CODE,  4, timeinterval_t*)
+#define QOTADM_MAGIC_CODE 0xEF
+#define QOTADM_GET_CLOCK_INFO    _IOWR(QOTADM_MAGIC_CODE, 1, qot_clk_t*)
+#define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 2, qot_clk_t*)
+#define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 3, qot_clk_t*)
+#define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 4, qot_clk_t*)
 
 #endif
