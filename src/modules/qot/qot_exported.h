@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
-#define QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
 
 #include <linux/ptp_clock_kernel.h>
 
@@ -37,35 +37,35 @@
 /**
  * @brief Information about a platform clock
  **/
-typedef struct qot_clk_info {
-    struct qot_clk properties;      /* Description of the clock       */
-    struct ptp_clock_info ptpclk;   /* The PTP interface to the clock */
+typedef struct qot_clock_impl {
+    qot_clock_t properties;          /* Description of this clock      */
+    struct ptp_clock_info ptpclk;    /* The PTP interface to the clock */
     timepoint_t (*read_time)(void);
     long (*program_interrupt)(timepoint_t expiry, long (*callback)(void*));
     long (*cancel_interrupt)(void);
     long (*sleep)(void);
     long (*wake)(void);
-} qot_clk_info_t;
+} qot_clock_impl_t;
 
 /**
  * @brief Register a clock with the QoT core
- * @param info A pointer containing all the clock info
+ * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_register(struct qot_clk_info *info);
+qot_return_t qot_clock_register(qot_clock_impl_t *impl);
 
 /**
  * @brief Unregister a clock with the QoT core
- * @param info A pointer containing all the clock info
+ * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_unregister(struct qot_clk_info *info);
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl);
 
 /**
  * @brief Prompt QoT core into updating the clock information
- * @param info A pointer containing all the clock info
+ * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_property_update(struct qot_clk_info *info);
+qot_return_t qot_clock_property_update(qot_clock_impl_t *impl);
 
 #endif

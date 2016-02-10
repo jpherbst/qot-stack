@@ -1,6 +1,6 @@
 /*
  * @file qot_chardev_usr.c
- * @brief Administrative ioctl interface (/dev/qotadm) to the QoT core
+ * @brief User ioctl interface (/dev/qotusr) to the QoT core
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -33,36 +33,47 @@
 #include <linux/poll.h>
 #include <linux/slab.h>
 #include <linux/rbtree.h>
+#include <linux/sched.h>
 
 #include "qot_internal.h"
 
+/* Information required to open a character device */
 static dev_t dev;
 static struct cdev c_dev;
 static struct class *cl;
 static struct device *dev_ret;
 
 /* Information that allows us to maintain parallel cchardev connections */
-struct qot_chardev_usr_con {
+typedef struct chardev_usr_con {
     struct rb_node node;                /* Red-black tree node */
     struct file *fileobject;            /* File object         */
     wait_queue_head_t wq;               /* Wait queue          */
     int event_flag;                     /* Data ready flag     */
     struct list_head event_list;        /* Event list          */
-    qot_binding_t *binding;             /* Current binding     */
-};
+} chardev_usr_con_t;
 
 /* Root of the red-black tree used to store parallel connections */
 static struct rb_root qot_chardev_usr_con_root = RB_ROOT;
 
+/* Free memory used by a connection */
+static void qot_chardev_usr_con_free(chardev_usr_con_t *con) {
+    event_t *event;
+    struct list_head *item, *tmp;
+    list_for_each_safe(item, tmp, &con->event_list) {
+        event = list_entry(item, event_t, list);    /* Get the event  */
+        list_del(item);                             /* Delte the item */
+        kfree(event);                               /* Free up memory */
+    }
+}
+
 /* Search for the connection corresponding to a given fileobject */
-static struct qot_chardev_usr_con *qot_chardev_usr_con_search(
-    struct file *fileobject) {
+static chardev_usr_con_t *qot_chardev_usr_con_search(struct file *f) {
     int result;
-    struct qot_chardev_usr_con *con;
+    chardev_usr_con_t *con;
     struct rb_node *node = qot_chardev_usr_con_root.rb_node;
     while (node) {
-        con = container_of(node, struct qot_chardev_usr_con, node);
-        result = fileobject - con->fileobject;
+        con = container_of(node, chardev_usr_con_t, node);
+        result = f - con->fileobject;
         if (result < 0)
             node = node->rb_left;
         else if (result > 0)
@@ -73,92 +84,132 @@ static struct qot_chardev_usr_con *qot_chardev_usr_con_search(
     return NULL;
 }
 
-/* Insert a new connection into the data structure */
-static int qot_chardev_usr_con_insert(struct qot_chardev_usr_con *data) {
+/* Insert a new connection into the data structure (0 = OK, 1 = EXISTS) */
+static void qot_chardev_usr_con_insert(chardev_usr_con_t *con) {
     int result;
-    struct qot_chardev_usr_con *con;
+    chardev_usr_con_t *tmp;
     struct rb_node **new = &(qot_chardev_usr_con_root.rb_node), *parent = NULL;
     while (*new) {
-        con = container_of(*new, struct qot_chardev_usr_con, node);
-        result = data->fileobject - con->fileobject;
+        tmp = container_of(*new, chardev_usr_con_t, node);
+        result = con->fileobject - tmp->fileobject;
         parent = *new;
-        if (result < 0)
+        if (result < 0)                 /* Traverse left    */
             new = &((*new)->rb_left);
-        else if (result > 0)
+        else if (result > 0)            /* Traverse right   */
             new = &((*new)->rb_right);
-        else
-            return 0;
+        else {                          /* Special case: already exists */
+            rb_replace_node(*new, &con->node, &qot_chardev_usr_con_root);
+            qot_chardev_usr_con_free(tmp);
+            return;
+        }
     }
-    rb_link_node(&data->node, parent, new);
-    rb_insert_color(&data->node, &qot_chardev_usr_con_root);
-    return 1;
+    rb_link_node(&con->node, parent, new);
+    rb_insert_color(&con->node, &qot_chardev_usr_con_root);
 }
 
-/* Remove a binding from the red-black tree */
-static int qot_chardev_usr_con_remove(struct qot_chardev_usr_con *data) {
-    if (!data) {
+/* Remove a connection from the red-black tree */
+static int qot_chardev_usr_con_remove(chardev_usr_con_t *con) {
+    if (!con) {
         pr_err("qot_chardev_usr: could not find ioctl connection\n");
         return 1;
     }
-    rb_erase(&data->node, &qot_chardev_usr_con_root);
-    kfree(data);
+    rb_erase(&con->node, &qot_chardev_usr_con_root);
     return 0;
 }
 
 /* chardev ioctl open callback implementation */
 static int qot_chardev_usr_ioctl_open(struct inode *i, struct file *f) {
-    struct qot_chardev_usr_con *con =
-        kzalloc(sizeof(struct qot_chardev_usr_con), GFP_KERNEL);
+    qot_timeline_t *timeline;
+    event_t *event;
+
+    /* Create a new connection */
+    chardev_usr_con_t *con =
+        kzalloc(sizeof(chardev_usr_con_t), GFP_KERNEL);
     if (!con)
-        return -ENOMEM;
+        goto fail2;
+    INIT_LIST_HEAD(&con->event_list);
     init_waitqueue_head(&con->wq);
     con->fileobject = f;
     con->event_flag = 0;
-    if (qot_chardev_usr_con_insert(con))
-        return 0;
-    kfree(con);
+
+    /* Insert the connection into the red-black tree */
+    qot_chardev_usr_con_insert(con);
+
+    /* Notify the connection (by polling) of all existing timelines */
+    timeline = NULL;
+    while (qot_core_timeline_next(timeline)) {
+        event = kzalloc(sizeof(event_t), GFP_KERNEL);
+        if (!event)
+            goto fail1;
+        event->info.type = QOT_EVENT_TIMELINE_CREATE;
+        strncpy(event->info.data,timeline->name,QOT_MAX_NAMELEN);
+        list_add_tail(&event->list, &con->event_list);
+    }
+    con->event_flag = 1;
+    wake_up_interruptible(&con->wq);
+
+    /* Success */
     return 0;
+
+fail1:
+    /* Connection allocated, added to red-black tree, event allocation issue */
+    qot_chardev_usr_con_free(con);
+fail2:
+    /* Connection allocation issue */
+    return -ENOMEM;
 }
 
 /* chardev ioctl close callback implementation */
 static int qot_chardev_usr_ioctl_close(struct inode *i, struct file *f) {
-    struct qot_chardev_usr_con *con = qot_chardev_usr_con_search(f);
+    chardev_usr_con_t *con = qot_chardev_usr_con_search(f);
     if (!con) {
         pr_err("qot_chardev_usr: could not find ioctl connection\n");
         return -ENOMEM;
     }
     qot_chardev_usr_con_remove(con);
+    qot_chardev_usr_con_free(con);
     return 0;
 }
 
 /* chardev ioctl open access implementation */
 static long qot_chardev_usr_ioctl_access(struct file *f, unsigned int cmd,
     unsigned long arg) {
-    qot_timeline_t timeline;
-    struct qot_chardev_usr_con *con = qot_chardev_usr_con_search(f);
+    event_t *event;
+    qot_event_t msge;
+    qot_timeline_t msgt;
+    chardev_usr_con_t *con = qot_chardev_usr_con_search(f);
     if (!con)
         return -EACCES;
     switch (cmd) {
-    /* Get the first timeline */
+    /* Get the next event in the queue for this connection */
+    case QOTUSR_GET_NEXT_EVENT:
+        if (list_empty(&con->event_list)) {
+            con->event_flag = 0;
+            return -EACCES;
+        }
+        event = list_entry(con->event_list.next, event_t, list);
+        memcpy(&msge,&event->info,sizeof(qot_event_t));
+        list_del(&event->list);
+        kfree(event);
+        if (copy_to_user((qot_event_t*)arg, &msge, sizeof(qot_event_t)))
+            return -EACCES;
+        break;
+    /* Get information about a timeline */
     case QOTUSR_GET_TIMELINE_INFO:
-        if (copy_from_user(&timeline, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
+        if (copy_from_user(&msgt, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
             return -EACCES;
-        if (qot_core_timeline_get_info(&timeline))
+        if (qot_core_timeline_get_info(&msgt))
             return -EACCES;
-        if (copy_to_user((qot_timeline_t*)arg, &timeline, sizeof(qot_timeline_t)))
+        if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
     /* Bind to a timeline */
-    case QOTUSR_BIND_TO_TIMELINE:
-        if (copy_from_user(&timeline, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
+    case QOTUSR_CREATE_TIMELINE:
+        if (copy_from_user(&msgt, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
             return -EACCES;
-        if (qot_core_timeline_get_info(&timeline))
+        if (qot_core_timeline_create(&msgt))
             return -EACCES;
-        if (con->binding || qot_core_timeline_del_binding(con->binding))
-            return -EACCES;
-        if (qot_core_timeline_add_binding(&timeline, con->binding))
-            return -EACCES;
-        if (copy_to_user((qot_timeline_t*)arg, &timeline, sizeof(qot_timeline_t)))
+        if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
     default:
@@ -169,7 +220,7 @@ static long qot_chardev_usr_ioctl_access(struct file *f, unsigned int cmd,
 
 static unsigned int qot_chardev_usr_poll(struct file *f, poll_table *wait) {
     unsigned int mask = 0;
-    struct qot_chardev_usr_con *con = qot_chardev_usr_con_search(f);
+    chardev_usr_con_t *con = qot_chardev_usr_con_search(f);
     if (con) {
         poll_wait(f, &con->wq, wait);
         if (con->event_flag && !list_empty(&con->event_list))
@@ -189,17 +240,17 @@ static struct file_operations qot_chardev_usr_fops = {
 qot_return_t qot_chardev_usr_init(void) {
     int ret;
     pr_info("qot_chardev_usr: initializing\n");
-    if ((ret = alloc_chrdev_region(&dev, 0, 1, "qotadm")) < 0)
+    if ((ret = alloc_chrdev_region(&dev, 0, 1, "qotusr")) < 0)
         return ret;
     cdev_init(&c_dev, &qot_chardev_usr_fops);
     if ((ret = cdev_add(&c_dev, dev, 1)) < 0)
         return ret;
-    if (IS_ERR(cl = class_create(THIS_MODULE, "qotadm"))) {
+    if (IS_ERR(cl = class_create(THIS_MODULE, "qotusr"))) {
         cdev_del(&c_dev);
         unregister_chrdev_region(dev, 1);
         return PTR_ERR(cl);
     }
-    if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, "qotadm"))) {
+    if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, "qotusr"))) {
         class_destroy(cl);
         cdev_del(&c_dev);
         unregister_chrdev_region(dev, 1);
@@ -209,14 +260,27 @@ qot_return_t qot_chardev_usr_init(void) {
 }
 
 qot_return_t qot_chardev_usr_cleanup(void) {
-    pr_info("qot_chardev_usr: cleaning up\n");
+    chardev_usr_con_t *con;
+    struct rb_node *node;
+
+    /* Clean up the character devices */
+    pr_info("qot_chardev_usr: cleaning up character devices\n");
     device_destroy(cl, dev);
     class_destroy(cl);
     cdev_del(&c_dev);
     unregister_chrdev_region(dev, 1);
+
+    /* Clean up the connections */
+    pr_info("qot_chardev_usr: flushing connections\n");
+    while ((node = rb_first(&qot_chardev_usr_con_root))) {
+        con = container_of(node, chardev_usr_con_t, node);
+        qot_chardev_usr_con_remove(con);    /* Remove from red-black tree */
+        qot_chardev_usr_con_free(con);      /* Free memory */
+    }
+    /* Success */
     return QOT_RETURN_TYPE_OK;
 }
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
-MODULE_DESCRIPTION("QoT (admin interface)");
+MODULE_DESCRIPTION("QoT (user interface)");

@@ -260,13 +260,8 @@ typedef enum {
  * @brief Timeline events
  */
 typedef enum {
-	QOT_EVENT_TYPE_TIMELINE_CREATE   = (0),	/* Timeline created 				 */
-	QOT_EVENT_TYPE_TIMELINE_DESTROY  = (1),	/* Timeline destroyed 				 */
-	QOT_EVENT_TYPE_TIMELINE_JOIN     = (2),	/* Peer joined timeline 			 */
-	QOT_EVENT_TYPE_TIMELINE_LEAVE    = (3),	/* Peer left timeline 				 */
-	QOT_EVENT_TYPE_TIMELINE_SYNC     = (4),	/* Timeline synchronization update 	 */
-	QOT_EVENT_TYPE_TIMELINE_CAPTURE  = (5),	/* Capture event on this timeline  	 */
-	QOT_EVENT_TYPE_TIMELINE_UDPATE   = (6),	/* Local timeline parameters updated */
+	QOT_EVENT_TIMELINE_CREATE   = (0),	/* Timeline created 			 */
+	QOT_EVENT_CLOCK_CREATE      = (1),	/* Clock created 				 */
 } qot_event_type_t;
 
 /**
@@ -309,38 +304,49 @@ typedef struct qot_event {
 	char data[QOT_MAX_NAMELEN];			/* Event data */
 } qot_event_t;
 
-/* QoT clock type */
-typedef struct qot_clk {
-    char name[QOT_MAX_NAMELEN];         /* Clock name              */
-    qot_clk_state_t state;              /* Clock state             */
-    frequency_t nominal_freq;           /* Frequency in Hz         */
-    power_t nominal_power;              /* Power draw in Watts     */
-    timeinterval_t read_latency;        /* Latency in seconds      */
-    timeinterval_t interrupt_latency;   /* Interrupt latency       */
-    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics   */
-    int phc;                            /* PHC index of this clock */
-} qot_clk_t;
-
 /* QoT timeline type */
 typedef struct qot_timeline {
-    char name[QOT_MAX_NAMELEN];         /* Timeline name           */
-    timequality_t demand;                /* Dominating demand       */
+    char name[QOT_MAX_NAMELEN];          /* Timeline name          */
+    timequality_t dominating;            /* Dominating QoT         */
+    timequality_t achieved;              /* Achieved QoT           */
 } qot_timeline_t;
+
+/* QoT timeline type */
+typedef struct qot_binding {
+    char name[QOT_MAX_NAMELEN];          /* Binding name           */
+    char timeline[QOT_MAX_NAMELEN];      /* Timeline uuid          */
+    timequality_t demand;                /* Requested QoT          */
+    int timeline_id;                     /* The integer Y in /dev/timelineY */
+} qot_binding_t;
+
+/* QoT clock type (admin only) */
+typedef struct qot_clock {
+    char name[QOT_MAX_NAMELEN];         /* Clock name                   */
+    qot_clk_state_t state;              /* Clock state                  */
+    frequency_t nominal_freq;           /* Frequency in Hz              */
+    power_t nominal_power;              /* Power draw in Watts          */
+    timeinterval_t read_latency;        /* Latency in seconds           */
+    timeinterval_t interrupt_latency;   /* Interrupt latency            */
+    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics        */
+    int phc_id;                         /* The integer X in /dev/ptpX   */
+} qot_clock_t;
 
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
 #define QOTUSR_MAGIC_CODE  0xEE
-#define QOTUSR_GET_TIMELINE_INFO  _IOR(QOTUSR_MAGIC_CODE, 1, qot_timeline_t*)
-#define QOTUSR_BIND_TO_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
+#define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
+#define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
+#define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 
 /**
  * @brief Key messages supported by /dev/qotadm
  */
 #define QOTADM_MAGIC_CODE 0xEF
-#define QOTADM_GET_CLOCK_INFO    _IOWR(QOTADM_MAGIC_CODE, 1, qot_clk_t*)
-#define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 2, qot_clk_t*)
-#define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 3, qot_clk_t*)
-#define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 4, qot_clk_t*)
+#define QOTADM_GET_NEXT_EVENT     _IOR(QOTADM_MAGIC_CODE, 1, qot_event_t*)
+#define QOTADM_GET_CLOCK_INFO    _IOWR(QOTADM_MAGIC_CODE, 2, qot_clock_t*)
+#define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 3, qot_clock_t*)
+#define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 4, qot_clock_t*)
+#define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 5, qot_clock_t*)
 
 #endif

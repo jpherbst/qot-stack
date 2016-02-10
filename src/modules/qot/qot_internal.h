@@ -30,22 +30,49 @@
 #ifndef QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
 #define QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
 
-#include "qot_core.h"
+#include "qot_exported.h"
 
-/* Stores a binding to a timeline */
+/* Internal timeline type */
+typedef struct timeline {
+    qot_timeline_t info;        /* Timeline information                 */
+    struct rb_node node_name;   /* Red-black tree indexes by name       */
+    struct list_head head_acc;  /* Head pointing to maximum accuracy    */
+    struct list_head head_res;  /* Head pointing to maximum resolution  */
+} timeline_t;
 
-typedef struct qot_binding {
-    u32 placeholder;
-} qot_binding_t;
+/* Internal clock type */
+typedef struct clk {
+    qot_clock_t info;            /* General clock information           */
+    qot_clock_impl_t impl;       /* Driver implementation               */
+    struct rb_node node_name;    /* Red-black tree indexes by name      */
+} clk_t;
 
-/* For qot_core */
+/* Internal binding type */
+typedef struct binding {
+    qot_binding_t info;         /* Binding information                  */
+    timeline_t *timeline;       /* The timeline associated with binding */
+    struct rb_node node;        /* Red-black tree node                  */
+    struct list_head res_list;  /* Next resolution (ordered)            */
+    struct list_head acc_list;  /* Next accuracy (ordered)              */
+} binding_t;
+
+/* Internal event type */
+typedef struct event {
+    qot_event_t info;            /* The event type                      */
+    struct list_head list;       /* The list of events head             */
+} event_t;
+
+/* qot_core: To support ioctl calls from /dev/qotusr */
+
+qot_return_t qot_core_timeline_next(qot_timeline_t *timeline);
 
 qot_return_t qot_core_timeline_get_info(qot_timeline_t *timeline);
 
-qot_return_t qot_core_timeline_del_binding(qot_binding_t *binding);
+qot_return_t qot_core_timeline_create(qot_timeline_t *timeline);
 
-qot_return_t qot_core_timeline_add_binding(qot_timeline_t *timeline,
-    qot_binding_t *binding);
+/* qot_core: To support ioctl calls from /dev/qotadm */
+
+qot_return_t qot_core_clock_next(qot_clock_t *clk);
 
 qot_return_t qot_core_clock_get_info(qot_clock_t *clk);
 
@@ -55,42 +82,18 @@ qot_return_t qot_core_clock_wake(qot_clock_t *clk);
 
 qot_return_t qot_core_clock_switch(qot_clock_t *clk);
 
-/* For qot_chardev_adm */
+/* qot_chardev_adm: Function calls from qot_core */
 
 qot_return_t qot_chardev_adm_init(void);
 
 qot_return_t qot_chardev_adm_cleanup(void);
 
-qot_return_t qot_chardev_adm_clock_update(qot_clock_t *clk);
-
-qot_return_t qot_chardev_adm_clock_add(qot_clock_t *clk);
-
-qot_return_t qot_chardev_adm_clock_del(qot_clock_t *clk);
-
-/* For qot_chardev_adm */
+/* qot_chardev_usr: Function calls from qot_core */
 
 qot_return_t qot_chardev_usr_init(void);
 
 qot_return_t qot_chardev_usr_cleanup(void);
 
-qot_return_t qot_chardev_adm_timeline_update(qot_timeline_t *clk);
-
-qot_return_t qot_chardev_adm_timeline_add(qot_timeline_t *clk);
-
-qot_return_t qot_chardev_adm_timeline_del(qot_timeline_t *clk);
-
-
-/* For qot_clock_sysfs */
-
-// int qot_clock_sysfs_init(void);
-
-// void qot_clock_sysfs_cleanup(void);
-
-/* For qot_scheduler */
-
-// int interface_update(struct rb_root *timeline_root);
-
-//int interface_nanosleep(struct timespec *exp_time, struct qot_timeline *timeline);
 
 
 #endif
