@@ -1,1 +1,1 @@
-cmd_/home/roseline/Desktop/qot-stack/src/modules/qot/qot.o := /export/bb-kernel/dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-ld -EL    -r -o /home/roseline/Desktop/qot-stack/src/modules/qot/qot.o /home/roseline/Desktop/qot-stack/src/modules/qot/qot_core.o 
+cmd_/home/roseline/Desktop/qot-stack/src/modules/qot/qot.o := ld -m elf_x86_64   -r -o /home/roseline/Desktop/qot-stack/src/modules/qot/qot.o /home/roseline/Desktop/qot-stack/src/modules/qot/qot_chardev_adm.o 

@@ -259,14 +259,14 @@ typedef struct qot_perout {
 	qot_trigger_t edge;					/* Off, rising, falling, toggle */
 	timepoint_t start;					/* Start time */
 	timelength_t period;				/* Period */
-	qot_return_t response;			     /* Response */
+	qot_return_t response;			    /* Response */
 } qot_perout_t;
 
 /* Binding request */
 typedef struct qot_bind {
 	char uuid[QOT_MAX_NAMELEN];			/* Timeline UUID */
 	timedemand_t demand;				/* Quality of Time (QoT) demand */
-	qot_return_t response;			  /* Response */
+	qot_return_t response;			    /* Response */
 } qot_bind_t;
 
 /* QoT event */
@@ -278,13 +278,13 @@ typedef struct qot_event {
 
 /* Platform clock type */
 typedef struct qot_plat_clk {
-    char name[QOT_MAX_NAMELEN];         /* Clock name             */
-    frequency_t nominal_freq;           /* Frequency in Hz        */
-    power_t nominal_power;              /* Power draw in Watts    */
-    timeinterval_t read_latency;        /* Latency in seconds     */
-    timeinterval_t interrupt_latency;   /* Interrupt latency      */
-    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics  */
-    int phc;                            /* PHC ID of this clock   */
+    char name[QOT_MAX_NAMELEN];         /* Clock name              */
+    frequency_t nominal_freq;           /* Frequency in Hz         */
+    power_t nominal_power;              /* Power draw in Watts     */
+    timeinterval_t read_latency;        /* Latency in seconds      */
+    timeinterval_t interrupt_latency;   /* Interrupt latency       */
+    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics   */
+    int phc;                            /* PHC index of this clock */
 } qot_plat_clk_t;
 
 /* Platform clock type */
