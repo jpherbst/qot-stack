@@ -79,4 +79,36 @@ qot_return_t qot_admin_sysfs_init(struct device *qot_device);
 
 void qot_admin_sysfs_cleanup(struct device *qot_device);
 
+/* qot_timeline: Function calls from qot_core */
+
+int qot_timeline_register(timeline_t *timeline);
+
+int qot_timeline_unregister(timeline_t *timeline);
+
+/* qot_timeline_clock: POSIX functions on a timeline */
+
+int qot_timeline_clock_getres(struct posix_clock *pc,
+    struct timespec *tp);
+
+int qot_timeline_clock_settime(struct posix_clock *pc,
+    const struct timespec *tp);
+
+int qot_timeline_clock_gettime(struct posix_clock *pc,
+    struct timespec *tp);
+
+int qot_timeline_clock_adjtime(struct posix_clock *pc,
+    struct timex *tx);
+
+/* qot_timeline_chdev: basic file I/O functions on a timeline */
+
+int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode);
+
+int qot_timeline_chdev_close(struct inode *i, struct file *f);
+
+long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
+    unsigned long arg);
+
+unsigned int qot_timeline_chdev_poll(struct posix_clock *pc, struct file *fp,
+    poll_table *wait);
+
 #endif

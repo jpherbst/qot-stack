@@ -327,5 +327,5 @@ module_init(qot_init);
 module_exit(qot_cleanup);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
-MODULE_DESCRIPTION("QoT (core)");
+MODULE_AUTHOR("RoseLine Project");
+MODULE_DESCRIPTION("Quality of Time (QoT)");

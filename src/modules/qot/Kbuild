@@ -1,2 +1,9 @@
 obj-m += qot.o
-qot-objs := qot_core.o qot_user_chdev.o qot_admin_chdev.o qot_admin_sysfs.o
+qot-objs := qot_core.o              \
+            qot_scheduler.o         \
+            qot_timeline_chdev.o    \
+            qot_timeline_clock.o    \
+            qot_timeline_sysfs.o    \
+            qot_user_chdev.o        \
+            qot_admin_chdev.o       \
+            qot_admin_sysfs.o

@@ -5,6 +5,7 @@ SET(MODULE_SOURCE_FILES
     qot_user_chdev.c
     qot_admin_chdev.c
     qot_admin_sysfs.c
+    qot_scheduler.c
 )
 
 # Set the source files
@@ -16,6 +17,7 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_user_chdev.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_chdev.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_sysfs.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_scheduler.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/Module.symvers
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.order
@@ -26,6 +28,7 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_user_chdev.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_chdev.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_sysfs.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_scheduler.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_core.o
 )
 
