@@ -27,9 +27,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/module.h>
+
 #include "qot_internal.h"
 
-/* To be written */
+void dummy(void) {}
 
 MODULE_LICENSE("GPL");
 

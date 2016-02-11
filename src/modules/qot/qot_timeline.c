@@ -39,7 +39,7 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 
-#include "qot_interal.h"
+#include "qot_internal.h"
 
 static DEFINE_IDA(qot_timelines_map);
 
@@ -56,167 +56,19 @@ static struct posix_clock_operations ptp_clock_ops = {
 	.read		    = qot_timeline_chdev_read,
 };
 
-static void delete_ptp_clock(struct posix_clock *pc) {
-	struct ptp_clock *ptp = container_of(pc, struct ptp_clock, clock);
-
-	mutex_destroy(&ptp->tsevq_mux);
-	mutex_destroy(&ptp->pincfg_mux);
-	ida_simple_remove(&ptp_clocks_map, ptp->index);
-	kfree(ptp);
-}
-
 /* public interface */
 
-struct ptp_clock *qot_timeline_register(struct ptp_clock_info *info,
-    struct device *parent) {
-
-    struct ptp_clock *ptp;
-	int err = 0, index, major = MAJOR(ptp_devt);
-
-	if (info->n_alarm > PTP_MAX_ALARMS)
-		return ERR_PTR(-EINVAL);
-
-	/* Initialize a clock structure. */
-	err = -ENOMEM;
-	ptp = kzalloc(sizeof(struct ptp_clock), GFP_KERNEL);
-	if (ptp == NULL)
-		goto no_memory;
-
-	index = ida_simple_get(&ptp_clocks_map, 0, MINORMASK + 1, GFP_KERNEL);
-	if (index < 0) {
-		err = index;
-		goto no_slot;
-	}
-
-	ptp->clock.ops = ptp_clock_ops;
-	ptp->clock.release = delete_ptp_clock;
-	ptp->info = info;
-	ptp->devid = MKDEV(major, index);
-	ptp->index = index;
-	spin_lock_init(&ptp->tsevq.lock);
-	mutex_init(&ptp->tsevq_mux);
-	mutex_init(&ptp->pincfg_mux);
-	init_waitqueue_head(&ptp->tsev_wq);
-
-	/* Create a new device in our class. */
-	ptp->dev = device_create(ptp_class, parent, ptp->devid, ptp, "timeline%d",
-        ptp->index);
-	if (IS_ERR(ptp->dev))
-		goto no_device;
-
-	dev_set_drvdata(ptp->dev, ptp);
-
-	err = ptp_populate_sysfs(ptp);
-	if (err)
-		goto no_sysfs;
-
-	/* Register a new PPS source. */
-	if (info->pps) {
-		struct pps_source_info pps;
-		memset(&pps, 0, sizeof(pps));
-		snprintf(pps.name, PPS_MAX_NAME_LEN, "ptp%d", index);
-		pps.mode = PTP_PPS_MODE;
-		pps.owner = info->owner;
-		ptp->pps_source = pps_register_source(&pps, PTP_PPS_DEFAULTS);
-		if (!ptp->pps_source) {
-			pr_err("failed to register pps source\n");
-			goto no_pps;
-		}
-	}
-
-	/* Create a posix clock. */
-	err = posix_clock_register(&ptp->clock, ptp->devid);
-	if (err) {
-		pr_err("failed to create posix clock\n");
-		goto no_clock;
-	}
-
-	return ptp;
-
-no_clock:
-	if (ptp->pps_source)
-		pps_unregister_source(ptp->pps_source);
-no_pps:
-	ptp_cleanup_sysfs(ptp);
-no_sysfs:
-	device_destroy(ptp_class, ptp->devid);
-no_device:
-	mutex_destroy(&ptp->tsevq_mux);
-	mutex_destroy(&ptp->pincfg_mux);
-no_slot:
-	kfree(ptp);
-no_memory:
-	return ERR_PTR(err);
+qot_return_t qot_timeline_register(qot_timeline_t *timeline) {
+    timeline->index =
+        ida_simple_get(&qot_timelines_map, 0, MINORMASK + 1, GFP_KERNEL);
+	if (index < 0)
+        return QOT_RETURN_TYPE_ERR;
+    return QOT_RETURN_TYPE_OK;
 }
-EXPORT_SYMBOL(ptp_clock_register);
 
-int ptp_clock_unregister(struct ptp_clock *ptp) {
-	ptp->defunct = 1;
-	wake_up_interruptible(&ptp->tsev_wq);
-
-	/* Release the clock's resources. */
-	if (ptp->pps_source)
-		pps_unregister_source(ptp->pps_source);
-	ptp_cleanup_sysfs(ptp);
-	device_destroy(ptp_class, ptp->devid);
-
-	posix_clock_unregister(&ptp->clock);
-	return 0;
+qot_return_t qot_timeline_unregister(qot_timeline_t *timeline) {
+    /* Todo */
 }
-EXPORT_SYMBOL(ptp_clock_unregister);
-
-void ptp_clock_event(struct ptp_clock *ptp, struct ptp_clock_event *event)
-{
-	struct pps_event_time evt;
-
-	switch (event->type) {
-
-	case PTP_CLOCK_ALARM:
-		break;
-
-	case PTP_CLOCK_EXTTS:
-		enqueue_external_timestamp(&ptp->tsevq, event);
-		wake_up_interruptible(&ptp->tsev_wq);
-		break;
-
-	case PTP_CLOCK_PPS:
-		pps_get_ts(&evt);
-		pps_event(ptp->pps_source, &evt, PTP_PPS_EVENT, NULL);
-		break;
-
-	case PTP_CLOCK_PPSUSR:
-		pps_event(ptp->pps_source, &event->pps_times,
-			  PTP_PPS_EVENT, NULL);
-		break;
-	}
-}
-EXPORT_SYMBOL(ptp_clock_event);
-
-int ptp_clock_index(struct ptp_clock *ptp)
-{
-	return ptp->index;
-}
-EXPORT_SYMBOL(ptp_clock_index);
-
-int ptp_find_pin(struct ptp_clock *ptp,
-    enum ptp_pin_function func, unsigned int chan)
-{
-	struct ptp_pin_desc *pin = NULL;
-	int i;
-
-	mutex_lock(&ptp->pincfg_mux);
-	for (i = 0; i < ptp->info->n_pins; i++) {
-		if (ptp->info->pin_config[i].func == func &&
-		    ptp->info->pin_config[i].chan == chan) {
-			pin = &ptp->info->pin_config[i];
-			break;
-		}
-	}
-	mutex_unlock(&ptp->pincfg_mux);
-
-	return pin ? i : -1;
-}
-EXPORT_SYMBOL(ptp_find_pin);
 
 /* Cleanup the timeline system */
 void qot_timeline_cleanup(struct class *qot_class) {

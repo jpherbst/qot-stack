@@ -181,7 +181,7 @@ qot_return_t qot_core_timeline_create(qot_timeline_t *timeline) {
         return QOT_RETURN_TYPE_ERR;
     memcpy(&timeline_priv->info,&timeline,sizeof(qot_timeline_t));
     /* TODO: full initialization of the timeline itself (SYSFS) */
-    timeline->timeline_id = 0; /* for now */
+    timeline->index = 0; /* for now */
     if (qot_core_insert_timeline(timeline_priv)) {
         kfree(timeline_priv);
         return QOT_RETURN_TYPE_ERR;

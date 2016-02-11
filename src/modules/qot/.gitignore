@@ -17,3 +17,5 @@
 /qot_sysfs.o
 /.qot_user_chdev.o.cmd
 /qot_user_chdev.o
+/.qot_scheduler.o.cmd
+/qot_scheduler.o

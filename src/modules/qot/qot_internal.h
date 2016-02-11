@@ -30,6 +30,9 @@
 #ifndef QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
 #define QOT_STACK_SRC_MODULES_QOT_QOT_INTERNAL_H
 
+#include <linux/posix-clock.h>
+#include <linux/poll.h>
+
 #include "qot_exported.h"
 
 /* All device drivers must be registered with this class to appear in sysfs */
@@ -81,9 +84,9 @@ void qot_admin_sysfs_cleanup(struct device *qot_device);
 
 /* qot_timeline: Function calls from qot_core */
 
-int qot_timeline_register(timeline_t *timeline);
+qot_return_t qot_timeline_register(qot_timeline_t *timeline);
 
-int qot_timeline_unregister(timeline_t *timeline);
+qot_return_t qot_timeline_unregister(qot_timeline_t *timeline);
 
 /* qot_timeline_clock: POSIX functions on a timeline */
 

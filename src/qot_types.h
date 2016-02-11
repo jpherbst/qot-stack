@@ -309,7 +309,7 @@ typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name          */
     timequality_t dominating;            /* Dominating QoT         */
     timequality_t achieved;              /* Achieved QoT           */
-    int timeline_id;                     /* The integer Y in /dev/timelineY */
+    int index;                           /* The integer Y in /dev/timelineY */
 } qot_timeline_t;
 
 /* QoT timeline type */
