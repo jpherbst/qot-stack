@@ -1,7 +1,9 @@
 #include <iostream>
 #include <gtest/gtest.h>
 
-#include "../qot_types.h"
+extern "C" {
+    #include "../qot_types.h"
+}
 
 TEST(TimelineMath, TimeInitializers) {
 	timelength_t ta = aSEC(1);

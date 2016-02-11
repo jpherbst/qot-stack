@@ -32,30 +32,6 @@
 
 #include "qot_exported.h"
 
-/* Internal timeline type */
-typedef struct timeline {
-    qot_timeline_t info;        /* Timeline information                 */
-    struct rb_node node_name;   /* Red-black tree indexes by name       */
-    struct list_head head_acc;  /* Head pointing to maximum accuracy    */
-    struct list_head head_res;  /* Head pointing to maximum resolution  */
-} timeline_t;
-
-/* Internal clock type */
-typedef struct clk {
-    qot_clock_t info;            /* General clock information           */
-    qot_clock_impl_t impl;       /* Driver implementation               */
-    struct rb_node node_name;    /* Red-black tree indexes by name      */
-} clk_t;
-
-/* Internal binding type */
-typedef struct binding {
-    qot_binding_t info;         /* Binding information                  */
-    timeline_t *timeline;       /* The timeline associated with binding */
-    struct rb_node node;        /* Red-black tree node                  */
-    struct list_head res_list;  /* Next resolution (ordered)            */
-    struct list_head acc_list;  /* Next accuracy (ordered)              */
-} binding_t;
-
 /* Internal event type */
 typedef struct event {
     qot_event_t info;            /* The event type                      */

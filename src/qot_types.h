@@ -309,6 +309,7 @@ typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name          */
     timequality_t dominating;            /* Dominating QoT         */
     timequality_t achieved;              /* Achieved QoT           */
+    int timeline_id;                     /* The integer Y in /dev/timelineY */
 } qot_timeline_t;
 
 /* QoT timeline type */
@@ -316,7 +317,6 @@ typedef struct qot_binding {
     char name[QOT_MAX_NAMELEN];          /* Binding name           */
     char timeline[QOT_MAX_NAMELEN];      /* Timeline uuid          */
     timequality_t demand;                /* Requested QoT          */
-    int timeline_id;                     /* The integer Y in /dev/timelineY */
 } qot_binding_t;
 
 /* QoT clock type (admin only) */

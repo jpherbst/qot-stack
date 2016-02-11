@@ -38,8 +38,8 @@
  * @brief Information about a platform clock
  **/
 typedef struct qot_clock_impl {
-    qot_clock_t properties;          /* Description of this clock      */
-    struct ptp_clock_info ptpclk;    /* The PTP interface to the clock */
+    qot_clock_t info;                 /* Description of this clock      */
+    struct ptp_clock_info ptpclk;     /* The PTP interface to the clock */
     timepoint_t (*read_time)(void);
     long (*program_interrupt)(timepoint_t expiry, long (*callback)(void*));
     long (*cancel_interrupt)(void);

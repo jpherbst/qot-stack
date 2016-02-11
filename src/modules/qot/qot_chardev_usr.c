@@ -137,7 +137,7 @@ static int qot_chardev_usr_ioctl_open(struct inode *i, struct file *f) {
 
     /* Notify the connection (by polling) of all existing timelines */
     timeline = NULL;
-    while (qot_core_timeline_next(timeline)) {
+    while (qot_core_timeline_next(timeline)==QOT_RETURN_TYPE_OK) {
         event = kzalloc(sizeof(event_t), GFP_KERNEL);
         if (!event)
             goto fail1;
