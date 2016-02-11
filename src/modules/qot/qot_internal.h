@@ -70,6 +70,10 @@ qot_return_t qot_chardev_usr_init(void);
 
 qot_return_t qot_chardev_usr_cleanup(void);
 
+/* qot_chardev_usr: Function calls from qot_core */
 
+qot_return_t qot_sysfs_init(void);
+
+qot_return_t qot_sysfs_cleanup(void);
 
 #endif

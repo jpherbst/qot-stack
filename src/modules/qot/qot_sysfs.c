@@ -1,6 +1,6 @@
 /*
- * @file qot_sysfs.c
- * @brief A SYSFS based introspection of qot-core
+ * @file qot_clock_sysfs.c
+ * @brief Admin sysfs interface to the QoT core
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -28,50 +28,52 @@
  */
 
 #include <linux/module.h>
-#include <linux/printk.h>
-#include <linux/kobject.h>
-#include <linux/sysfs.h>
+#include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/fs.h>
-#include <linux/string.h>
+#include <linux/device.h>
 
 #include "qot_internal.h"
 
-static struct kobject *qot_kobject;
-static int foo;
+static int bus_value = 1;
 
-static ssize_t foo_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
-        return sprintf(buf, "%d\n", foo);
+static struct bus_type my_pseudo_bus = {
+    .name = "qot",
+};
+
+static ssize_t bus_show(struct bus_type *bus, char *buf) {
+    return scnprintf(buf, PAGE_SIZE, "%d\n", bus_value);
 }
 
-static ssize_t foo_store(struct kobject *kobj, struct kobj_attribute *attr, char *buf, size_t count) {
-        sscanf(buf, "%du", &foo);
-        return count;
+static ssize_t bus_store(struct bus_type *bus, const char *buf, size_t count) {
+    sscanf(buf, "%d", &bus_value);
+    return sizeof(int);
 }
+BUS_ATTR(busval, S_IRUGO | S_IWUSR, bus_show, bus_store);
 
-static struct kobj_attribute foo_attribute =__ATTR(foo, 0660, foo_show, foo_store);
-
-int qot_sysfs_init(void) {
-
-#ifdef CONFIG_SYSFS
-    int error = 0;
-    qot_kobject = kobject_create_and_add("qot",kernel_kobj);
-    if(!qot_kobject) {
-        pr_err("kobject_create_and_add failed\n");
-        return -ENOMEM;
+qot_return_t qot_sysfs_init(void) {
+    int ret = -1;
+    pr_info("qot_sysfs: initializing\n");
+    ret = bus_register(&my_pseudo_bus);
+    if (ret < 0) {
+        printk(KERN_WARNING "qot_sysfs: error register bus: %d\n", ret);
+        return QOT_RETURN_TYPE_ERR;
     }
-    error = sysfs_create_file(qot_kobject, &foo_attribute.attr);
-    if (error)
-        pr_err("sysfs_create_group failed\n");
-#endif
-
-    return error;
+    ret = bus_create_file(&my_pseudo_bus, &bus_attr_busval);
+    if (ret < 0) {
+        printk(KERN_WARNING "qot_sysfs: error creating busfile\n");
+        bus_unregister(&my_pseudo_bus);
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
 }
 
-void qot_sysfs_cleanup(void) {
-
-#ifdef CONFIG_SYSFS
-    kobject_put(qot_kobject);
-#endif
-
+qot_return_t qot_sysfs_cleanup(void) {
+    pr_info("qot_sysfs: removing files\n");
+    bus_remove_file(&my_pseudo_bus, &bus_attr_busval);
+    bus_unregister(&my_pseudo_bus);
+    return QOT_RETURN_TYPE_OK;
 }
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
+MODULE_DESCRIPTION("QoT (sysfs interface to clocks)");

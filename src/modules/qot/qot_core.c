@@ -289,6 +289,11 @@ EXPORT_SYMBOL(qot_clock_property_update);
 /* Initialize the QoT core */
 static int qot_init(void) {
     int ret;
+    ret = qot_sysfs_init();
+    if (ret) {
+        pr_err("qot_core: problem calling qot_sysfs_init\n");
+        goto fail_sys;
+    }
     ret = qot_chardev_adm_init();
     if (ret) {
         pr_err("qot_core: problem calling qot_chardev_adm_init\n");
@@ -303,15 +308,18 @@ static int qot_init(void) {
 fail_usr:
     qot_chardev_adm_cleanup();
 fail_adm:
+fail_sys:
 	return 1;
 }
 
 /* Cleanup the QoT core */
 static void qot_cleanup(void) {
-    if (qot_chardev_adm_cleanup())
-        pr_err("qot_core: problem cleaning up qot_chardev_adm_init\n");
     if (qot_chardev_usr_cleanup())
-        pr_err("qot_core: problem cleaning up qot_chardev_usr_init\n");
+        pr_err("qot_core: problem calling qot_chardev_usr_cleanup\n");
+    if (qot_chardev_adm_cleanup())
+        pr_err("qot_core: problem calling qot_chardev_adm_cleanup\n");
+    if (qot_sysfs_cleanup())
+        pr_err("qot_core: problem calling qot_sysfs_cleanup\n");
 }
 
 module_init(qot_init);

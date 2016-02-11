@@ -1,2 +1,2 @@
 obj-m += qot.o
-qot-objs := qot_core.o qot_chardev_usr.o qot_chardev_adm.o
+qot-objs := qot_core.o qot_chardev_usr.o qot_chardev_adm.o qot_sysfs.o
