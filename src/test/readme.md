@@ -10,4 +10,14 @@ This is a folder of unit tests for the QoT stack. In order to run these tests yo
     #> sudo ln -s /usr/src/gtest/libgtest.a 
     #> sudo ln -s /usr/src/gtest/libgtest_main.a 
 
-Then, you will be able to build the unit tests.
+Then, you will be able to make code:
+
+    #> make
+
+And, run the tests
+
+    #> make test
+
+If you want lots of information, try
+
+    #> ctest -V

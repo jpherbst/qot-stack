@@ -1,5 +1,10 @@
-obj-m += qot_core.o
-qot_core-y := qot_ioctl.o
-qot_core-y := qot_scheduler.o
-qot_core-y := qot_sysfs.o
-qot_core-y := qot_timeline.o
+obj-m += qot.o
+qot-objs := qot_core.o              \
+            qot_scheduler.o         \
+            qot_timeline.o          \
+            qot_timeline_chdev.o    \
+            qot_timeline_clock.o    \
+            qot_timeline_sysfs.o    \
+            qot_user_chdev.o        \
+            qot_admin_chdev.o       \
+            qot_admin_sysfs.o

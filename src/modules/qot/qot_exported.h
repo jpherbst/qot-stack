@@ -27,57 +27,45 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/idr.h>
-#include <linux/device.h>
-#include <linux/err.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/posix-clock.h>
-#include <linux/pps_kernel.h>
-#include <linux/slab.h>
-#include <linux/syscalls.h>
-#include <linux/uaccess.h>
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
 
-#include "qot_internal.h"
+#include <linux/ptp_clock_kernel.h>
 
-static DEFINE_IDA(qot_timelines_map);
+#include "../../qot_types.h"
 
-static struct posix_clock_operations ptp_clock_ops = {
-	.owner		    = THIS_MODULE,
-	.clock_adjtime	= qot_timeline_clock_adjtime,
-	.clock_gettime	= qot_timeline_clock_gettime,
-	.clock_getres	= qot_timeline_clock_getres,
-	.clock_settime	= qot_timeline_clock_settime,
-	.ioctl		    = qot_timeline_chdev_ioctl,
-	.open		    = qot_timeline_chdev_open,
-    .close          = qot_timeline_chdev_close,
-	.poll		    = qot_timeline_chdev_poll,
-	.read		    = qot_timeline_chdev_read,
-};
+/**
+ * @brief Information about a platform clock
+ **/
+typedef struct qot_clock_impl {
+    qot_clock_t info;                 /* Description of this clock      */
+    struct ptp_clock_info ptpclk;     /* The PTP interface to the clock */
+    timepoint_t (*read_time)(void);
+    long (*program_interrupt)(timepoint_t expiry, long (*callback)(void*));
+    long (*cancel_interrupt)(void);
+    long (*sleep)(void);
+    long (*wake)(void);
+} qot_clock_impl_t;
 
-/* public interface */
+/**
+ * @brief Register a clock with the QoT core
+ * @param impl A pointer containing all the clock info
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_clock_register(qot_clock_impl_t *impl);
 
-qot_return_t qot_timeline_register(qot_timeline_t *timeline) {
-    timeline->index =
-        ida_simple_get(&qot_timelines_map, 0, MINORMASK + 1, GFP_KERNEL);
-	if (index < 0)
-        return QOT_RETURN_TYPE_ERR;
-    return QOT_RETURN_TYPE_OK;
-}
+/**
+ * @brief Unregister a clock with the QoT core
+ * @param impl A pointer containing all the clock info
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl);
 
-qot_return_t qot_timeline_unregister(qot_timeline_t *timeline) {
-    /* Todo */
-}
+/**
+ * @brief Prompt QoT core into updating the clock information
+ * @param impl A pointer containing all the clock info
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_clock_property_update(qot_clock_impl_t *impl);
 
-/* Cleanup the timeline system */
-void qot_timeline_cleanup(struct class *qot_class) {
-	ida_destroy(&qot_timelines_map);
-}
-
-/* Initialize the timeline system */
-qot_return_t qot_timeline_init(struct class *qot_class) {
-    /* TODO */
-}
-
-MODULE_LICENSE("GPL");
+#endif

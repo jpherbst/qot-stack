@@ -27,11 +27,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef QOT_STACK_SRC_QOT_H
-#define QOT_STACK_SRC_QOT_H
+#ifndef QOT_STACK_SRC_QOT_TYPES_H
+#define QOT_STACK_SRC_QOT_TYPES_H
 
 /* So that we might expose a meaningful name through PTP interface */
-#define QOT_MAX_NAMELEN 16
+#define QOT_MAX_NAMELEN 64
+#define QOT_MAX_NUMCLKS 8
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
@@ -72,11 +73,11 @@ typedef struct utimelength {
 	timeinterval_t interval;	/* Uncertainty interval around endpoint */
 } utimelength_t;
 
-/* A duration of time with an uncertain end point */
-typedef struct timedemand {
+/* A time quality comprised of a (min, max) accuracy and tick resolution  */
+typedef struct timequality {
 	timelength_t resolution;	/* Time resolution */
 	timeinterval_t accuracy;	/* Time accuracy  */
-} timedemand_t;
+} timequality_t;
 
 /* Popular ratios that will be used throughout this file */
 #define aSEC_PER_SEC 1000000000000000000ULL
@@ -91,14 +92,14 @@ typedef struct timedemand {
 #define aSEC(t)  { .sec=0, 				.asec=(t), 						}
 
 /* Add a length of time to a point in time */
-void timepoint_add(timepoint_t *t, timelength_t *v) {
+static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
 	t->sec  += v->sec + t->asec / aSEC_PER_SEC;
 	t->asec %= aSEC_PER_SEC;
 }
 
 /* Subtract a length of time from a point in time */
-void timepoint_sub(timepoint_t *t, timelength_t *v) {
+static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 	t->sec -= v->sec;
 	if (t->asec < v->asec) { /* Special case */
 		t->sec--;
@@ -109,14 +110,45 @@ void timepoint_sub(timepoint_t *t, timelength_t *v) {
 }
 
 /* Add two lengths of time together */
-void timelength_add(timelength_t *l1, timelength_t *l2) {
+static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
 	l1->sec  += l2->sec + l1->asec / aSEC_PER_SEC;
 	l1->asec %= aSEC_PER_SEC;
 }
 
+/* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
+static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
+    if (l1->sec > l2->sec)
+        return -1;
+    if (l1->sec < l2->sec)
+        return  1;
+    if (l1->asec > l2->asec)
+        return -1;
+    if (l1->asec < l2->asec)
+        return  1;
+    return 0;
+}
+
+/* Copy the maximum value of two timelengths into a third timelength */
+static inline void timelength_max(timelength_t *sol,
+    timelength_t *l1, timelength_t *l2) {
+    if (timelength_cmp(l1,l2) < 0)
+        memcpy(sol,l1,sizeof(timelength_t));
+    else
+        memcpy(sol,l2,sizeof(timelength_t));
+}
+
+/* Copy the minimum value of two timelengths into a third timelength */
+static inline void timelength_min(timelength_t *sol,
+    timelength_t *l1, timelength_t *l2) {
+    if (timelength_cmp(l1,l2) > 0)
+        memcpy(sol,l1,sizeof(timelength_t));
+    else
+        memcpy(sol,l2,sizeof(timelength_t));
+}
+
 /* Get the difference between two timepoints as a timelength */
-void timepoint_diff(timelength_t *v,
+static inline void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
@@ -126,36 +158,36 @@ void timepoint_diff(timelength_t *v,
 }
 
 /* Add a length of uncertain time to an uncertain point in time */
-void utimepoint_add(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_add(utimepoint_t *t, utimelength_t *v) {
 	timepoint_add(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
 
 /* Subtract a length of uncertain time from an uncertain point in time */
-void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 	timepoint_sub(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aHZ_PER_HZ 1000000000000000000ULL
+#define aHZ_PER_Hz 1000000000000000000ULL
 
 /* Some initializers for efficiency */
-#define EHZ(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
-#define PHZ(t) { .hz=(t)*1000000000000000ULL,  .ahz=0,    }
-#define THZ(t) { .hz=(t)*1000000000000ULL,  .ahz=0,       }
-#define GHZ(t) { .hz=(t)*1000000000ULL,   .ahz=0,         }
-#define MHZ(t) { .hz=(t)*1000000ULL,    .ahz=0,           }
-#define KHZ(t) { .hz=(t)*1000ULL,     .ahz=0,             }
-#define  HZ(t) { .hz=(t),           .ahz=0,               }
-#define mHZ(t) { .hz=0, .ahz=(t)*1000000000000000ULL,     }
-#define uHZ(t) { .hz=0, .ahz=(t)*1000000000000ULL,        }
-#define pHZ(t) { .hz=0, .ahz=(t)*1000000000ULL,           }
-#define nHZ(t) { .hz=0, .ahz=(t)*1000000ULL,              }
-#define fHZ(t) { .hz=0, .ahz=(t)*1000ULL,                 }
-#define aHZ(t) { .hz=0, .ahz=(t),                         }
+#define EHz(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
+#define PHz(t) { .hz=(t)*1000000000000000ULL,  .ahz=0,    }
+#define THz(t) { .hz=(t)*1000000000000ULL,  .ahz=0,       }
+#define GHz(t) { .hz=(t)*1000000000ULL,   .ahz=0,         }
+#define MHz(t) { .hz=(t)*1000000ULL,    .ahz=0,           }
+#define KHz(t) { .hz=(t)*1000ULL,     .ahz=0,             }
+#define  Hz(t) { .hz=(t),           .ahz=0,               }
+#define mHz(t) { .hz=0, .ahz=(t)*1000000000000000ULL,     }
+#define uHz(t) { .hz=0, .ahz=(t)*1000000000000ULL,        }
+#define pHz(t) { .hz=0, .ahz=(t)*1000000000ULL,           }
+#define nHz(t) { .hz=0, .ahz=(t)*1000000ULL,              }
+#define fHz(t) { .hz=0, .ahz=(t)*1000ULL,                 }
+#define aHz(t) { .hz=0, .ahz=(t),                         }
 
 /* An absolute frequency */
 typedef struct frequency {
@@ -164,10 +196,10 @@ typedef struct frequency {
 } frequency_t;
 
 /* Add two frequencies together */
-void frequency_add(frequency_t *l1, frequency_t *l2) {
+static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
-    l1->hz  += l2->hz + l1->ahz / aHZ_PER_HZ;
-    l1->ahz %= aHZ_PER_HZ;
+    l1->hz  += l2->hz + l1->ahz / aHZ_PER_Hz;
+    l1->ahz %= aHZ_PER_Hz;
 }
 
 /* Popular ratios that will be used throughout this file */
@@ -195,7 +227,7 @@ typedef struct power {
 } power_t;
 
 /* Add two frequencies together */
-void power_add(power_t *l1, power_t *l2) {
+static inline void power_add(power_t *l1, power_t *l2) {
     l1->awatt += l2->awatt;
     l1->watt  += l2->watt + l1->awatt / aWATT_PER_WATT;
     l1->awatt %= aWATT_PER_WATT;
@@ -228,14 +260,9 @@ typedef enum {
  * @brief Timeline events
  */
 typedef enum {
-	QOT_TYPE_CREATE   = (0),	/* Timeline created 					*/
-	QOT_TYPE_DESTROY  = (1),	/* Timeline destroyed 					*/
-	QOT_TYPE_JOIN     = (2),	/* Peer joined timeline 				*/
-	QOT_TYPE_LEAVE    = (3),	/* Peer left timeline 					*/
-	QOT_TYPE_SYNC     = (4),	/* Timeline synchronization update 		*/
-	QOT_TYPE_CAPTURE  = (5),	/* Capture event on this timeline  		*/
-	QOT_TYPE_UDPATE   = (6),	/* Local timeline parameters updated 	*/
-} qot_type_t;
+	QOT_EVENT_TIMELINE_CREATE   = (0),	/* Timeline created 			 */
+	QOT_EVENT_CLOCK_CREATE      = (1),	/* Clock created 				 */
+} qot_event_type_t;
 
 /**
  * @brief Clock error types
@@ -245,6 +272,14 @@ typedef enum {
     QOT_CLK_ERR_WALK,
     QOT_CLK_ERR_NUM
 } qot_clk_err_t;
+
+/**
+ * @brief Clock error types
+ */
+typedef enum {
+    QOT_CLK_STATE_ON  = (0),
+    QOT_CLK_STATE_OFF,
+} qot_clk_state_t;
 
 /* QoT external input timestamping */
 typedef struct qot_extts {
@@ -259,59 +294,59 @@ typedef struct qot_perout {
 	qot_trigger_t edge;					/* Off, rising, falling, toggle */
 	timepoint_t start;					/* Start time */
 	timelength_t period;				/* Period */
-	qot_return_t response;			     /* Response */
+	qot_return_t response;			    /* Response */
 } qot_perout_t;
-
-/* Binding request */
-typedef struct qot_bind {
-	char uuid[QOT_MAX_NAMELEN];			/* Timeline UUID */
-	timedemand_t demand;				/* Quality of Time (QoT) demand */
-	qot_return_t response;			  /* Response */
-} qot_bind_t;
 
 /* QoT event */
 typedef struct qot_event {
-	qot_type_t type;					/* Event type */
+	qot_event_type_t type;				/* Event type */
 	utimepoint_t timestamp;				/* Uncertain time of event */
 	char data[QOT_MAX_NAMELEN];			/* Event data */
 } qot_event_t;
 
-/* Platform clock type */
-typedef struct qot_plat_clk {
-    char name[QOT_MAX_NAMELEN];         /* Clock name             */
-    frequency_t nominal_freq;           /* Frequency in Hz        */
-    power_t nominal_power;              /* Power draw in Watts    */
-    timeinterval_t read_latency;        /* Latency in seconds     */
-    timeinterval_t interrupt_latency;   /* Interrupt latency      */
-    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics  */
-} qot_plat_clk_t;
+/* QoT timeline type */
+typedef struct qot_timeline {
+    char name[QOT_MAX_NAMELEN];          /* Timeline name          */
+    timequality_t dominating;            /* Dominating QoT         */
+    timequality_t achieved;              /* Achieved QoT           */
+    int index;                           /* The integer Y in /dev/timelineY */
+} qot_timeline_t;
 
-/* Platform clock type */
-typedef struct qot_plat_clkarr {
-    int num_clks;                       /* Number of clocks         */
-    qot_plat_clk_t *clk;                /* Array of num_clks clocks */
-} qot_plat_clkarr_t;
+/* QoT timeline type */
+typedef struct qot_binding {
+    char name[QOT_MAX_NAMELEN];          /* Binding name           */
+    char timeline[QOT_MAX_NAMELEN];      /* Timeline uuid          */
+    timequality_t demand;                /* Requested QoT          */
+} qot_binding_t;
+
+/* QoT clock type (admin only) */
+typedef struct qot_clock {
+    char name[QOT_MAX_NAMELEN];         /* Clock name                   */
+    qot_clk_state_t state;              /* Clock state                  */
+    frequency_t nominal_freq;           /* Frequency in Hz              */
+    power_t nominal_power;              /* Power draw in Watts          */
+    timeinterval_t read_latency;        /* Latency in seconds           */
+    timeinterval_t interrupt_latency;   /* Interrupt latency            */
+    scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics        */
+    int phc_id;                         /* The integer X in /dev/ptpX   */
+} qot_clock_t;
 
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
 #define QOTUSR_MAGIC_CODE  0xEE
-#define QOTUSR_BIND       _IOWR(QOTUSR_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTUSR_UNBIND      _IOR(QOTUSR_MAGIC_CODE,  1, qot_return_t*)
-#define QOTUSR_SET_DEMAND  _IOW(QOTUSR_MAGIC_CODE,  2, timedemand_t*)
-#define QOTUSR_GET_DEMAND  _IOR(QOTUSR_MAGIC_CODE,  3, timedemand_t*)
-#define QOTUSR_REQ_PEROUT  _IOW(QOTUSR_MAGIC_CODE,  4, qot_perout_t*)
-#define QOTUSR_REQ_EXTTS   _IOW(QOTUSR_MAGIC_CODE,  5, qot_extts_t*)
-#define QOTUSR_GET_EVENT   _IOR(QOTUSR_MAGIC_CODE,  6, qot_event_t*)
+#define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
+#define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
+#define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 
 /**
  * @brief Key messages supported by /dev/qotadm
  */
-#define QOTADM_MAGIC_CODE  0xEF
-#define QOTADM_SET_UNCERTAINTY _IOWR(QOTADM_MAGIC_CODE,  0, qot_bind_t*)
-#define QOTADM_GET_CLOCKS       _IOR(QOTADM_MAGIC_CODE,  1, qot_plat_clkarr*)
-#define QOTADM_SELECT_CLOCK     _IOW(QOTADM_MAGIC_CODE,  2, qot_plat_clk*)
-#define QOTADM_GET_OS_LATENCY   _IOR(QOTADM_MAGIC_CODE,  3, timeinterval_t*)
-#define QOTADM_SET_OS_LATENCY   _IOW(QOTADM_MAGIC_CODE,  4, timeinterval_t*)
+#define QOTADM_MAGIC_CODE 0xEF
+#define QOTADM_GET_NEXT_EVENT     _IOR(QOTADM_MAGIC_CODE, 1, qot_event_t*)
+#define QOTADM_GET_CLOCK_INFO    _IOWR(QOTADM_MAGIC_CODE, 2, qot_clock_t*)
+#define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 3, qot_clock_t*)
+#define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 4, qot_clock_t*)
+#define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 5, qot_clock_t*)
 
 #endif

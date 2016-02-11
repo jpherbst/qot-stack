@@ -27,57 +27,39 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/idr.h>
-#include <linux/device.h>
-#include <linux/err.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/posix-clock.h>
-#include <linux/pps_kernel.h>
+#include <linux/poll.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
-#include <linux/syscalls.h>
-#include <linux/uaccess.h>
 
 #include "qot_internal.h"
 
-static DEFINE_IDA(qot_timelines_map);
-
-static struct posix_clock_operations ptp_clock_ops = {
-	.owner		    = THIS_MODULE,
-	.clock_adjtime	= qot_timeline_clock_adjtime,
-	.clock_gettime	= qot_timeline_clock_gettime,
-	.clock_getres	= qot_timeline_clock_getres,
-	.clock_settime	= qot_timeline_clock_settime,
-	.ioctl		    = qot_timeline_chdev_ioctl,
-	.open		    = qot_timeline_chdev_open,
-    .close          = qot_timeline_chdev_close,
-	.poll		    = qot_timeline_chdev_poll,
-	.read		    = qot_timeline_chdev_read,
-};
-
-/* public interface */
-
-qot_return_t qot_timeline_register(qot_timeline_t *timeline) {
-    timeline->index =
-        ida_simple_get(&qot_timelines_map, 0, MINORMASK + 1, GFP_KERNEL);
-	if (index < 0)
-        return QOT_RETURN_TYPE_ERR;
-    return QOT_RETURN_TYPE_OK;
+static s32 scaled_ppm_to_ppb(long ppm) {
+    s64 ppb = 1 + ppm;
+    ppb *= 125;
+    ppb >>= 13;
+    return (s32) ppb;
 }
 
-qot_return_t qot_timeline_unregister(qot_timeline_t *timeline) {
-    /* Todo */
+/* posix clock implementation */
+
+static int qot_timeline_clock_getres(struct posix_clock *pc,
+    struct timespec *tp) {
+    return 0;
 }
 
-/* Cleanup the timeline system */
-void qot_timeline_cleanup(struct class *qot_class) {
-	ida_destroy(&qot_timelines_map);
+static int qot_timeline_clock_settime(struct posix_clock *pc,
+    const struct timespec *tp) {
+    return 0;
 }
 
-/* Initialize the timeline system */
-qot_return_t qot_timeline_init(struct class *qot_class) {
-    /* TODO */
+static int qot_timeline_clock_gettime(struct posix_clock *pc,
+    struct timespec *tp) {
+    return 0;
 }
 
-MODULE_LICENSE("GPL");
+static int qot_timeline_clock_adjtime(struct posix_clock *pc,
+    struct timex *tx) {
+    return 0;
+}

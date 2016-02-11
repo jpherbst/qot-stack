@@ -39,9 +39,9 @@
 
 /* Timeline implementation */
 typedef struct timeline {
-    qot_bind_t info;    /* Basic binding information */
-    int fd;             /* File descriptor to ioctl  */
-    pthread_t thread;   /* Thread to poll on fd */
+    qot_timeline_t info;    /* Basic binding information */
+    int fd;                 /* File descriptor to ioctl  */
+    pthread_t thread;       /* Thread to poll on fd */
 } timeline_t;
 
 /* Is the given timeline a valid one */

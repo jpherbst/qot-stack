@@ -26,44 +26,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <linux/module.h>
+#include <linux/posix-clock.h>
+#include <linux/poll.h>
+#include <linux/sched.h>
+#include <linux/slab.h>
 
-#ifndef _QOT_CORE_H_
-#define _QOT_CORE_H_
+#include "qot_internal.h"
 
-#include <linux/ptp_clock_kernel.h>
+int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode) {
+	return 0;
+}
 
-#include "qot_types.h"
+int qot_timeline_chdev_close(struct inode *i, struct file *f) {
+    return 0;
+}
 
-/**
- * @brief Information about a platform clock
- **/
-struct qot_platform_clock_info {
-    struct qot_plat_clk properties; /* Description of the clock       */
-    struct ptp_clock_info ptpclk;   /* The PTP interface to the clock */
-    timepoint_t (*read_time)(void);
-    long (*program_interrupt)(timepoint_t expiry, long (*callback)(void*));
-    long (*cancel_interrupt)(void);
-};
+long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
+    unsigned long arg) {
+	return 0;
+}
 
-/**
- * @brief Register a clock with the QoT core
- * @param info A pointer containing all the clock info
- * @return A status code indicating success (0) or other
- **/
-qot_return_t qot_clock_register(struct qot_platform_clock_info *info);
+unsigned int qot_timeline_chdev_poll(struct posix_clock *pc, struct file *fp,
+    poll_table *wait) {
+	return 0;
+}
 
-/**
- * @brief Unregister a clock with the QoT core
- * @param info A pointer containing all the clock info
- * @return A status code indicating success (0) or other
- **/
-qot_return_t qot_clock_unregister(struct qot_platform_clock_info *info);
-
-/**
- * @brief Prompt QoT core into updating the clock information
- * @param info A pointer containing all the clock info
- * @return A status code indicating success (0) or other
- **/
-qot_return_t qot_clock_property_update(struct qot_platform_clock_info *info);
-
-#endif
+ssize_t qot_timeline_chdev_read(struct posix_clock *pc, uint rdflags,
+    char __user *buf, size_t cnt) {
+	return 0;
+}
