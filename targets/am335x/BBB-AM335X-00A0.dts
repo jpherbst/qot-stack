@@ -1,61 +1,68 @@
 /dts-v1/;
 /plugin/;
- 
+
 / {
     /* what boards are we compatible with */
     compatible = "ti,beaglebone", "ti,beaglebone-black";
- 
+
     /* identification */
-    part-number = "ROSELINE-QOT";
- 
+    part-number = "BBB-AM335X";
+
     /* special version ignores EEPROM */
     version = "00A0";
- 
-    /* pin multiplexing */
+
+    /* Resources used */
+    exclusive-use =
+        "P8.7",  /*  TIMER4  */
+        "P8.8",  /*  TIMER5  */
+        "P8.9",  /*  TIMER6  */
+        "P8.10"; /*  TIMER7  */
+
+    /* Pin multiplexing */
     fragment@0 {
         target = <&am33xx_pinmux>;
         __overlay__ {
-            qot_pins: qot_pins {
+            qot_am335x_pins: qot_am335x_pins {
                 pinctrl-single,pins = <
-                    0x90  0x22      /* P8.7   MODE2 TIMER4 - CAPTURE */
-                    0x9C  0x22      /* P8.9   MODE2 TIMER5 - CAPTURE */
-                    0x98  0x22      /* P8.10  MODE2 TIMER6 - CAPTURE */
-                    0x94  0x02      /* P8.8   MODE2 TIMER7 - CAPTURE */
-                >;
-            };
-            chronos_pins: chronos_pins {
-                pinctrl-single,pins = <
-                    0x038 0x17      /* RESET P8.16 O_PULLUP | MODE7-GPIO1[14] */
-                    0x03c 0x37      /* IRQ P8.15 I_PULLUP | MODE7-GPIO1[15] */
-                    0x190 0x33      /* P9.31 CLK INPUT_PULLUP | MODE3 */
-                    0x194 0x33      /* P9.29 MISO INPUT_PULLUP | MODE3 */
-                    0x198 0x13      /* P9.30 MOSI OUTPUT_PULLUP | MODE3 */
-                    0x19c 0x13      /* P9.28 CS0  OUTPUT_PULLUP | MODE3 */
+                    0x90  0x02      /* P8.7   0x22 = INP PD, 0x02 = OUT PD */
+                    0x9C  0x02      /* P8.9   0x22 = INP PD, 0x02 = OUT PD */
+                    0x98  0x02      /* P8.10  0x22 = INP PD, 0x02 = OUT PD */
+                    0x94  0x02      /* P8.8   0x22 = INP PD, 0x02 = OUT PD */
                 >;
             };
         };
     };
- 
-    /* define the basic driverset for pinmuxing timers and initializing the qot kernel */
+
+    /* Setup the am335x timer subsystem as a PHC */
     fragment@1 {
         target-path="/";
         __overlay__ {
             qot_am335x {
                 compatible = "qot_am335x";
                 status = "okay";
-                core  = <&timer3>;
-                hwio0 = <&timer4>;
-                hwio1 = <&timer5>;
-                hwio2 = <&timer6>;
-                hwio3 = <&timer7>;
                 pinctrl-names = "default";
-                pinctrl-0 = <&qot_pins>;
-            };
-            chronos {
-                compatible = "chronos";
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&chronos_pins>;
+                pinctrl-0 = <&qot_am335x_pins>;
+                core  = <&timer3 0>; /* 0 = SYS, 1 = RTC, 2 = TCLKIN */
+                pin3 {
+                    label = "TIMER7";
+                    timer = <&timer7>;
+                    gpios = <&gpio2 3 0>;
+                };
+                pin2 {
+                    label = "TIMER6";
+                    timer = <&timer6>;
+                    gpios = <&gpio2 4 0>;
+                };
+                pin1 {
+                    label = "TIMER5";
+                    timer = <&timer5>;
+                    gpios = <&gpio2 5 0>;
+                };
+                pin0 {
+                    label = "TIMER4";
+                    timer = <&timer4>;
+                    gpios = <&gpio2 2 0>;
+                };
             };
         };
     };
