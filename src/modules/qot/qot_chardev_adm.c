@@ -37,11 +37,11 @@
 
 #include "qot_internal.h"
 
+#define DEVICE_NAME "qotadm"
+
 /* Information required to open a character device */
-static dev_t dev;
-static struct cdev c_dev;
-static struct class *cl;
-static struct device *dev_ret;
+static struct device *qot_device = NULL;
+static int qot_major;
 
 /* Information that allows us to maintain parallel cchardev connections */
 typedef  struct chardev_adm_con {
@@ -249,38 +249,34 @@ static struct file_operations qot_chardev_adm_fops = {
     .poll = qot_chardev_adm_poll,
 };
 
-qot_return_t qot_chardev_adm_init(void) {
-    int ret;
+qot_return_t qot_chardev_adm_init(struct class *qot_class) {
     pr_info("qot_chardev_adm: initializing\n");
-    if ((ret = alloc_chrdev_region(&dev, 0, 1, "qotadm")) < 0)
-        return ret;
-    cdev_init(&c_dev, &qot_chardev_adm_fops);
-    if ((ret = cdev_add(&c_dev, dev, 1)) < 0)
-        return ret;
-    if (IS_ERR(cl = class_create(THIS_MODULE, "qotadm"))) {
-        cdev_del(&c_dev);
-        unregister_chrdev_region(dev, 1);
-        return PTR_ERR(cl);
+    qot_major = register_chrdev(0,DEVICE_NAME,&qot_chardev_adm_fops);
+    if (qot_major < 0) {
+        pr_err("qot_chardev_adm: cannot register device\n");
+        goto failed_chrdevreg;
     }
-    if (IS_ERR(dev_ret = device_create(cl, NULL, dev, NULL, "qotadm"))) {
-        class_destroy(cl);
-        cdev_del(&c_dev);
-        unregister_chrdev_region(dev, 1);
-        return PTR_ERR(dev_ret);
+    qot_device = device_create(qot_class, NULL, MKDEV(qot_major, 0),
+        NULL, DEVICE_NAME);
+    if (IS_ERR(qot_device)) {
+        pr_err("qot_chardev_adm: cannot create device\n");
+        goto failed_devreg;
     }
     return QOT_RETURN_TYPE_OK;
+failed_devreg:
+    unregister_chrdev(qot_major, DEVICE_NAME);
+failed_chrdevreg:
+    return QOT_RETURN_TYPE_ERR;
 }
 
-qot_return_t qot_chardev_adm_cleanup(void) {
+qot_return_t qot_chardev_adm_cleanup(struct class *qot_class) {
     chardev_adm_con_t *con;
     struct rb_node *node;
 
     /* Clean up the character devices */
     pr_info("qot_chardev_adm: cleaning up character devices\n");
-    device_destroy(cl, dev);
-    class_destroy(cl);
-    cdev_del(&c_dev);
-    unregister_chrdev_region(dev, 1);
+    device_destroy(qot_class, MKDEV(qot_major, 0));
+    unregister_chrdev(qot_major, DEVICE_NAME);
 
     /* Clean up the connections */
     pr_info("qot_chardev_adm: flushing connections\n");
@@ -289,10 +285,9 @@ qot_return_t qot_chardev_adm_cleanup(void) {
         qot_chardev_adm_con_remove(con);    /* Remove from red-black tree */
         qot_chardev_adm_con_free(con);      /* Free memory */
     }
+
     /* Success */
     return QOT_RETURN_TYPE_OK;
 }
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
-MODULE_DESCRIPTION("QoT (admin interface)");

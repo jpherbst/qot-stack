@@ -32,6 +32,9 @@
 
 #include "qot_exported.h"
 
+/* All device drivers must be registered with this class to appear in sysfs */
+#define CLASS_NAME "qot"
+
 /* Internal event type */
 typedef struct event {
     qot_event_t info;            /* The event type                      */
@@ -60,20 +63,20 @@ qot_return_t qot_core_clock_switch(qot_clock_t *clk);
 
 /* qot_chardev_adm: Function calls from qot_core */
 
-qot_return_t qot_chardev_adm_init(void);
+qot_return_t qot_chardev_adm_init(struct class *qot_class);
 
-qot_return_t qot_chardev_adm_cleanup(void);
-
-/* qot_chardev_usr: Function calls from qot_core */
-
-qot_return_t qot_chardev_usr_init(void);
-
-qot_return_t qot_chardev_usr_cleanup(void);
+qot_return_t qot_chardev_adm_cleanup(struct class *qot_class);
 
 /* qot_chardev_usr: Function calls from qot_core */
 
-qot_return_t qot_sysfs_init(void);
+qot_return_t qot_chardev_usr_init(struct class *qot_class);
 
-qot_return_t qot_sysfs_cleanup(void);
+qot_return_t qot_chardev_usr_cleanup(struct class *qot_class);
+
+/* qot_chardev_usr: Function calls from qot_core */
+
+qot_return_t qot_sysfs_init(struct class *qot_class);
+
+qot_return_t qot_sysfs_cleanup(struct class *qot_class);
 
 #endif

@@ -13,3 +13,5 @@
 /qot_chardev_adm.o
 /qot_chardev_usr.o
 /qot_core.o
+/.qot_sysfs.o.cmd
+/qot_sysfs.o

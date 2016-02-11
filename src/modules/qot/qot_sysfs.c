@@ -36,8 +36,13 @@
 
 static int bus_value = 1;
 
-static struct bus_type my_pseudo_bus = {
-    .name = "qot",
+static int qot_match(struct device *dev, struct device_driver *driver) {
+    return !strncmp("qot", driver->name, strlen(driver->name));
+}
+
+static struct bus_type qot_bus = {
+    .name   = "qot",
+    .match  = qot_match,
 };
 
 static ssize_t bus_show(struct bus_type *bus, char *buf) {
@@ -48,32 +53,30 @@ static ssize_t bus_store(struct bus_type *bus, const char *buf, size_t count) {
     sscanf(buf, "%d", &bus_value);
     return sizeof(int);
 }
-BUS_ATTR(busval, S_IRUGO | S_IWUSR, bus_show, bus_store);
+BUS_ATTR(timeline_delete_all,  S_IRUGO | S_IWUSR, bus_show, bus_store);
 
-qot_return_t qot_sysfs_init(void) {
+qot_return_t qot_sysfs_init(struct class *qot_class) {
     int ret = -1;
     pr_info("qot_sysfs: initializing\n");
-    ret = bus_register(&my_pseudo_bus);
+    ret = bus_register(&qot_bus);
     if (ret < 0) {
         printk(KERN_WARNING "qot_sysfs: error register bus: %d\n", ret);
         return QOT_RETURN_TYPE_ERR;
     }
-    ret = bus_create_file(&my_pseudo_bus, &bus_attr_busval);
+    ret = bus_create_file(&qot_bus, &bus_attr_timeline_delete_all);
     if (ret < 0) {
         printk(KERN_WARNING "qot_sysfs: error creating busfile\n");
-        bus_unregister(&my_pseudo_bus);
+        bus_unregister(&qot_bus);
         return QOT_RETURN_TYPE_ERR;
     }
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_sysfs_cleanup(void) {
+qot_return_t qot_sysfs_cleanup(struct class *qot_class) {
     pr_info("qot_sysfs: removing files\n");
-    bus_remove_file(&my_pseudo_bus, &bus_attr_busval);
-    bus_unregister(&my_pseudo_bus);
+    bus_remove_file(&qot_bus, &bus_attr_timeline_delete_all);
+    bus_unregister(&qot_bus);
     return QOT_RETURN_TYPE_OK;
 }
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Andrew Symington <asymingt@ucla.edu>");
-MODULE_DESCRIPTION("QoT (sysfs interface to clocks)");
