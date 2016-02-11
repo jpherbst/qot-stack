@@ -63,20 +63,20 @@ qot_return_t qot_core_clock_switch(qot_clock_t *clk);
 
 /* qot_chardev_adm: Function calls from qot_core */
 
-qot_return_t qot_chardev_adm_init(struct class *qot_class);
+qot_return_t qot_admin_chdev_init(struct class *qot_class);
 
-qot_return_t qot_chardev_adm_cleanup(struct class *qot_class);
-
-/* qot_chardev_usr: Function calls from qot_core */
-
-qot_return_t qot_chardev_usr_init(struct class *qot_class);
-
-qot_return_t qot_chardev_usr_cleanup(struct class *qot_class);
+void qot_admin_chdev_cleanup(struct class *qot_class);
 
 /* qot_chardev_usr: Function calls from qot_core */
 
-qot_return_t qot_sysfs_init(struct class *qot_class);
+qot_return_t qot_user_chdev_init(struct class *qot_class);
 
-qot_return_t qot_sysfs_cleanup(struct class *qot_class);
+void qot_user_chdev_cleanup(struct class *qot_class);
+
+/* qot_chardev_usr: Function calls from qot_core */
+
+qot_return_t qot_admin_sysfs_init(struct device *qot_device);
+
+void qot_admin_sysfs_cleanup(struct device *qot_device);
 
 #endif

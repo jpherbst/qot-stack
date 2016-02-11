@@ -15,3 +15,5 @@
 /qot_core.o
 /.qot_sysfs.o.cmd
 /qot_sysfs.o
+/.qot_user_chdev.o.cmd
+/qot_user_chdev.o

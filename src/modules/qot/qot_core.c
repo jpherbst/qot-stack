@@ -297,26 +297,19 @@ static int qot_init(void) {
         pr_err("qot_chardev_usr: cannot create device class\n");
         goto failed_classreg;
     }
-    ret = qot_chardev_adm_init(qot_class);
+    ret = qot_admin_chdev_init(qot_class);
     if (ret) {
         pr_err("qot_core: problem calling qot_chardev_adm_init\n");
         goto fail_adm;
     }
-    ret = qot_chardev_usr_init(qot_class);
+    ret = qot_user_chdev_init(qot_class);
     if (ret) {
         pr_err("qot_core: problem calling qot_chardev_usr_init\n");
         goto fail_usr;
     }
-    ret = qot_sysfs_init(qot_class);
-    if (ret) {
-        pr_err("qot_core: problem calling qot_sysfs_init\n");
-        goto fail_sys;
-    }
     return 0;
-fail_sys:
-    qot_chardev_usr_cleanup(qot_class);
 fail_usr:
-    qot_chardev_adm_cleanup(qot_class);
+    qot_admin_chdev_cleanup(qot_class);
 fail_adm:
     class_destroy(qot_class);
 failed_classreg:
@@ -325,12 +318,8 @@ failed_classreg:
 
 /* Cleanup the QoT core */
 static void qot_cleanup(void) {
-    if (qot_sysfs_cleanup(qot_class))
-        pr_err("qot_core: problem calling qot_sysfs_cleanup\n");
-    if (qot_chardev_usr_cleanup(qot_class))
-        pr_err("qot_core: problem calling qot_chardev_usr_cleanup\n");
-    if (qot_chardev_adm_cleanup(qot_class))
-        pr_err("qot_core: problem calling qot_chardev_adm_cleanup\n");
+    qot_user_chdev_cleanup(qot_class);
+    qot_admin_chdev_cleanup(qot_class);
     class_destroy(qot_class);
 }
 

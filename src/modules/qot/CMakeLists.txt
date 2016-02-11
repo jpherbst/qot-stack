@@ -2,8 +2,9 @@
 SET(MODULE_SOURCE_FILES
     Kbuild
     qot_core.c
-    qot_chardev_usr.c
-    qot_chardev_adm.c
+    qot_user_chdev.c
+    qot_admin_chdev.c
+    qot_admin_sysfs.c
 )
 
 # Set the source files
@@ -12,9 +13,9 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot.ko.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot.mod.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_chardev_adm.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_chardev_usr.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_sysfs.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_user_chdev.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_chdev.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_sysfs.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/Module.symvers
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.order
@@ -22,9 +23,9 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.c
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_chardev_adm.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_chardev_usr.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_sysfs.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_user_chdev.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_chdev.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_sysfs.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_core.o
 )
 
