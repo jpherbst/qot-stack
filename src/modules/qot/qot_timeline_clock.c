@@ -35,31 +35,24 @@
 
 #include "qot_internal.h"
 
-static s32 scaled_ppm_to_ppb(long ppm) {
-    s64 ppb = 1 + ppm;
-    ppb *= 125;
-    ppb >>= 13;
-    return (s32) ppb;
-}
-
 /* posix clock implementation */
 
-static int qot_timeline_clock_getres(struct posix_clock *pc,
+int qot_timeline_clock_getres(struct posix_clock *pc,
     struct timespec *tp) {
     return 0;
 }
 
-static int qot_timeline_clock_settime(struct posix_clock *pc,
+int qot_timeline_clock_settime(struct posix_clock *pc,
     const struct timespec *tp) {
     return 0;
 }
 
-static int qot_timeline_clock_gettime(struct posix_clock *pc,
+int qot_timeline_clock_gettime(struct posix_clock *pc,
     struct timespec *tp) {
     return 0;
 }
 
-static int qot_timeline_clock_adjtime(struct posix_clock *pc,
+int qot_timeline_clock_adjtime(struct posix_clock *pc,
     struct timex *tx) {
     return 0;
 }

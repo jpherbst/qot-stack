@@ -101,12 +101,12 @@ static const struct attribute_group qot_timeline_group = {
 };
 
 void qot_timeline_sysfs_cleanup(struct device *qot_device) {
-    sysfs_remove_group(&qot_device->kobj, &qot_admin_group);
+    sysfs_remove_group(&qot_device->kobj, &qot_timeline_group);
 }
 
 qot_return_t qot_timeline_sysfs_init(struct device *qot_device) {
     if (!qot_device)
         return QOT_RETURN_TYPE_ERR;
-    sysfs_create_group(&qot_device->kobj, &qot_admin_group);
+    sysfs_create_group(&qot_device->kobj, &qot_timeline_group);
     return QOT_RETURN_TYPE_OK;
 }

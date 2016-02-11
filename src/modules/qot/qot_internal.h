@@ -52,6 +52,8 @@ qot_return_t qot_core_timeline_get_info(qot_timeline_t *timeline);
 
 qot_return_t qot_core_timeline_create(qot_timeline_t *timeline);
 
+qot_return_t qot_core_timeline_remove(int index);
+
 /* qot_core: To support ioctl calls from /dev/qotadm */
 
 qot_return_t qot_core_clock_next(qot_clock_t *clk);
@@ -86,7 +88,7 @@ void qot_admin_sysfs_cleanup(struct device *qot_device);
 
 qot_return_t qot_timeline_register(qot_timeline_t *timeline);
 
-qot_return_t qot_timeline_unregister(qot_timeline_t *timeline);
+qot_return_t qot_timeline_unregister(int index);
 
 /* qot_timeline_clock: POSIX functions on a timeline */
 
@@ -106,12 +108,15 @@ int qot_timeline_clock_adjtime(struct posix_clock *pc,
 
 int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode);
 
-int qot_timeline_chdev_close(struct inode *i, struct file *f);
+int qot_timeline_chdev_release(struct posix_clock *pc);
 
 long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
     unsigned long arg);
 
 unsigned int qot_timeline_chdev_poll(struct posix_clock *pc, struct file *fp,
     poll_table *wait);
+
+ssize_t qot_timeline_chdev_read(struct posix_clock *pc, uint rdflags,
+    char __user *buf, size_t cnt);
 
 #endif

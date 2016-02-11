@@ -36,8 +36,8 @@
 
 /* Internal timeline type */
 typedef struct timeline {
-    qot_timeline_t info;        /* Timeline information                 */
-    struct rb_node node;        /* Red-black tree indexes by name       */
+    qot_timeline_t info;        /* Timeline information                */
+    struct rb_node node;        /* Red-black tree indexes by name      */
 } timeline_t;
 
 /* Internal clock type */
@@ -46,7 +46,7 @@ typedef struct clk {
     struct rb_node node;        /* Red-black tree indexes by name      */
 } clk_t;
 
-/* The current clock set to core (initially this will be NULL)          */
+/* The current clock set to core (initially this will be NULL)         */
 static clk_t *core = NULL;
 
 /* Root of the red-black tree used to store timelines */
@@ -63,7 +63,7 @@ static struct class *qot_class = NULL;
 /* Search for a timeline given by a name */
 static timeline_t *qot_core_find_timeline(char *name) {
     int result;
-    timeline_t *timeline;
+    timeline_t *timeline = NULL;
     struct rb_node *node = qot_core_timeline_root.rb_node;
     while (node) {
         timeline = container_of(node, timeline_t, node);
@@ -102,7 +102,7 @@ static qot_return_t qot_core_insert_timeline(timeline_t *timeline) {
 /* Search for a timeline given by a name */
 static clk_t *qot_core_find_clock(char *name) {
     int result;
-    clk_t *clk;
+    clk_t *clk = NULL;
     struct rb_node *node = qot_core_clock_root.rb_node;
     while (node) {
         clk = container_of(node, clk_t, node);
@@ -120,7 +120,7 @@ static clk_t *qot_core_find_clock(char *name) {
 // Insert a timeline into our data structure
 static qot_return_t qot_core_insert_clock(clk_t *clk) {
     int result;
-    clk_t *target;
+    clk_t *target = NULL;
     struct rb_node **new = &(qot_core_clock_root.rb_node), *parent = NULL;
     while (*new) {
         target = container_of(*new, clk_t, node);
@@ -142,7 +142,7 @@ static qot_return_t qot_core_insert_clock(clk_t *clk) {
 
 /* Get the next timeline in the set */
 qot_return_t qot_core_timeline_next(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv;
+    timeline_t *timeline_priv = NULL;
     struct rb_node *node;
     if (!timeline) {
         node = rb_first(&qot_core_clock_root);
@@ -161,7 +161,7 @@ qot_return_t qot_core_timeline_next(qot_timeline_t *timeline) {
 
 /* Get information about a timeline */
 qot_return_t qot_core_timeline_get_info(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv;
+    timeline_t *timeline_priv = NULL;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
     timeline_priv = qot_core_find_timeline(timeline->name);
@@ -171,19 +171,24 @@ qot_return_t qot_core_timeline_get_info(qot_timeline_t *timeline) {
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Delete an existing binding from a timeline */
+/* Creata a new timeline */
 qot_return_t qot_core_timeline_create(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv;
+    timeline_t *timeline_priv = NULL;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
-    timeline_priv = kzalloc(sizeof(timeline_t), GFP_KERNEL);
-    if (!timeline_priv)
+    /* If successful, timeline->index will be assigned an IDR integer */
+    if (qot_timeline_register(timeline))
         return QOT_RETURN_TYPE_ERR;
-    memcpy(&timeline_priv->info,&timeline,sizeof(qot_timeline_t));
-    /* TODO: full initialization of the timeline itself (SYSFS) */
-    timeline->index = 0; /* for now */
     if (qot_core_insert_timeline(timeline_priv)) {
-        kfree(timeline_priv);
+        qot_timeline_unregister(timeline->index);
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Creata a new timeline */
+qot_return_t qot_core_timeline_remove(int index) {
+    if (qot_timeline_unregister(index)) {
         return QOT_RETURN_TYPE_ERR;
     }
     return QOT_RETURN_TYPE_OK;
@@ -191,7 +196,7 @@ qot_return_t qot_core_timeline_create(qot_timeline_t *timeline) {
 
 /* Get the next clock in the list */
 qot_return_t qot_core_clock_next(qot_clock_t *clk) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     struct rb_node *node;
     if (!clk) {
         node = rb_first(&qot_core_clock_root);
@@ -210,7 +215,7 @@ qot_return_t qot_core_clock_next(qot_clock_t *clk) {
 
 /* Get information about a clock */
 qot_return_t qot_core_clock_get_info(qot_clock_t *clk) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = qot_core_find_clock(clk->name);
@@ -222,7 +227,7 @@ qot_return_t qot_core_clock_get_info(qot_clock_t *clk) {
 
 /* Put the specified clock to sleep */
 qot_return_t qot_core_clock_sleep(qot_clock_t *clk) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = qot_core_find_clock(clk->name);
@@ -234,7 +239,7 @@ qot_return_t qot_core_clock_sleep(qot_clock_t *clk) {
 
 /* Wake up the specified clock */
 qot_return_t qot_core_clock_wake(qot_clock_t *clk) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = qot_core_find_clock(clk->name);
@@ -246,7 +251,7 @@ qot_return_t qot_core_clock_wake(qot_clock_t *clk) {
 
 /* Switch core to run from this clock */
 qot_return_t qot_core_clock_switch(qot_clock_t *clk) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = qot_core_find_clock(clk->name);
@@ -260,7 +265,7 @@ qot_return_t qot_core_clock_switch(qot_clock_t *clk) {
 
 /* Register a clock with the QoT stack */
 qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
-    clk_t *clk_priv;
+    clk_t *clk_priv = NULL;
     if (!impl)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = kzalloc(sizeof(clk_t), GFP_KERNEL);

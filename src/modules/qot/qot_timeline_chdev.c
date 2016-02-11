@@ -38,7 +38,7 @@ int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode) {
 	return 0;
 }
 
-int qot_timeline_chdev_close(struct inode *i, struct file *f) {
+int qot_timeline_chdev_release(struct posix_clock *pc) {
     return 0;
 }
 
