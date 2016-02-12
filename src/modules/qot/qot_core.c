@@ -110,7 +110,7 @@ fail_timeline:
 fail_clock:
     class_destroy(qot_class);
 failed_classreg:
-	return 1;
+	return -EIO;
 }
 
 /* Cleanup the QoT core */

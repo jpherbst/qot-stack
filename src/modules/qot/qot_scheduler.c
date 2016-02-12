@@ -39,7 +39,7 @@ void qot_scheduler_cleanup(struct class *qot_class) {
 /* Initialize the timeline subsystem */
 qot_return_t qot_scheduler_init(struct class *qot_class) {
     /* TODO */
-    return QOT_RETURN_TYPE_ERR;
+    return QOT_RETURN_TYPE_OK;
 }
 
 MODULE_LICENSE("GPL");

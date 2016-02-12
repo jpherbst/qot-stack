@@ -149,7 +149,6 @@ qot_return_t qot_clock_next(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-
 qot_return_t qot_clock_get_info(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     if (!clk)
@@ -159,6 +158,30 @@ qot_return_t qot_clock_get_info(qot_clock_t *clk) {
         return QOT_RETURN_TYPE_ERR;
     memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
     return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_remove(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    /* Make certain that clk->index has been set */
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    /* TODO: Remove any inner structures */
+    rb_erase(&clk_priv->node,&qot_clock_root);
+    kfree(clk_priv);
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Remove all timelines */
+void qot_clock_remove_all(void) {
+    clk_t *clk, *clk_next;
+    rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
+        /* TODO: Remove any inner structures */
+        rb_erase(&clk->node,&qot_clock_root);
+        kfree(clk);
+    }
 }
 
 qot_return_t qot_clock_sleep(qot_clock_t *clk) {

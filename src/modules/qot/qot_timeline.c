@@ -179,17 +179,20 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline) {
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Cleanup the timeline subsystem */
-void qot_timeline_cleanup(struct class *qot_class) {
+/* Remove all timelines */
+void qot_timeline_remove_all(void) {
     timeline_t *timeline, *timeline_next;
-    /* Remove all timelines */
     rbtree_postorder_for_each_entry_safe(timeline, timeline_next,
         &qot_timeline_root, node) {
         qot_timeline_chdev_unregister(timeline->info.index);
         rb_erase(&timeline->node,&qot_timeline_root);
         kfree(timeline);
     }
-    /* Clean up the character device */
+}
+
+/* Cleanup the timeline subsystem */
+void qot_timeline_cleanup(struct class *qot_class) {
+    qot_timeline_remove_all();
     qot_timeline_chdev_cleanup(qot_class);
 }
 

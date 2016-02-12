@@ -82,6 +82,11 @@ qot_return_t qot_clock_get_info(qot_clock_t *clk);
 qot_return_t qot_clock_remove(qot_clock_t *clk);
 
 /**
+ * @brief Remove all clocks
+ **/
+void qot_clock_remove_all(void);
+
+/**
  * @brief Ask a clock with a given name to sleep. Core will not sleep.
  * @param clk A pointer to the current clock with the name field populated
  * @return A status code indicating success (0) or other (no more clocks)

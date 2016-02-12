@@ -79,44 +79,10 @@ DEVICE_ATTR(timeline_remove, 0600, NULL, timeline_remove_store);
 /* Remove all timelines */
 static ssize_t timeline_remove_all_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count) {
-	qot_timeline_t timeline;
-	if (qot_timeline_first(&timeline)) {
-	 	do {
-			if (qot_timeline_remove(&timeline)) {
-				pr_err("qot_admin_sysfs: could not remove a timeline\n");
-				return -EINVAL;
-			}
-	 	} while (!qot_timeline_next(&timeline));
-	}
+	qot_timeline_remove_all();
     return count;
 }
 DEVICE_ATTR(timeline_remove_all, 0600, NULL, timeline_remove_all_store);
-
-/* List all timelines */
-static ssize_t timeline_list_show(struct device *dev,
-	struct device_attribute *attr, char *buf) {
-	qot_timeline_t timeline;
-	if (qot_timeline_first(&timeline)) {
-	 	do {
-	 		/* Print to buffer */
-	 	} while (!qot_timeline_next(&timeline));
-	}
-    return 0;
-}
-DEVICE_ATTR(timeline_list, 0600, timeline_list_show, NULL);
-
-/* List all clocks */
-static ssize_t clock_list_show(struct device *dev,
-	struct device_attribute *attr, char *buf) {
-	qot_clock_t clk;
-	if (qot_clock_first(&clk)) {
-	 	do {
-
-	 	} while (!qot_clock_next(&clk));
-	}
-    return 0;
-}
-DEVICE_ATTR(clock_list, 0600, clock_list_show, NULL);
 
 /* List all timelines */
 static ssize_t clock_core_show(struct device *dev,
@@ -133,8 +99,6 @@ static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
     &dev_attr_timeline_remove.attr,
     &dev_attr_timeline_create.attr,
-    &dev_attr_timeline_list.attr,
-    &dev_attr_clock_list.attr,
     &dev_attr_clock_core.attr,
     NULL,
 };

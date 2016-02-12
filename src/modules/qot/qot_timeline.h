@@ -72,6 +72,11 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline);
 qot_return_t qot_timeline_remove(qot_timeline_t *timeline);
 
 /**
+ * @brief Remove all timelines
+ **/
+void qot_timeline_remove_all(void);
+
+/**
  * @brief Clean up the timer subsystem
  * @param qot_class Device class for all QoT devices
  **/
