@@ -29,7 +29,7 @@
 
 #include <linux/module.h>
 
-#include "qot_scheduler.h"
+#include "qot_core.h"
 
 /* Cleanup the timeline subsystem */
 void qot_scheduler_cleanup(struct class *qot_class) {

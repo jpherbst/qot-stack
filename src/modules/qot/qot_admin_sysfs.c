@@ -31,6 +31,8 @@
 #include <linux/capability.h>
 #include <linux/slab.h>
 
+#include "qot_admin.h"
+#include "qot_clock.h"
 #include "qot_timeline.h"
 
 /*
@@ -41,46 +43,46 @@
 */
 
 /* Create a timeline */
-static ssize_t s_timeline_create(struct device *dev,
+static ssize_t timeline_create_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count) {
     qot_timeline_t timeline;
-    cnt = sscanf(buf, "%s", timeline.name);
+    int cnt = sscanf(buf, "%s", timeline.name);
     if (cnt != 1) {
     	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
         return -EINVAL;
     }
-    if (qot_core_timeline_create(&timeline)) {
+    if (qot_timeline_create(&timeline)) {
     	pr_err("qot_admin_sysfs: could not create a timeline\n");
     	return -EINVAL;
     }
     return count;
 }
-DEVICE_ATTR(timeline_create, 0600, NULL, s_timeline_create);
+DEVICE_ATTR(timeline_create, 0600, NULL, timeline_create_store);
 
 /* Destroy a timeline */
-static ssize_t s_timeline_remove(struct device *dev,
+static ssize_t timeline_remove_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count) {
     qot_timeline_t timeline;
-    cnt = sscanf(buf, "%s", timeline.name);
+    int cnt = sscanf(buf, "%s", timeline.name);
     if (cnt != 1) {
     	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
         return -EINVAL;
     }
-	if (qot_core_timeline_remove(&timeline)) {
+	if (qot_timeline_remove(&timeline)) {
 		pr_err("qot_admin_sysfs: could not remove a timeline\n");
 		return -EINVAL;
 	}
     return count;
 }
-DEVICE_ATTR(timeline_remove, 0600, NULL, s_timeline_remove);
+DEVICE_ATTR(timeline_remove, 0600, NULL, timeline_remove_store);
 
 /* Remove all timelines */
-static ssize_t s_timeline_remove_all(struct device *dev,
+static ssize_t timeline_remove_all_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count) {
 	qot_timeline_t timeline;
 	if (qot_timeline_first(&timeline)) {
 	 	do {
-			if (qot_core_timeline_remove(&timeline)) {
+			if (qot_timeline_remove(&timeline)) {
 				pr_err("qot_admin_sysfs: could not remove a timeline\n");
 				return -EINVAL;
 			}
@@ -88,44 +90,44 @@ static ssize_t s_timeline_remove_all(struct device *dev,
 	}
     return count;
 }
-DEVICE_ATTR(timeline_remove_all, 0600, NULL, s_timeline_remove_all);
+DEVICE_ATTR(timeline_remove_all, 0600, NULL, timeline_remove_all_store);
 
 /* List all timelines */
-static ssize_t s_timeline_list(struct device *dev,
-	struct device_attribute *attr, const char *buf) {
+static ssize_t timeline_list_show(struct device *dev,
+	struct device_attribute *attr, char *buf) {
 	qot_timeline_t timeline;
 	if (qot_timeline_first(&timeline)) {
 	 	do {
 	 		/* Print to buffer */
 	 	} while (!qot_timeline_next(&timeline));
 	}
-    return count;
+    return 0;
 }
-DEVICE_ATTR(timeline_list, 0600, s_timeline_list, NULL);
+DEVICE_ATTR(timeline_list, 0600, timeline_list_show, NULL);
 
 /* List all clocks */
-static ssize_t s_clock_list(struct device *dev,
-	struct device_attribute *attr, const char *buf) {
+static ssize_t clock_list_show(struct device *dev,
+	struct device_attribute *attr, char *buf) {
 	qot_clock_t clk;
 	if (qot_clock_first(&clk)) {
 	 	do {
 
 	 	} while (!qot_clock_next(&clk));
 	}
-    return count;
+    return 0;
 }
-DEVICE_ATTR(clock_list, 0600, s_clock_list, NULL);
+DEVICE_ATTR(clock_list, 0600, clock_list_show, NULL);
 
 /* List all timelines */
-static ssize_t s_clock_core_check(struct device *dev,
+static ssize_t clock_core_show(struct device *dev,
+    struct device_attribute *attr, char *buf) {
+    return 0;
+}
+static ssize_t clock_core_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
     return count;
 }
-static ssize_t s_clock_core_switch(struct device *dev,
-	struct device_attribute *attr, const char *buf) {
-
-    return count;
-}
-DEVICE_ATTR(clock_core, 0600, s_clock_core_check, s_clock_core_switch);
+DEVICE_ATTR(clock_core, 0600, clock_core_show, clock_core_store);
 
 static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
@@ -133,7 +135,7 @@ static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_create.attr,
     &dev_attr_timeline_list.attr,
     &dev_attr_clock_list.attr,
-    &dev_attr_clock_switch.attr,
+    &dev_attr_clock_core.attr,
     NULL,
 };
 
@@ -145,7 +147,7 @@ void qot_admin_sysfs_cleanup(struct device *qot_device) {
     sysfs_remove_group(&qot_device->kobj, &qot_admin_group);
 }
 
-qot_return_t qot_admin_chdev_sysfs_init(struct device *qot_device) {
+qot_return_t qot_admin_sysfs_init(struct device *qot_device) {
     if (!qot_device)
         return QOT_RETURN_TYPE_ERR;
     sysfs_create_group(&qot_device->kobj, &qot_admin_group);

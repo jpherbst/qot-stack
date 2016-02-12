@@ -27,11 +27,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
-#define QOT_STACK_SRC_MODULES_QOT_QOT_EXPORTED_H
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_CORE_H
 
 #include <linux/ptp_clock_kernel.h>
 
+/* Public interface */
 #include "../../qot_types.h"
 
 /**
@@ -52,20 +53,20 @@ typedef struct qot_clock_impl {
  * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_register(qot_clock_impl_t *impl);
+qot_return_t qot_register(qot_clock_impl_t *impl);
 
 /**
  * @brief Unregister a clock with the QoT core
  * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_unregister(qot_clock_impl_t *impl);
+qot_return_t qot_unregister(qot_clock_impl_t *impl);
 
 /**
  * @brief Prompt QoT core into updating the clock information
  * @param impl A pointer containing all the clock info
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_clock_property_update(qot_clock_impl_t *impl);
+qot_return_t qot_update(qot_clock_impl_t *impl);
 
 #endif

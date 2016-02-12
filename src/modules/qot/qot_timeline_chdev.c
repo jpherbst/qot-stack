@@ -40,7 +40,7 @@
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
 
-#include "qot_internal.h"
+#include "qot_timeline.h"
 
 #define DEVICE_NAME "timeline"
 
@@ -55,6 +55,7 @@ static spinlock_t qot_timelines_lock;
 
 /* Private data for this timeline, not visible outside this code   */
 typedef struct timeline_impl {
+    char name[QOT_MAX_NAMELEN]; /* Timeline name                   */
     struct rb_node node;        /* Red-black tree indexes by name  */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
@@ -108,7 +109,7 @@ ssize_t qot_timeline_chdev_read(struct posix_clock *pc, uint rdflags,
 }
 
 /* File operations for a given timeline */
-static struct posix_clock_operations qot_clock_ops = {
+static struct posix_clock_operations qot_timeline_chdev_ops = {
 	.owner		    = THIS_MODULE,
 	.clock_adjtime	= qot_timeline_chdev_adjtime,
 	.clock_gettime	= qot_timeline_chdev_gettime,
@@ -130,19 +131,20 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc) {
 /* PUBLIC */
 
 /* Create the timeline and return an index that identifies it uniquely */
-qot_return_t qot_timeline_chdev_register(qot_timeline_t *timeline) {
+int qot_timeline_chdev_register(char* name) {
     timeline_impl_t *timeline_impl;
-    int major = MAJOR(timeline_devt);   /* Allocate a major number for device */
-    if (!timeline)
-        return QOT_RETURN_TYPE_ERR;
-
-    /* Allocate some memory for the timeline implementation data */
+    int major;
+    if (!name)
+        goto fail_noname;
+    /* Allocate a major number for device */
+    major = MAJOR(timeline_devt);
+    /* Allocate some memory for the timeline and copy name */
     timeline_impl = kzalloc(sizeof(timeline_impl_t), GFP_KERNEL);
     if (!timeline_impl) {
         pr_err("qot_timeline: cannot allocate memory for timeline_impl");
         goto fail_memoryalloc;
     }
-
+    strncpy(timeline_impl->name,name,strlen(timeline_impl->name));
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
@@ -154,31 +156,27 @@ qot_return_t qot_timeline_chdev_register(qot_timeline_t *timeline) {
         pr_err("qot_timeline: cannot get next integer");
         goto fail_idasimpleget;
     }
-
     /* Assign an ID and create the character device for this timeline */
     timeline_impl->devid = MKDEV(major, timeline_impl->index);
     timeline_impl->dev = device_create(timeline_class, NULL,
         timeline_impl->devid, timeline_impl, "timeline%d", timeline_impl->index);
-
     /* Setup the PTP clock for this timeline */
-    timeline_impl->clock.ops = qot_clock_ops;
-    timeline_impl->clock.release = qot_timeline_delete;
+    timeline_impl->clock.ops = qot_timeline_chdev_ops;
+    timeline_impl->clock.release = qot_timeline_chdev_delete;
     if (posix_clock_register(&timeline_impl->clock, timeline_impl->devid)) {
         pr_err("qot_timeline: cannot register POSIX clock");
         goto fail_posixclock;
     }
-
     /* Update the index before returning OK */
-    timeline->index = timeline_impl->index;
-
-    return QOT_RETURN_TYPE_OK;
+    return timeline_impl->index;
 
 fail_posixclock:
     idr_remove(&qot_timelines_map, timeline_impl->index);
 fail_idasimpleget:
     kfree(timeline_impl);
 fail_memoryalloc:
-    return QOT_RETURN_TYPE_ERR;
+fail_noname:
+    return -1;  /* Negative IDR values are not valid */
 }
 
 /* Destroy the timeline based on an index */

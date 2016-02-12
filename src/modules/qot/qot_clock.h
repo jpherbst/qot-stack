@@ -30,15 +30,40 @@
 #ifndef QOT_STACK_SRC_MODULES_QOT_QOT_CLOCK_H
 #define QOT_STACK_SRC_MODULES_QOT_QOT_CLOCK_H
 
-#include <linux/posix-clock.h>
-#include <linux/poll.h>
+#include "qot_core.h"
 
-#include "qot_internal.h"
+/**
+ * @brief Register a clock with the QoT stack
+ * @param impl A struct containing the clock implementation
+ * @return A status code indicating success (0) or other (no more clocks)
+ **/
+qot_return_t qot_clock_register(qot_clock_impl_t *impl);
+
+/**
+ * @brief Unregister a clock with the QoT stack
+ * @param impl A struct containing the clock implementation
+ * @return A status code indicating success (0) or other (no more clocks)
+ **/
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl);
+
+/**
+ * @brief Update clock parameters with the QoT stack
+ * @param impl A struct containing the clock implementation
+ * @return A status code indicating success (0) or other (no more clocks)
+ **/
+qot_return_t qot_clock_update(qot_clock_impl_t *impl);
+
+/**
+ * @brief Find the first clock in the system.
+ * @param clk A pointer to a clock
+ * @return A status code indicating success (0) or other (no more timelines)
+ **/
+qot_return_t qot_clock_first(qot_clock_t *clk);
 
 /**
  * @brief Find the next clock in the system based on the specified name.
- * @param clk A pointer to the current clock with the name field populated
- * @return A status code indicating success (0) or other (no more clocks)
+ * @param clk A pointer to a clock with the name field populated
+ * @return A status code indicating success (0) or other (no more timelines)
  **/
 qot_return_t qot_clock_next(qot_clock_t *clk);
 

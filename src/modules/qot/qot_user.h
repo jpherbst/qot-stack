@@ -27,16 +27,42 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/module.h>
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_USER_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_USER_H
 
-#include "qot_exported.h"
+#include "qot_core.h"
 
-/* Cleanup the user subsystem */
+/* qot_admin_user.c */
+
+/**
+ * @brief Clean up the user subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
 void qot_user_cleanup(struct class *qot_class);
 
-/* Initialize the user subsystem */
+/**
+ * @brief Initialize the user subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
 qot_return_t qot_user_init(struct class *qot_class);
 
-MODULE_LICENSE("GPL");
+/* qot_admin_chdev.c */
+
+/**
+ * @brief Clean up the user character device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_user_chdev_cleanup(struct class *qot_class);
+
+/**
+ * @brief Initialize the user character device subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_user_chdev_init(struct class *qot_class);
+
+
+#endif
 
 

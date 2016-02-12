@@ -90,7 +90,7 @@ static qot_return_t qot_timeline_insert(timeline_t *timeline) {
 qot_return_t qot_timeline_first(qot_timeline_t *timeline) {
     timeline_t *timeline_priv = NULL;
     struct rb_node *node;
-    node = rb_first(&qot_core_clock_root);
+    node = rb_first(&qot_timeline_root);
     timeline_priv = rb_entry(node, timeline_t, node);
     memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
     return QOT_RETURN_TYPE_OK;
@@ -141,25 +141,24 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline) {
 		return QOT_RETURN_TYPE_ERR;
     }
 	memcpy(&timeline_priv->info,timeline,sizeof(qot_timeline_t));
-
     /* Try and initialize the character device for this timeline */
-    if (qot_timeline_chdev_register(timeline_priv)) {
+    timeline_priv->info.index =
+        qot_timeline_chdev_register(timeline_priv->info.name);
+    if (timeline_priv->info.index < 0) {
     	pr_err("qot_timeline: cannot create the character device");
-        goto fail_chdev_register:
+        goto fail_chdev_register;
     }
-
     /* Try and insert into the red-black tree */
     if (qot_timeline_insert(timeline_priv)) {
     	pr_err("qot_timeline: cannot insert the timeline");
-        goto fail_timeline_insert:
+        goto fail_timeline_insert;
     }
     /* Copy the IDR back to the user */
 	memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
-
     return QOT_RETURN_TYPE_OK;
 
 fail_timeline_insert:
-	qot_timeline_chdev_unregister(timeline_priv);
+	qot_timeline_chdev_unregister(timeline_priv->info.index);
 fail_chdev_register:
 	kfree(timeline_priv);
 	return QOT_RETURN_TYPE_ERR;
@@ -170,22 +169,33 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline) {
     timeline_t *timeline_priv = NULL;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
-    /* Make certain that timeline->index has been set accordingly */
+    /* Make certain that timeline->index has been set */
     timeline_priv = qot_timeline_find(timeline->name);
 	if (!timeline_priv)
 		return QOT_RETURN_TYPE_ERR;
-	qot_timeline_chdev_unregister(timeline->index);
-	rb_erase(&timeline->node,&qot_timeline_root);
+	qot_timeline_chdev_unregister(timeline_priv->info.index);
+	rb_erase(&timeline_priv->node,&qot_timeline_root);
+    kfree(timeline_priv);
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Cleanup the timeline subsystem */
 void qot_timeline_cleanup(struct class *qot_class) {
-	qot_timeline_chdev_cleanup(qot_class);
+    timeline_t *timeline, *timeline_next;
+    /* Remove all timelines */
+    rbtree_postorder_for_each_entry_safe(timeline, timeline_next,
+        &qot_timeline_root, node) {
+        qot_timeline_chdev_unregister(timeline->info.index);
+        rb_erase(&timeline->node,&qot_timeline_root);
+        kfree(timeline);
+    }
+    /* Clean up the character device */
+    qot_timeline_chdev_cleanup(qot_class);
 }
 
 /* Initialize the timeline subsystem */
 qot_return_t qot_timeline_init(struct class *qot_class) {
+    /* Initialize the character device */
     if (qot_timeline_chdev_init(qot_class)) {
         pr_err("qot_timeline: problem calling qot_timeline_chdev_init\n");
         goto fail_chdev_init;

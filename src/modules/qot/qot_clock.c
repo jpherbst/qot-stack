@@ -42,17 +42,14 @@ typedef struct clk {
     struct rb_node node;        /* Red-black tree indexes by name      */
 } clk_t;
 
-/* The current clock set to core (initially this will be NULL)         */
-static clk_t *core = NULL;
-
 /* Root of the red-black tree used to store clocks */
-static struct rb_root qot_core_clock_root = RB_ROOT;
+static struct rb_root qot_clock_root = RB_ROOT;
 
-/* Search for a timeline given by a name */
-static clk_t *qot_core_find_clock(char *name) {
+/* Search for a clock given by a name */
+static clk_t *qot_clock_find(char *name) {
     int result;
     clk_t *clk = NULL;
-    struct rb_node *node = qot_core_clock_root.rb_node;
+    struct rb_node *node = qot_clock_root.rb_node;
     while (node) {
         clk = container_of(node, clk_t, node);
         result = strcmp(name, clk->impl.info.name);
@@ -66,11 +63,11 @@ static clk_t *qot_core_find_clock(char *name) {
     return NULL;
 }
 
-// Insert a timeline into our data structure
-static qot_return_t qot_core_insert_clock(clk_t *clk) {
+/* Insert a clock into our data structure */
+static qot_return_t qot_clock_insert(clk_t *clk) {
     int result;
     clk_t *target = NULL;
-    struct rb_node **new = &(qot_core_clock_root.rb_node), *parent = NULL;
+    struct rb_node **new = &(qot_clock_root.rb_node), *parent = NULL;
     while (*new) {
         target = container_of(*new, clk_t, node);
         result = strcmp(clk->impl.info.name, target->impl.info.name);
@@ -83,24 +80,68 @@ static qot_return_t qot_core_insert_clock(clk_t *clk) {
             return QOT_RETURN_TYPE_ERR;
     }
     rb_link_node(&clk->node, parent, new);
-    rb_insert_color(&clk->node, &qot_core_clock_root);
+    rb_insert_color(&clk->node, &qot_clock_root);
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Public functions */
 
-/* Get the next clock in the list */
-qot_return_t qot_core_clock_next(qot_clock_t *clk) {
+qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!impl)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = kzalloc(sizeof(clk_t), GFP_KERNEL);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
+    if (qot_clock_insert(clk_priv)) {
+        kfree(clk_priv);
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(impl->info.name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    rb_erase(&clk_priv->node,&qot_clock_root);
+    kfree(clk_priv);
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_update(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(impl->info.name);
+    memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Get the next clk in the set */
+qot_return_t qot_clock_first(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     struct rb_node *node;
-    if (!clk) {
-        node = rb_first(&qot_core_clock_root);
-    } else {
-        clk_priv = qot_core_find_clock(clk->name);
-        if (!clk_priv)
-            return QOT_RETURN_TYPE_ERR;
-        node = rb_next(&clk_priv->node);
-    }
+    node = rb_first(&qot_clock_root);
+    clk_priv = rb_entry(node, clk_t, node);
+    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Get the next timeline in the set */
+qot_return_t qot_clock_next(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    struct rb_node *node;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    node = rb_next(&clk_priv->node);
     if (!node)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = rb_entry(node, clk_t, node);
@@ -108,50 +149,60 @@ qot_return_t qot_core_clock_next(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Get information about a clock */
-qot_return_t qot_core_clock_get_info(qot_clock_t *clk) {
+
+qot_return_t qot_clock_get_info(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
+    clk_priv = qot_clock_find(clk->name);
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
     memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Put the specified clock to sleep */
-qot_return_t qot_core_clock_sleep(qot_clock_t *clk) {
+qot_return_t qot_clock_sleep(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
+    clk_priv = qot_clock_find(clk->name);
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
     clk_priv->impl.sleep();
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Wake up the specified clock */
-qot_return_t qot_core_clock_wake(qot_clock_t *clk) {
+qot_return_t qot_clock_wake(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
+    clk_priv = qot_clock_find(clk->name);
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
     clk_priv->impl.wake();
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Switch core to run from this clock */
-qot_return_t qot_core_clock_switch(qot_clock_t *clk) {
+qot_return_t qot_clock_switch(qot_clock_t *clk) {
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
+    clk_priv = qot_clock_find(clk->name);
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
     /* TODO: switch core clock */
+    return QOT_RETURN_TYPE_OK;
+}
+
+void qot_clock_cleanup(struct class *qot_class) {
+    clk_t *clk, *clk_next;
+    /* Remove all clocks */
+    rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
+        rb_erase(&clk->node, &qot_clock_root);
+        kfree(clk);
+    }
+}
+
+qot_return_t qot_clock_init(struct class *qot_class) {
     return QOT_RETURN_TYPE_OK;
 }

@@ -31,7 +31,7 @@
 #include <linux/capability.h>
 #include <linux/slab.h>
 
-#include "qot_internal.h"
+#include "qot_timeline.h"
 
 /*
 static ssize_t ptp_pin_show(struct device *dev, struct device_attribute *attr,

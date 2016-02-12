@@ -30,10 +30,9 @@
 #ifndef QOT_STACK_SRC_MODULES_QOT_QOT_TIMELINE_H
 #define QOT_STACK_SRC_MODULES_QOT_QOT_TIMELINE_H
 
-#include <linux/posix-clock.h>
-#include <linux/poll.h>
+#include "qot_core.h"
 
-#include "qot_exported.h"
+/* qot_timeline.h */
 
 /* All the functions below assume the argument pointer has been allocated */
 
@@ -84,5 +83,50 @@ void qot_timeline_cleanup(struct class *qot_class);
  * @return A status code indicating success (0) or failure (!0)
  **/
 qot_return_t qot_timeline_init(struct class *qot_class);
+
+/* qot_timeline_chdev.h */
+
+/**
+ * @brief Register a new /dev/timelineX character device for the timeline
+ * @param timeline The timeline to register
+ * @return < 0 failure, 0+ the IDR index of the new timeline
+ **/
+int qot_timeline_chdev_register(char *name);
+
+/**
+ * @brief Remove an existing /dev/timelineX character device
+ * @param timeline The timeline to register
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_timeline_chdev_unregister(int index);
+
+/**
+ * @brief Clean up the timeline character device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_timeline_chdev_cleanup(struct class *qot_class);
+
+/**
+ * @brief Initialize the timeline character device subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_timeline_chdev_init(struct class *qot_class);
+
+/* qot_timeline_sysfs.h */
+
+/**
+ * @brief Clean up the timeline sysfs device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_timeline_sysfs_cleanup(struct device *qot_device);
+
+/**
+ * @brief Initialize the timeline sysfs device subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_timeline_sysfs_init(struct device *qot_device);
+
 
 #endif

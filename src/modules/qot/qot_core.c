@@ -46,36 +46,28 @@
 static struct class *qot_class = NULL;
 
 /* Register a clock with the QoT stack */
-qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
-    clk_t *clk_priv = NULL;
-    if (!impl)
+qot_return_t qot_register(qot_clock_impl_t *impl) {
+    if (qot_clock_register(impl))
         return QOT_RETURN_TYPE_ERR;
-    clk_priv = kzalloc(sizeof(clk_t), GFP_KERNEL);
-    if (!clk_priv)
-        return QOT_RETURN_TYPE_ERR;
-    memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
-    if (qot_clock_insert(clk_priv)) {
-        kfree(clk_priv);
-        return QOT_RETURN_TYPE_ERR;
-    }
     return QOT_RETURN_TYPE_OK;
 }
-EXPORT_SYMBOL(qot_clock_register);
+EXPORT_SYMBOL(qot_register);
 
 /* Unregister a clock with the QoT stack */
-qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
-    if (qot_clock_remove(qot_clock_t *clk)
-
-    return QOT_RETURN_TYPE_ERR;
-
+qot_return_t qot_unregister(qot_clock_impl_t *impl) {
+    if (qot_clock_unregister(impl))
+        return QOT_RETURN_TYPE_ERR;
+    return QOT_RETURN_TYPE_OK;
 }
-EXPORT_SYMBOL(qot_clock_unregister);
+EXPORT_SYMBOL(qot_unregister);
 
 /* Notify the QoT stack that the clock properties have changed */
-qot_return_t qot_clock_property_update(qot_clock_impl_t *impl) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t qot_update(qot_clock_impl_t *impl) {
+    if (qot_clock_update(impl))
+        return QOT_RETURN_TYPE_ERR;
+    return QOT_RETURN_TYPE_OK;
 }
-EXPORT_SYMBOL(qot_clock_property_update);
+EXPORT_SYMBOL(qot_update);
 
 /* MODULE INITIALIZATION */
 

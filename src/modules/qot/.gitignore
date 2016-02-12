@@ -31,3 +31,11 @@
 /qot_timeline_chdev.o
 /qot_timeline_clock.o
 /qot_timeline_sysfs.o
+/.qot_admin.o.cmd
+/.qot_clock.o.cmd
+/.qot_clock_sysfs.o.cmd
+/.qot_user.o.cmd
+/qot_admin.o
+/qot_clock.o
+/qot_clock_sysfs.o
+/qot_user.o
