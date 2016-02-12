@@ -2,7 +2,18 @@
 	"folders":
 	[
 		{
-			"path": "."
+			"path": ".",
+			"spell_check": true,
+			"tab_size": 4,
+			"translate_tabs_to_spaces": false,
+			"trim_automatic_white_space": true,
+			"trim_trailing_white_space_on_save": true,
+			"folder_exclude_patterns": [".svn", ".git", ".hg", "CVS",".tmp_versions"],
+			"file_exclude_patterns": ["*.pyc", "*.pyo", "*.exe", "*.dll", "*.obj","*.o",
+			    "*.a", "*.lib", "*.so", "*.dylib", "*.ncb", "*.sdf", "*.suo", "*.pdb",
+			    "*.idb", ".DS_Store", "*.class", "*.psd", "*.db", "*.sublime-workspace",
+			    "*.o.cmd","*.ko.cmd", "*.symvers", "*.order", "*.ko"
+			]
 		}
 	]
 }

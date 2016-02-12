@@ -1,6 +1,6 @@
 /*
- * @file qot_scheduler.c
- * @brief Interface to the QoT Scheduler
+ * @file qot_admin.h
+ * @brief Admin interface to the QoT stack
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -27,21 +27,54 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/module.h>
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_ADMIN_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_ADMIN_H
 
 #include "qot_core.h"
 
-/* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
-	/* TODO */
-}
+/* qot_admin.c */
 
-/* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
-    /* TODO */
-    return QOT_RETURN_TYPE_OK;
-}
+/**
+ * @brief Clean up the admin device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_admin_cleanup(struct class *qot_class);
 
-MODULE_LICENSE("GPL");
+/**
+ * @brief Initialize the admin subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_admin_init(struct class *qot_class);
 
+/* qot_admin_chdev.c */
 
+/**
+ * @brief Clean up the admin character device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_admin_chdev_cleanup(struct class *qot_class);
+
+/**
+ * @brief Initialize the admin character device subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_admin_chdev_init(struct class *qot_class);
+
+/* qot_admin_sysfs.c */
+
+/**
+ * @brief Clean the admin sysfs subsystem
+ * @param qot_device Device against which to attach the attributes
+ **/
+void qot_admin_sysfs_cleanup(struct device *qot_device);
+
+/**
+ * @brief Initialize the admin sysfs subsystem
+ * @param qot_device Device against which to remove the attributes
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_admin_sysfs_init(struct device *qot_device);
+
+#endif

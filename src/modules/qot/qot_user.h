@@ -1,6 +1,6 @@
 /*
- * @file qot_core.h
- * @brief Interfaces used by clocks to interact with core
+ * @file qot_user.h
+ * @brief user interface for the QoT stack
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -27,39 +27,42 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <linux/module.h>
-#include <linux/posix-clock.h>
-#include <linux/poll.h>
-#include <linux/sched.h>
-#include <linux/slab.h>
+#ifndef QOT_STACK_SRC_MODULES_QOT_QOT_USER_H
+#define QOT_STACK_SRC_MODULES_QOT_QOT_USER_H
 
-#include "qot_internal.h"
+#include "qot_core.h"
 
-static s32 scaled_ppm_to_ppb(long ppm) {
-    s64 ppb = 1 + ppm;
-    ppb *= 125;
-    ppb >>= 13;
-    return (s32) ppb;
-}
+/* qot_admin_user.c */
 
-/* posix clock implementation */
+/**
+ * @brief Clean up the user subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_user_cleanup(struct class *qot_class);
 
-static int qot_timeline_clock_getres(struct posix_clock *pc,
-    struct timespec *tp) {
-    return 0;
-}
+/**
+ * @brief Initialize the user subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_user_init(struct class *qot_class);
 
-static int qot_timeline_clock_settime(struct posix_clock *pc,
-    const struct timespec *tp) {
-    return 0;
-}
+/* qot_admin_chdev.c */
 
-static int qot_timeline_clock_gettime(struct posix_clock *pc,
-    struct timespec *tp) {
-    return 0;
-}
+/**
+ * @brief Clean up the user character device subsystem
+ * @param qot_class Device class for all QoT devices
+ **/
+void qot_user_chdev_cleanup(struct class *qot_class);
 
-static int qot_timeline_clock_adjtime(struct posix_clock *pc,
-    struct timex *tx) {
-    return 0;
-}
+/**
+ * @brief Initialize the user character device subsystem
+ * @param qot_class Device class for all QoT devices
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_user_chdev_init(struct class *qot_class);
+
+
+#endif
+
+

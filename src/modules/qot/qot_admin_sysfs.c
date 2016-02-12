@@ -31,73 +31,74 @@
 #include <linux/capability.h>
 #include <linux/slab.h>
 
-#include "qot_internal.h"
+#include "qot_admin.h"
+#include "qot_clock.h"
+#include "qot_timeline.h"
 
 /*
-static ssize_t ptp_pin_show(struct device *dev, struct device_attribute *attr,
-    char *page) {
-
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int index;
-
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
-        return -EINVAL;
-
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-
-    func = ptp->info->pin_config[index].func;
-    chan = ptp->info->pin_config[index].chan;
-
-    mutex_unlock(&ptp->pincfg_mux);
-
-    return snprintf(page, PAGE_SIZE, "%u %u\n", func, chan);
-}
-
-static ssize_t ptp_pin_store(struct device *dev, struct device_attribute *attr,
-    const char *buf, size_t count) {
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int cnt, err, index;
-
-    cnt = sscanf(buf, "%u %u", &func, &chan);
-    if (cnt != 2)
-        return -EINVAL;
-
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
-        return -EINVAL;
-
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-    err = ptp_set_pinfunc(ptp, index, func, chan);
-    mutex_unlock(&ptp->pincfg_mux);
-    if (err)
-        return err;
-
-    return count;
-}
+   Only *general* functions are supported:
+   Timelines : R: list, W: create, remove, remove all
+   Clocks    : R: list, R/w: core (view and switch)
+   Introspection of the timelines and clocks is done on the devices
 */
 
-DEVICE_ATTR(timeline_remove_all,    0600,   NULL, NULL);
-DEVICE_ATTR(timeline_remove,        0600,   NULL, NULL);
-DEVICE_ATTR(timeline_create,        0600,   NULL, NULL);
-DEVICE_ATTR(timeline_list,          0600,   NULL, NULL);
-DEVICE_ATTR(timeline_info,          0600,   NULL, NULL);
-DEVICE_ATTR(clock_list,             0600,   NULL, NULL);
-DEVICE_ATTR(clock_info,             0600,   NULL, NULL);
-DEVICE_ATTR(clock_core,             0600,   NULL, NULL);
+/* Create a timeline */
+static ssize_t timeline_create_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+    qot_timeline_t timeline;
+    int cnt = sscanf(buf, "%s", timeline.name);
+    if (cnt != 1) {
+    	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
+        return -EINVAL;
+    }
+    if (qot_timeline_create(&timeline)) {
+    	pr_err("qot_admin_sysfs: could not create a timeline\n");
+    	return -EINVAL;
+    }
+    return count;
+}
+DEVICE_ATTR(timeline_create, 0600, NULL, timeline_create_store);
+
+/* Destroy a timeline */
+static ssize_t timeline_remove_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+    qot_timeline_t timeline;
+    int cnt = sscanf(buf, "%s", timeline.name);
+    if (cnt != 1) {
+    	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
+        return -EINVAL;
+    }
+	if (qot_timeline_remove(&timeline)) {
+		pr_err("qot_admin_sysfs: could not remove a timeline\n");
+		return -EINVAL;
+	}
+    return count;
+}
+DEVICE_ATTR(timeline_remove, 0600, NULL, timeline_remove_store);
+
+/* Remove all timelines */
+static ssize_t timeline_remove_all_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+	qot_timeline_remove_all();
+    return count;
+}
+DEVICE_ATTR(timeline_remove_all, 0600, NULL, timeline_remove_all_store);
+
+/* List all timelines */
+static ssize_t clock_core_show(struct device *dev,
+    struct device_attribute *attr, char *buf) {
+    return 0;
+}
+static ssize_t clock_core_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+    return count;
+}
+DEVICE_ATTR(clock_core, 0600, clock_core_show, clock_core_store);
 
 static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
     &dev_attr_timeline_remove.attr,
     &dev_attr_timeline_create.attr,
-    &dev_attr_timeline_list.attr,
-    &dev_attr_timeline_info.attr,
-    &dev_attr_clock_list.attr,
-    &dev_attr_clock_info.attr,
     &dev_attr_clock_core.attr,
     NULL,
 };

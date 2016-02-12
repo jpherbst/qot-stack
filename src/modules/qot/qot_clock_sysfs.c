@@ -1,6 +1,6 @@
 /*
- * @file qot_scheduler.c
- * @brief Interface to the QoT Scheduler
+ * @file qot_clock_sysfs.c
+ * @brief Admin sysfs interface to clocks
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -26,22 +26,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include <linux/module.h>
+#include <linux/cdev.h>
+#include <linux/capability.h>
+#include <linux/slab.h>
 
-#include "qot_core.h"
+#include "qot_clock.h"
 
-/* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
-	/* TODO */
+void qot_clock_sysfs_cleanup(struct device *qot_device) {
+    /* DO nothing */
 }
 
-/* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
-    /* TODO */
+qot_return_t qot_clock_sysfs_init(struct device *qot_device) {
     return QOT_RETURN_TYPE_OK;
 }
-
-MODULE_LICENSE("GPL");
-
-

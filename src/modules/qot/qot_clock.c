@@ -1,0 +1,231 @@
+/*
+ * @file qot_clock.c
+ * @brief Interface to clock management in the QoT stack
+ * @author Andrew Symington
+ *
+ * Copyright (c) Regents of the University of California, 2015.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice,
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/slab.h>
+#include <linux/rbtree.h>
+
+#include "qot_clock.h"
+
+/* Private data */
+
+/* Internal clock type */
+typedef struct clk {
+    qot_clock_impl_t impl;      /* Driver implementation               */
+    struct rb_node node;        /* Red-black tree indexes by name      */
+} clk_t;
+
+/* Root of the red-black tree used to store clocks */
+static struct rb_root qot_clock_root = RB_ROOT;
+
+/* Search for a clock given by a name */
+static clk_t *qot_clock_find(char *name) {
+    int result;
+    clk_t *clk = NULL;
+    struct rb_node *node = qot_clock_root.rb_node;
+    while (node) {
+        clk = container_of(node, clk_t, node);
+        result = strcmp(name, clk->impl.info.name);
+        if (result < 0)
+            node = node->rb_left;
+        else if (result > 0)
+            node = node->rb_right;
+        else
+            return clk;
+    }
+    return NULL;
+}
+
+/* Insert a clock into our data structure */
+static qot_return_t qot_clock_insert(clk_t *clk) {
+    int result;
+    clk_t *target = NULL;
+    struct rb_node **new = &(qot_clock_root.rb_node), *parent = NULL;
+    while (*new) {
+        target = container_of(*new, clk_t, node);
+        result = strcmp(clk->impl.info.name, target->impl.info.name);
+        parent = *new;
+        if (result < 0)
+            new = &((*new)->rb_left);
+        else if (result > 0)
+            new = &((*new)->rb_right);
+        else
+            return QOT_RETURN_TYPE_ERR;
+    }
+    rb_link_node(&clk->node, parent, new);
+    rb_insert_color(&clk->node, &qot_clock_root);
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Public functions */
+
+qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!impl)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = kzalloc(sizeof(clk_t), GFP_KERNEL);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
+    if (qot_clock_insert(clk_priv)) {
+        kfree(clk_priv);
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(impl->info.name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    rb_erase(&clk_priv->node,&qot_clock_root);
+    kfree(clk_priv);
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_update(qot_clock_impl_t *impl) {
+    clk_t *clk_priv = NULL;
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(impl->info.name);
+    memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Get the next clk in the set */
+qot_return_t qot_clock_first(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    struct rb_node *node;
+    node = rb_first(&qot_clock_root);
+    clk_priv = rb_entry(node, clk_t, node);
+    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Get the next timeline in the set */
+qot_return_t qot_clock_next(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    struct rb_node *node;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    node = rb_next(&clk_priv->node);
+    if (!node)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = rb_entry(node, clk_t, node);
+    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_get_info(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_remove(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    /* Make certain that clk->index has been set */
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    /* TODO: Remove any inner structures */
+    rb_erase(&clk_priv->node,&qot_clock_root);
+    kfree(clk_priv);
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Remove all timelines */
+void qot_clock_remove_all(void) {
+    clk_t *clk, *clk_next;
+    rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
+        /* TODO: Remove any inner structures */
+        rb_erase(&clk->node,&qot_clock_root);
+        kfree(clk);
+    }
+}
+
+qot_return_t qot_clock_sleep(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv->impl.sleep();
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_wake(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv->impl.wake();
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_switch(qot_clock_t *clk) {
+    clk_t *clk_priv = NULL;
+    if (!clk)
+        return QOT_RETURN_TYPE_ERR;
+    clk_priv = qot_clock_find(clk->name);
+    if (!clk_priv)
+        return QOT_RETURN_TYPE_ERR;
+    /* TODO: switch core clock */
+    return QOT_RETURN_TYPE_OK;
+}
+
+void qot_clock_cleanup(struct class *qot_class) {
+    clk_t *clk, *clk_next;
+    /* Remove all clocks */
+    rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
+        rb_erase(&clk->node, &qot_clock_root);
+        kfree(clk);
+    }
+}
+
+qot_return_t qot_clock_init(struct class *qot_class) {
+    return QOT_RETURN_TYPE_OK;
+}

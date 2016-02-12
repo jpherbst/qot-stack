@@ -35,22 +35,29 @@
 #include <linux/rbtree.h>
 #include <linux/sched.h>
 
-#include "qot_internal.h"
+#include "qot_admin.h"
+#include "qot_clock.h"
 
 #define DEVICE_NAME "qotadm"
 
-/* Information required to open a character device */
-static struct device *qot_device = NULL;
-static int qot_major;
+/* Internal event type */
+typedef struct event {
+    qot_event_t info;            /* The event type                      */
+    struct list_head list;       /* The list of events head             */
+} event_t;
 
 /* Information that allows us to maintain parallel cchardev connections */
-typedef  struct qot_admin_chdev_con {
+typedef struct qot_admin_chdev_con {
     struct rb_node node;                /* Red-black tree node */
     struct file *fileobject;            /* File object         */
     wait_queue_head_t wq;               /* Wait queue          */
     int event_flag;                     /* Data ready flag     */
     struct list_head event_list;        /* Event list          */
 } qot_admin_chdev_con_t;
+
+/* Information required to open a character device */
+static struct device *qot_device = NULL;
+static int qot_major;
 
 /* Root of the red-black tree used to store parallel connections */
 static struct rb_root qot_admin_chdev_con_root = RB_ROOT;
@@ -125,8 +132,10 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f) {
     /* Create a new connection */
     qot_admin_chdev_con_t *con =
         kzalloc(sizeof(qot_admin_chdev_con_t), GFP_KERNEL);
-    if (!con)
-        goto fail2;
+    if (!con) {
+        pr_err("qot_user_chdev: failed to allocate memory for connection\n");
+        return -ENOMEM;
+    }
     INIT_LIST_HEAD(&con->event_list);
     init_waitqueue_head(&con->wq);
     con->fileobject = f;
@@ -137,26 +146,21 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f) {
 
     /* Notify the connection (by polling) of all existing timelines */
     clk = NULL;
-    while (qot_core_clock_next(clk)==QOT_RETURN_TYPE_OK) {
-        event = kzalloc(sizeof(event_t), GFP_KERNEL);
-        if (!event)
-            goto fail1;
-        event->info.type = QOT_EVENT_CLOCK_CREATE;
-        strncpy(event->info.data,clk->name,QOT_MAX_NAMELEN);
-        list_add_tail(&event->list, &con->event_list);
+    if (qot_clock_first(clk)==QOT_RETURN_TYPE_OK) {
+        do {
+            event = kzalloc(sizeof(event_t), GFP_KERNEL);
+            if (!event) {
+                pr_warn("qot_user_chdev: failed to allocate event\n");
+                continue;
+            }
+            event->info.type = QOT_EVENT_CLOCK_CREATE;
+            strncpy(event->info.data,clk->name,QOT_MAX_NAMELEN);
+            list_add_tail(&event->list, &con->event_list);
+        } while (qot_clock_next(clk)==QOT_RETURN_TYPE_OK);
+        con->event_flag = 1;
+        wake_up_interruptible(&con->wq);
     }
-    con->event_flag = 1;
-    wake_up_interruptible(&con->wq);
-
-    /* Success */
     return 0;
-
-fail1:
-    /* Connection allocated, couln't be added to red-black tree */
-    qot_admin_chdev_con_free(con);
-fail2:
-    /* Connection allocation issue */
-    return -ENOMEM;
 }
 
 /* chardev ioctl close callback implementation */
@@ -198,7 +202,7 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
     case QOTADM_GET_CLOCK_INFO:
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
-        if (qot_core_clock_get_info(&msgc))
+        if (qot_clock_get_info(&msgc))
             return -EACCES;
         if (copy_to_user((qot_clock_t*)arg, &msgc, sizeof(qot_clock_t)))
             return -EACCES;
@@ -207,21 +211,21 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
     case QOTADM_SET_CLOCK_SLEEP:
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
-        if (qot_core_clock_sleep(&msgc))
+        if (qot_clock_sleep(&msgc))
             return -EACCES;
         break;
     /* Tell a clock to wake up */
     case QOTADM_SET_CLOCK_WAKE:
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
-        if (qot_core_clock_wake(&msgc))
+        if (qot_clock_wake(&msgc))
             return -EACCES;
         break;
     /* Switch core to a specific clock */
     case QOTADM_SET_CLOCK_ACTIVE:
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
-        if (qot_core_clock_switch(&msgc))
+        if (qot_clock_switch(&msgc))
             return -EACCES;
         break;
     default:

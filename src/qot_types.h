@@ -307,17 +307,21 @@ typedef struct qot_event {
 /* QoT timeline type */
 typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name          */
-    timequality_t dominating;            /* Dominating QoT         */
-    timequality_t achieved;              /* Achieved QoT           */
     int index;                           /* The integer Y in /dev/timelineY */
 } qot_timeline_t;
 
 /* QoT timeline type */
 typedef struct qot_binding {
-    char name[QOT_MAX_NAMELEN];          /* Binding name           */
-    char timeline[QOT_MAX_NAMELEN];      /* Timeline uuid          */
     timequality_t demand;                /* Requested QoT          */
 } qot_binding_t;
+
+/**
+ * @brief Ioctl messages supported by /dev/qotusr
+ */
+#define QOTUSR_MAGIC_CODE  0xEE
+#define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
+#define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
+#define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 
 /* QoT clock type (admin only) */
 typedef struct qot_clock {
@@ -330,14 +334,6 @@ typedef struct qot_clock {
     scalar_t errors[QOT_CLK_ERR_NUM];   /* Error characteristics        */
     int phc_id;                         /* The integer X in /dev/ptpX   */
 } qot_clock_t;
-
-/**
- * @brief Ioctl messages supported by /dev/qotusr
- */
-#define QOTUSR_MAGIC_CODE  0xEE
-#define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
-#define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
-#define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 
 /**
  * @brief Key messages supported by /dev/qotadm
