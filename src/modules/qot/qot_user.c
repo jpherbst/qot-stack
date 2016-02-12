@@ -1,6 +1,6 @@
 /*
  * @file qot_scheduler.c
- * @brief Interface to the QoT Scheduler
+ * @brief user interface for the QoT stack
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -29,16 +29,21 @@
 
 #include <linux/module.h>
 
-#include "qot_scheduler.h"
+#include "qot_user.h"
 
 /* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
-	/* TODO */
+void qot_user_cleanup(struct class *qot_class) {
+	qot_user_chdev_cleanup(qot_class);
 }
 
 /* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
-    /* TODO */
+qot_return_t qot_user_init(struct class *qot_class) {
+    if (qot_user_chdev_init(qot_class)) {
+        pr_err("qot_user: problem calling qot_user_chdev_init\n");
+        goto fail_chdev_init;
+    }
+    return QOT_RETURN_TYPE_OK;
+fail_chdev_init:
     return QOT_RETURN_TYPE_ERR;
 }
 

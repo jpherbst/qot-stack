@@ -32,236 +32,18 @@
 #include <linux/slab.h>
 #include <linux/rbtree.h>
 
-#include "qot_internal.h"
+/* Project submodules */
+#include "qot_clock.h"
+#include "qot_timeline.h"
+#include "qot_scheduler.h"
+#include "qot_admin.h"
+#include "qot_user.h"
 
-/* Internal timeline type */
-typedef struct timeline {
-    qot_timeline_t info;        /* Timeline information                */
-    struct rb_node node;        /* Red-black tree indexes by name      */
-} timeline_t;
-
-/* Internal clock type */
-typedef struct clk {
-    qot_clock_impl_t impl;      /* Driver implementation               */
-    struct rb_node node;        /* Red-black tree indexes by name      */
-} clk_t;
-
-/* The current clock set to core (initially this will be NULL)         */
-static clk_t *core = NULL;
-
-/* Root of the red-black tree used to store timelines */
-static struct rb_root qot_core_timeline_root = RB_ROOT;
-
-/* Root of the red-black tree used to store clocks */
-static struct rb_root qot_core_clock_root = RB_ROOT;
+/* All device drivers must be registered with this class to appear in sysfs */
+#define CLASS_NAME "qot"
 
 /* Class to hold all QoT devices */
 static struct class *qot_class = NULL;
-
-/* PRIVATE FUNCTIONS */
-
-/* Search for a timeline given by a name */
-static timeline_t *qot_core_find_timeline(char *name) {
-    int result;
-    timeline_t *timeline = NULL;
-    struct rb_node *node = qot_core_timeline_root.rb_node;
-    while (node) {
-        timeline = container_of(node, timeline_t, node);
-        result = strcmp(name, timeline->info.name);
-        if (result < 0)
-            node = node->rb_left;
-        else if (result > 0)
-            node = node->rb_right;
-        else
-            return timeline;
-    }
-    return NULL;
-}
-
-// Insert a timeline into our data structure
-static qot_return_t qot_core_insert_timeline(timeline_t *timeline) {
-    int result;
-    timeline_t *target;
-    struct rb_node **new = &(qot_core_timeline_root.rb_node), *parent = NULL;
-    while (*new) {
-        target = container_of(*new, timeline_t, node);
-        result = strcmp(timeline->info.name, target->info.name);
-        parent = *new;
-        if (result < 0)
-            new = &((*new)->rb_left);
-        else if (result > 0)
-            new = &((*new)->rb_right);
-        else
-            return QOT_RETURN_TYPE_ERR;
-    }
-    rb_link_node(&timeline->node, parent, new);
-    rb_insert_color(&timeline->node, &qot_core_timeline_root);
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Search for a timeline given by a name */
-static clk_t *qot_core_find_clock(char *name) {
-    int result;
-    clk_t *clk = NULL;
-    struct rb_node *node = qot_core_clock_root.rb_node;
-    while (node) {
-        clk = container_of(node, clk_t, node);
-        result = strcmp(name, clk->impl.info.name);
-        if (result < 0)
-            node = node->rb_left;
-        else if (result > 0)
-            node = node->rb_right;
-        else
-            return clk;
-    }
-    return NULL;
-}
-
-// Insert a timeline into our data structure
-static qot_return_t qot_core_insert_clock(clk_t *clk) {
-    int result;
-    clk_t *target = NULL;
-    struct rb_node **new = &(qot_core_clock_root.rb_node), *parent = NULL;
-    while (*new) {
-        target = container_of(*new, clk_t, node);
-        result = strcmp(clk->impl.info.name, target->impl.info.name);
-        parent = *new;
-        if (result < 0)
-            new = &((*new)->rb_left);
-        else if (result > 0)
-            new = &((*new)->rb_right);
-        else
-            return QOT_RETURN_TYPE_ERR;
-    }
-    rb_link_node(&clk->node, parent, new);
-    rb_insert_color(&clk->node, &qot_core_clock_root);
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* INTERNAL FUNCTIONS */
-
-/* Get the next timeline in the set */
-qot_return_t qot_core_timeline_next(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv = NULL;
-    struct rb_node *node;
-    if (!timeline) {
-        node = rb_first(&qot_core_clock_root);
-    } else {
-        timeline_priv = qot_core_find_timeline(timeline->name);
-        if (!timeline_priv)
-            return QOT_RETURN_TYPE_ERR;
-        node = rb_next(&timeline_priv->node);
-    }
-    if (!node)
-        return QOT_RETURN_TYPE_ERR;
-    timeline_priv = rb_entry(node, timeline_t, node);
-    memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Get information about a timeline */
-qot_return_t qot_core_timeline_get_info(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv = NULL;
-    if (!timeline)
-        return QOT_RETURN_TYPE_ERR;
-    timeline_priv = qot_core_find_timeline(timeline->name);
-    if (!timeline_priv)
-        return QOT_RETURN_TYPE_ERR;
-    memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Creata a new timeline */
-qot_return_t qot_core_timeline_create(qot_timeline_t *timeline) {
-    timeline_t *timeline_priv = NULL;
-    if (!timeline)
-        return QOT_RETURN_TYPE_ERR;
-    /* If successful, timeline->index will be assigned an IDR integer */
-    if (qot_timeline_register(timeline))
-        return QOT_RETURN_TYPE_ERR;
-    if (qot_core_insert_timeline(timeline_priv)) {
-        qot_timeline_unregister(timeline->index);
-        return QOT_RETURN_TYPE_ERR;
-    }
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Creata a new timeline */
-qot_return_t qot_core_timeline_remove(int index) {
-    if (qot_timeline_unregister(index)) {
-        return QOT_RETURN_TYPE_ERR;
-    }
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Get the next clock in the list */
-qot_return_t qot_core_clock_next(qot_clock_t *clk) {
-    clk_t *clk_priv = NULL;
-    struct rb_node *node;
-    if (!clk) {
-        node = rb_first(&qot_core_clock_root);
-    } else {
-        clk_priv = qot_core_find_clock(clk->name);
-        if (!clk_priv)
-            return QOT_RETURN_TYPE_ERR;
-        node = rb_next(&clk_priv->node);
-    }
-    if (!node)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv = rb_entry(node, clk_t, node);
-    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Get information about a clock */
-qot_return_t qot_core_clock_get_info(qot_clock_t *clk) {
-    clk_t *clk_priv = NULL;
-    if (!clk)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
-    if (!clk_priv)
-        return QOT_RETURN_TYPE_ERR;
-    memcpy(clk,&clk_priv->impl.info,sizeof(qot_clock_t));
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Put the specified clock to sleep */
-qot_return_t qot_core_clock_sleep(qot_clock_t *clk) {
-    clk_t *clk_priv = NULL;
-    if (!clk)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
-    if (!clk_priv)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv->impl.sleep();
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Wake up the specified clock */
-qot_return_t qot_core_clock_wake(qot_clock_t *clk) {
-    clk_t *clk_priv = NULL;
-    if (!clk)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
-    if (!clk_priv)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv->impl.wake();
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* Switch core to run from this clock */
-qot_return_t qot_core_clock_switch(qot_clock_t *clk) {
-    clk_t *clk_priv = NULL;
-    if (!clk)
-        return QOT_RETURN_TYPE_ERR;
-    clk_priv = qot_core_find_clock(clk->name);
-    if (!clk_priv)
-        return QOT_RETURN_TYPE_ERR;
-    /* TODO: switch core clock */
-    return QOT_RETURN_TYPE_OK;
-}
-
-/* EXPORTED SYMBOLS */
 
 /* Register a clock with the QoT stack */
 qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
@@ -272,7 +54,7 @@ qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
     memcpy(&clk_priv->impl,impl,sizeof(qot_clock_impl_t));
-    if (qot_core_insert_clock(clk_priv)) {
+    if (qot_clock_insert(clk_priv)) {
         kfree(clk_priv);
         return QOT_RETURN_TYPE_ERR;
     }
@@ -282,7 +64,10 @@ EXPORT_SYMBOL(qot_clock_register);
 
 /* Unregister a clock with the QoT stack */
 qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
+    if (qot_clock_remove(qot_clock_t *clk)
+
     return QOT_RETURN_TYPE_ERR;
+
 }
 EXPORT_SYMBOL(qot_clock_unregister);
 
@@ -296,26 +81,41 @@ EXPORT_SYMBOL(qot_clock_property_update);
 
 /* Initialize the QoT core */
 static int qot_init(void) {
-    int ret;
     qot_class = class_create(THIS_MODULE, CLASS_NAME);
     if (IS_ERR(qot_class)) {
         pr_err("qot_chardev_usr: cannot create device class\n");
         goto failed_classreg;
     }
-    ret = qot_admin_chdev_init(qot_class);
-    if (ret) {
-        pr_err("qot_core: problem calling qot_chardev_adm_init\n");
-        goto fail_adm;
+    if (qot_clock_init(qot_class)) {
+        pr_err("qot_core: problem calling qot_clock_init\n");
+        goto fail_clock;
     }
-    ret = qot_user_chdev_init(qot_class);
-    if (ret) {
-        pr_err("qot_core: problem calling qot_chardev_usr_init\n");
-        goto fail_usr;
+    if (qot_timeline_init(qot_class)) {
+        pr_err("qot_core: problem calling qot_timeline_init\n");
+        goto fail_timeline;
+    }
+    if (qot_scheduler_init(qot_class)) {
+        pr_err("qot_core: problem calling qot_scheduler_init\n");
+        goto fail_scheduler;
+    }
+    if (qot_admin_init(qot_class)) {
+        pr_err("qot_core: problem calling qot_admin_init\n");
+        goto fail_admin;
+    }
+    if (qot_user_init(qot_class)) {
+        pr_err("qot_core: problem calling qot_user_init\n");
+        goto fail_user;
     }
     return 0;
-fail_usr:
-    qot_admin_chdev_cleanup(qot_class);
-fail_adm:
+fail_user:
+    qot_admin_cleanup(qot_class);
+fail_admin:
+    qot_scheduler_cleanup(qot_class);
+fail_scheduler:
+    qot_timeline_cleanup(qot_class);
+fail_timeline:
+    qot_clock_cleanup(qot_class);
+fail_clock:
     class_destroy(qot_class);
 failed_classreg:
 	return 1;
@@ -323,8 +123,11 @@ failed_classreg:
 
 /* Cleanup the QoT core */
 static void qot_cleanup(void) {
-    qot_user_chdev_cleanup(qot_class);
-    qot_admin_chdev_cleanup(qot_class);
+    qot_user_cleanup(qot_class);
+    qot_admin_cleanup(qot_class);
+    qot_scheduler_cleanup(qot_class);
+    qot_timeline_cleanup(qot_class);
+    qot_clock_cleanup(qot_class);
     class_destroy(qot_class);
 }
 

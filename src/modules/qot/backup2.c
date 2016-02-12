@@ -1,50 +1,16 @@
-/*
- * @file qot_core.h
- * @brief Interfaces used by clocks to interact with core
- * @author Andrew Symington
- *
- * Copyright (c) Regents of the University of California, 2015.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *  1. Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright notice,
- *     this list of conditions and the following disclaimer in the documentation
- *     and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
 
-#include <linux/idr.h>
-#include <linux/device.h>
-#include <linux/err.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/posix-clock.h>
-#include <linux/pps_kernel.h>
-#include <linux/slab.h>
-#include <linux/syscalls.h>
-#include <linux/uaccess.h>
-#include <linux/spinlock.h>
 
-#include "qot_internal.h"
 
-#define DEVICE_NAME "timeline"
 
-/* PRIVATE */
+
+
+
+
+
+
+
+
+
 
 static dev_t timeline_devt;
 static struct class *timeline_class;
@@ -62,58 +28,13 @@ typedef struct timeline_impl {
     struct posix_clock clock;   /* POSIX clock for this timeline   */
 } timeline_impl_t;
 
-/* File operations operations */
-
- int qot_timeline_chdev_getres(struct posix_clock *pc,
-    struct timespec *tp) {
-    return 0;
-}
-
-int qot_timeline_chdev_settime(struct posix_clock *pc,
-    const struct timespec *tp) {
-    return 0;
-}
-
-int qot_timeline_chdev_gettime(struct posix_clock *pc,
-    struct timespec *tp) {
-    return 0;
-}
-
-int qot_timeline_chdev_adjtime(struct posix_clock *pc,
-    struct timex *tx) {
-    return 0;
-}
-
-int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode) {
-	return 0;
-}
-
-int qot_timeline_chdev_release(struct posix_clock *pc) {
-    return 0;
-}
-
-long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
-    unsigned long arg) {
-	return 0;
-}
-
-unsigned int qot_timeline_chdev_poll(struct posix_clock *pc, struct file *fp,
-    poll_table *wait) {
-	return 0;
-}
-
-ssize_t qot_timeline_chdev_read(struct posix_clock *pc, uint rdflags,
-    char __user *buf, size_t cnt) {
-	return 0;
-}
-
 /* File operations for a given timeline */
 static struct posix_clock_operations qot_clock_ops = {
 	.owner		    = THIS_MODULE,
-	.clock_adjtime	= qot_timeline_chdev_adjtime,
-	.clock_gettime	= qot_timeline_chdev_gettime,
-	.clock_getres	= qot_timeline_chdev_getres,
-	.clock_settime	= qot_timeline_chdev_settime,
+	.clock_adjtime	= qot_timeline_clock_adjtime,
+	.clock_gettime	= qot_timeline_clock_gettime,
+	.clock_getres	= qot_timeline_clock_getres,
+	.clock_settime	= qot_timeline_clock_settime,
 	.ioctl		    = qot_timeline_chdev_ioctl,
 	.open		    = qot_timeline_chdev_open,
     .release        = qot_timeline_chdev_release,
@@ -121,7 +42,7 @@ static struct posix_clock_operations qot_clock_ops = {
 	.read		    = qot_timeline_chdev_read,
 };
 
-static void qot_timeline_chdev_delete(struct posix_clock *pc) {
+static void qot_timeline_delete(struct posix_clock *pc) {
     timeline_impl_t *timeline_impl = container_of(pc, timeline_impl_t, clock);
     idr_remove(&qot_timelines_map, timeline_impl->index);
     kfree(timeline_impl);
@@ -130,7 +51,7 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc) {
 /* PUBLIC */
 
 /* Create the timeline and return an index that identifies it uniquely */
-qot_return_t qot_timeline_chdev_register(qot_timeline_t *timeline) {
+qot_return_t qot_timeline_register(qot_timeline_t *timeline) {
     timeline_impl_t *timeline_impl;
     int major = MAJOR(timeline_devt);   /* Allocate a major number for device */
     if (!timeline)
@@ -182,7 +103,7 @@ fail_memoryalloc:
 }
 
 /* Destroy the timeline based on an index */
-qot_return_t qot_timeline_chdev_unregister(int index) {
+qot_return_t qot_timeline_unregister(int index) {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
     if (!timeline_impl)
         return QOT_RETURN_TYPE_ERR;
@@ -194,7 +115,7 @@ qot_return_t qot_timeline_chdev_unregister(int index) {
 }
 
 /* Cleanup the timeline system */
-void qot_timeline_chdev_cleanup(struct class *qot_class) {
+void qot_timeline_cleanup(struct class *qot_class) {
     /* Remove the character device region */
 	unregister_chrdev_region(timeline_devt, MINORMASK + 1);
     /* Shut down the IDR subsystem */
@@ -202,7 +123,7 @@ void qot_timeline_chdev_cleanup(struct class *qot_class) {
 }
 
 /* Initialize the timeline system */
-qot_return_t qot_timeline_chdev_init(struct class *qot_class) {
+qot_return_t qot_timeline_init(struct class *qot_class) {
     int err;
     /* Copy the device class to help with future chdev allocations */
     if (!qot_class)
@@ -216,6 +137,3 @@ qot_return_t qot_timeline_chdev_init(struct class *qot_class) {
     spin_lock_init(&qot_timelines_lock);
     return QOT_RETURN_TYPE_OK;
 }
-
-MODULE_LICENSE("GPL");
-

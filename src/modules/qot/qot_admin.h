@@ -1,6 +1,6 @@
 /*
- * @file qot_scheduler.c
- * @brief Interface to the QoT Scheduler
+ * @file qot_admin.h
+ * @brief Administration interface for the QoT stack
  * @author Andrew Symington
  *
  * Copyright (c) Regents of the University of California, 2015.
@@ -29,18 +29,13 @@
 
 #include <linux/module.h>
 
-#include "qot_scheduler.h"
+#include "qot_internal.h"
 
-/* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
-	/* TODO */
-}
+/* Cleanup the admin subsystem */
+void qot_admin_cleanup(struct class *qot_class);
 
-/* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
-    /* TODO */
-    return QOT_RETURN_TYPE_ERR;
-}
+/* Initialize the admin subsystem */
+qot_return_t qot_admin_init(struct class *qot_class);
 
 MODULE_LICENSE("GPL");
 

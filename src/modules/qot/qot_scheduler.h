@@ -1,5 +1,5 @@
 /*
- * @file qot_scheduler.c
+ * @file qot_scheduler.h
  * @brief Interface to the QoT Scheduler
  * @author Andrew Symington
  *
@@ -29,18 +29,13 @@
 
 #include <linux/module.h>
 
-#include "qot_scheduler.h"
+#include "qot_exported.h"
 
 /* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
-	/* TODO */
-}
+void qot_scheduler_cleanup(struct class *qot_class);
 
 /* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
-    /* TODO */
-    return QOT_RETURN_TYPE_ERR;
-}
+qot_return_t qot_scheduler_init(struct class *qot_class);
 
 MODULE_LICENSE("GPL");
 

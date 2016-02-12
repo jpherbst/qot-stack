@@ -31,74 +31,109 @@
 #include <linux/capability.h>
 #include <linux/slab.h>
 
-#include "qot_internal.h"
+#include "qot_timeline.h"
 
 /*
-static ssize_t ptp_pin_show(struct device *dev, struct device_attribute *attr,
-    char *page) {
+   Only *general* functions are supported:
+   Timelines : R: list, W: create, remove, remove all
+   Clocks    : R: list, R/w: core (view and switch)
+   Introspection of the timelines and clocks is done on the devices
+*/
 
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int index;
-
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
+/* Create a timeline */
+static ssize_t s_timeline_create(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+    qot_timeline_t timeline;
+    cnt = sscanf(buf, "%s", timeline.name);
+    if (cnt != 1) {
+    	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
         return -EINVAL;
-
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-
-    func = ptp->info->pin_config[index].func;
-    chan = ptp->info->pin_config[index].chan;
-
-    mutex_unlock(&ptp->pincfg_mux);
-
-    return snprintf(page, PAGE_SIZE, "%u %u\n", func, chan);
+    }
+    if (qot_core_timeline_create(&timeline)) {
+    	pr_err("qot_admin_sysfs: could not create a timeline\n");
+    	return -EINVAL;
+    }
+    return count;
 }
+DEVICE_ATTR(timeline_create, 0600, NULL, s_timeline_create);
 
-static ssize_t ptp_pin_store(struct device *dev, struct device_attribute *attr,
-    const char *buf, size_t count) {
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int cnt, err, index;
-
-    cnt = sscanf(buf, "%u %u", &func, &chan);
-    if (cnt != 2)
+/* Destroy a timeline */
+static ssize_t s_timeline_remove(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+    qot_timeline_t timeline;
+    cnt = sscanf(buf, "%s", timeline.name);
+    if (cnt != 1) {
+    	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
         return -EINVAL;
+    }
+	if (qot_core_timeline_remove(&timeline)) {
+		pr_err("qot_admin_sysfs: could not remove a timeline\n");
+		return -EINVAL;
+	}
+    return count;
+}
+DEVICE_ATTR(timeline_remove, 0600, NULL, s_timeline_remove);
 
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
-        return -EINVAL;
+/* Remove all timelines */
+static ssize_t s_timeline_remove_all(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count) {
+	qot_timeline_t timeline;
+	if (qot_timeline_first(&timeline)) {
+	 	do {
+			if (qot_core_timeline_remove(&timeline)) {
+				pr_err("qot_admin_sysfs: could not remove a timeline\n");
+				return -EINVAL;
+			}
+	 	} while (!qot_timeline_next(&timeline));
+	}
+    return count;
+}
+DEVICE_ATTR(timeline_remove_all, 0600, NULL, s_timeline_remove_all);
 
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-    err = ptp_set_pinfunc(ptp, index, func, chan);
-    mutex_unlock(&ptp->pincfg_mux);
-    if (err)
-        return err;
+/* List all timelines */
+static ssize_t s_timeline_list(struct device *dev,
+	struct device_attribute *attr, const char *buf) {
+	qot_timeline_t timeline;
+	if (qot_timeline_first(&timeline)) {
+	 	do {
+	 		/* Print to buffer */
+	 	} while (!qot_timeline_next(&timeline));
+	}
+    return count;
+}
+DEVICE_ATTR(timeline_list, 0600, s_timeline_list, NULL);
+
+/* List all clocks */
+static ssize_t s_clock_list(struct device *dev,
+	struct device_attribute *attr, const char *buf) {
+	qot_clock_t clk;
+	if (qot_clock_first(&clk)) {
+	 	do {
+
+	 	} while (!qot_clock_next(&clk));
+	}
+    return count;
+}
+DEVICE_ATTR(clock_list, 0600, s_clock_list, NULL);
+
+/* List all timelines */
+static ssize_t s_clock_core_check(struct device *dev,
+    return count;
+}
+static ssize_t s_clock_core_switch(struct device *dev,
+	struct device_attribute *attr, const char *buf) {
 
     return count;
 }
-*/
-
-DEVICE_ATTR(timeline_remove_all,    0600,   NULL, NULL);
-DEVICE_ATTR(timeline_remove,        0600,   NULL, NULL);
-DEVICE_ATTR(timeline_create,        0600,   NULL, NULL);
-DEVICE_ATTR(timeline_list,          0600,   NULL, NULL);
-DEVICE_ATTR(timeline_info,          0600,   NULL, NULL);
-DEVICE_ATTR(clock_list,             0600,   NULL, NULL);
-DEVICE_ATTR(clock_info,             0600,   NULL, NULL);
-DEVICE_ATTR(clock_core,             0600,   NULL, NULL);
+DEVICE_ATTR(clock_core, 0600, s_clock_core_check, s_clock_core_switch);
 
 static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
     &dev_attr_timeline_remove.attr,
     &dev_attr_timeline_create.attr,
     &dev_attr_timeline_list.attr,
-    &dev_attr_timeline_info.attr,
     &dev_attr_clock_list.attr,
-    &dev_attr_clock_info.attr,
-    &dev_attr_clock_core.attr,
+    &dev_attr_clock_switch.attr,
     NULL,
 };
 
@@ -110,7 +145,7 @@ void qot_admin_sysfs_cleanup(struct device *qot_device) {
     sysfs_remove_group(&qot_device->kobj, &qot_admin_group);
 }
 
-qot_return_t qot_admin_sysfs_init(struct device *qot_device) {
+qot_return_t qot_admin_chdev_sysfs_init(struct device *qot_device) {
     if (!qot_device)
         return QOT_RETURN_TYPE_ERR;
     sysfs_create_group(&qot_device->kobj, &qot_admin_group);

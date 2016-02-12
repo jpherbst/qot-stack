@@ -2,14 +2,17 @@
 SET(MODULE_SOURCE_FILES
     Kbuild
     qot_core.c
-    qot_user_chdev.c
-    qot_admin_chdev.c
-    qot_admin_sysfs.c
-    qot_scheduler.c
+    qot_clock.c
+    qot_clock_sysfs.c
     qot_timeline.c
     qot_timeline_chdev.c
-    qot_timeline_clock.c
     qot_timeline_sysfs.c
+    qot_scheduler.c
+    qot_admin.c
+    qot_admin_chdev.c
+    qot_admin_sysfs.c
+    qot_user.c
+    qot_user_chdev.c
 )
 
 # Set the source files
@@ -19,14 +22,18 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot.ko.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot.mod.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_user_chdev.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_chdev.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_sysfs.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_scheduler.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_clock.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_clock_sysfs.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline_chdev.o.cmd
-    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline_clock.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline_sysfs.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_scheduler.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_chdev.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_admin_sysfs.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_user.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_user_chdev.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/Module.symvers
     ${CMAKE_CURRENT_SOURCE_DIR}/modules.order
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.ko
@@ -34,14 +41,17 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.mod.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_core.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_user_chdev.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_chdev.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_sysfs.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_scheduler.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_clock.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_clock_sysfs.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_timeline.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_timeline_chdev.o
-    ${CMAKE_CURRENT_SOURCE_DIR}/qot_timeline_clock.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_timeline_sysfs.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_scheduler.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_chdev.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_sysfs.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_user.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_user_chdev.o
 )
 
 # Perform the compilation
