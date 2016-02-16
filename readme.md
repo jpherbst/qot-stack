@@ -96,10 +96,7 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 
 # Development #
 
-This code is maintained by University of California Los Angeles (UCLA) on behalf
-of the RoseLine project. If you wish to contribute to development, please fork
-the repository, submit your changes to a new branch, and submit the updated code
-by means of a pull request against origin/master.
+This code is maintained by University of California Los Angeles (UCLA) on behalf of the RoseLine project. If you wish to contribute to development, please fork the repository, submit your changes to a new branch, and submit the updated code by means of a pull request against origin/master.
 
 # Support #
 

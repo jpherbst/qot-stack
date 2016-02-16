@@ -35,7 +35,7 @@
 #define QOT_MAX_NUMCLKS 8
 
 /* For ease of conversion */
-#define ASEC_PER_NSEC 1000000000ULL
+#define ASEC_PER_NSEC (u64)1000000000ULL
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
@@ -48,18 +48,20 @@
  	#define div_u64(X,Y) (uint64_t)X/(uint64_t)Y
  	#define u64 uint64_t
  	#define s64 int64_t
+ 	#define u32 uint32_t
+ 	#define s32 int32_t
 #endif
 
 /* A single point in time with respect to some reference */
 typedef struct timepoint {
-	 int64_t sec;	/* Seconds since reference */
-	uint64_t asec;  /* Fractional seconds expressed in attoseconds */
+	s64 sec;	/* Seconds since reference */
+	u64 asec;  	/* Fractional seconds expressed in attoseconds */
 } timepoint_t;
 
 /* An absolute length time */
 typedef struct timelength {
-	uint64_t sec;	/* Seconds */
-	uint64_t asec;  /* Fractional seconds expressed in attoseconds */
+	u64 sec;	/* Seconds */
+	u64 asec;  	/* Fractional seconds expressed in attoseconds */
 } timelength_t;
 
 /* An interval of time */
@@ -87,7 +89,7 @@ typedef struct timequality {
 } timequality_t;
 
 /* Popular ratios that will be used throughout this file */
-#define aSEC_PER_SEC 1000000000000000000ULL
+#define aSEC_PER_SEC (u64)1000000000000000000ULL
 
 /* Some initializers for efficiency */
 #define  SEC(t)  { .sec=(t), 			.asec=0, 						}
@@ -102,8 +104,8 @@ typedef struct timequality {
 /* Add a length of time to a point in time */
 static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
-	t->sec  += v->sec + div_u64(t->asec,aSEC_PER_SEC);
-	t->asec -= t->sec*aSEC_PER_SEC;
+	t->sec  += (s64)v->sec + (s64)div_u64(t->asec,aSEC_PER_SEC);
+	t->asec %= t->sec*aSEC_PER_SEC;
 }
 
 /* Subtract a length of time from a point in time */
@@ -120,12 +122,14 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 /* Add two lengths of time together */
 static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
-	l1->sec  += l2->sec + div_u64(l1->asec, aSEC_PER_SEC);
-	l1->asec -= l1->sec*aSEC_PER_SEC;
+	l1->sec  += l2->sec + (u64)div_u64(l1->asec, aSEC_PER_SEC);
+	l1->asec %= l1->sec*aSEC_PER_SEC;
 }
 
 /* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
 static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
+	if (!l1 || !l2)
+		return 0;
     if (l1->sec > l2->sec)
         return -1;
     if (l1->sec < l2->sec)
@@ -140,6 +144,8 @@ static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
 /* Copy the maximum value of two timelengths into a third timelength */
 static inline void timelength_max(timelength_t *sol,
     timelength_t *l1, timelength_t *l2) {
+	if (!sol || !l1 || !l2)
+		return;
     if (timelength_cmp(l1,l2) < 0)
         memcpy(sol,l1,sizeof(timelength_t));
     else
@@ -149,6 +155,8 @@ static inline void timelength_max(timelength_t *sol,
 /* Copy the minimum value of two timelengths into a third timelength */
 static inline void timelength_min(timelength_t *sol,
     timelength_t *l1, timelength_t *l2) {
+	if (!sol || !l1 || !l2)
+		return;
     if (timelength_cmp(l1,l2) > 0)
         memcpy(sol,l1,sizeof(timelength_t));
     else
@@ -158,6 +166,7 @@ static inline void timelength_min(timelength_t *sol,
 /* Get the difference between two timepoints as a timelength */
 static inline void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
+	if (!v || !t1 || !t2)
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
 		v->asec = t2->asec - t1->asec;
@@ -213,16 +222,16 @@ static inline timepoint_t ns_to_timepoint(u64 ns) {
 }
 /* An absolute frequency */
 typedef struct frequency {
-    uint64_t hz;   /* Hertz */
-    uint64_t ahz;  /* Fractional Hertz expressed in attohertz */
+    u64 hz;   /* Hertz */
+    u64 ahz;  /* Fractional Hertz expressed in attohertz */
 } frequency_t;
 
 
 /* Add two frequencies together */
 static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
-    l1->hz  += l2->hz + div_u64(l1->ahz,  aHZ_PER_Hz);
-    l1->ahz -= l1->hz*aHZ_PER_Hz;
+    l1->hz  += l2->hz + (u64)div_u64(l1->ahz,  aHZ_PER_Hz);
+    l1->ahz %= l1->hz*aHZ_PER_Hz;
 }
 
 /* Popular ratios that will be used throughout this file */
@@ -245,8 +254,8 @@ static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
 
 /* An absolute frequency */
 typedef struct power {
-    uint64_t watt;   /* Watts */
-    uint64_t awatt;  /* Fractional Watts expressed in attowatt */
+    u64 watt;   /* Watts */
+    u64 awatt;  /* Fractional Watts expressed in attowatt */
 } power_t;
 
 /* Add two frequencies together */

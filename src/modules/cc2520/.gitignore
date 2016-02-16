@@ -1,0 +1,7 @@
+/Module.symvers
+/modules.order
+*.cmd
+/cc2520.ko
+/cc2520.mod.c
+/cc2520.mod.o
+/cc2520.o

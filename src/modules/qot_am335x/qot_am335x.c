@@ -580,10 +580,10 @@ void clkev_configure(struct clock_event_device *dev, u32 freq)
 	dev->shift = sft;
 	dev->min_delta_ns = clkev_delta2ns(dev->min_delta_ticks, dev, false);
 	dev->max_delta_ns = clkev_delta2ns(dev->max_delta_ticks, dev, true);
-	pr_info("qot_am335x: clkev mult = %lu\n", dev->mult);
-	pr_info("qot_am335x: clkev shift = %lu\n", dev->shift);
-	pr_info("qot_am335x: clkev max_ns = %llu\n", dev->max_delta_ns);
-	pr_info("qot_am335x: clkev min_ns = %llu\n", dev->min_delta_ns);
+	pr_info("qot_am335x: clkev mult = %lu\n", (unsigned long)dev->mult);
+	pr_info("qot_am335x: clkev shift = %lu\n", (unsigned long)dev->shift);
+	pr_info("qot_am335x: clkev max_ns = %llu\n", (unsigned long long)dev->max_delta_ns);
+	pr_info("qot_am335x: clkev min_ns = %llu\n", (unsigned long long)dev->min_delta_ns);
 
 	return;
 }
@@ -806,7 +806,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	case 1: timer_source = OMAP_TIMER_SRC_32_KHZ; 	break;
 	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
 	}
-	nodet = of_find_node_by_phandle(be32_to_cpup(phand));
+	nodet = (struct device_node*) of_find_node_by_phandle(be32_to_cpup(phand));
 	if (!nodet) {
 		pr_err("qot_am335x: could not find the timer node\n");
 		goto err;
@@ -861,7 +861,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	case 1: timer_source = OMAP_TIMER_SRC_32_KHZ; 	break;
 	case 2: timer_source = OMAP_TIMER_SRC_EXT_CLK; 	break;
 	}
-	nodeb = of_find_node_by_phandle(be32_to_cpup(phand));
+	nodeb = (struct device_node*) of_find_node_by_phandle(be32_to_cpup(phand));
 	if (!nodeb) {
 		pr_err("qot_am335x: could not find the timer node\n");
 		goto err;
@@ -962,7 +962,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 		/* Create the timer */
 		nodec = of_node(child);
 		phand = of_get_property(nodec, "timer", NULL);
-		nodet = of_find_node_by_phandle(be32_to_cpup(phand));
+		nodet = (struct device_node*) of_find_node_by_phandle(be32_to_cpup(phand));
 		of_property_read_string_index(nodet, "ti,hwmods", 0, &tmp);
 		if (!tmp) {
 			pr_err("qot_am335x: ti,hwmods property missing?\n");

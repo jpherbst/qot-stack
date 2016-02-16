@@ -1,0 +1,7 @@
+/Module.symvers
+/modules.order
+*.cmd
+/dw1000.ko
+/dw1000.mod.c
+/dw1000.mod.o
+/dw1000.o
