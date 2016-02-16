@@ -29,9 +29,6 @@
 #include "tmv.h"
 #include "transport.h"
 
-// Include the QOT api
-#include "../../../module/qot.h"
-
 struct ptp_message; /*forward declaration*/
 
 /** Opaque type. */
@@ -66,16 +63,15 @@ UInteger8 clock_class(struct clock *c);
  *
  * @param phc_index    PTP hardware clock device to use.
  *                     Pass -1 to select CLOCK_REALTIME.
- * @qotfd              Quality of time ioctl link
  * @param ifaces       A queue of network interfaces.
  * @param timestamping The timestamping mode for this clock.
  * @param dds          A pointer to a default data set for the clock.
  * @param servo        The servo that this clock will use.
  * @return             A pointer to the single global clock instance.
  */
-struct clock *clock_create(int phc_index, int qotfd, struct interfaces_head *ifaces,
+struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
-			   enum servo_type servo);
+			   enum servo_type servo, clockid_t *timelines, int timelines_size); /* QOT */
 
 /**
  * Obtains a clock's default data set.
@@ -227,10 +223,10 @@ int clock_switch_phc(struct clock *c, int phc_index);
  * @return             The state of the clock's servo.
  */
 enum servo_state clock_synchronize(struct clock *c,
-				   struct timespec ingress_ts,
-				   struct timestamp origin_ts,
-				   Integer64 correction1,
-				   Integer64 correction2);
+				   	struct timespec ingress_ts,
+				   	struct timestamp origin_ts,
+				   	Integer64 correction1,
+				   	Integer64 correction2);
 
 /**
  * Inform a slaved clock about the master's sync interval.
@@ -280,13 +276,5 @@ void clock_check_ts(struct clock *c, struct timespec ts);
  * @return   The rate ratio, 1.0 is returned when not known.
  */
 double clock_rate_ratio(struct clock *c);
-
-/**
- * Obtain Project time into a timeline
- * @param c  The clock instance.
- * @return   0 = success, otherwise error
- */
-int clock_qot(struct clock *c, struct timespec *ts);
-
 
 #endif

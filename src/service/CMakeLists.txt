@@ -50,10 +50,10 @@ IF (CROSS_COMPILE)
 ENDIF (CROSS_COMPILE)
 
 # Include the OpenSplice macros (IDL message compilation)
-INCLUDE(MacroOpenSplice)
+#INCLUDE(MacroOpenSplice)
 
 # Find the OpenSplice package
-FIND_PACKAGE(OpenSplice REQUIRED)
+#FIND_PACKAGE(OpenSplice REQUIRED)
 
 # Location of header files for the entire project
 INCLUDE_DIRECTORIES(
@@ -62,11 +62,11 @@ INCLUDE_DIRECTORIES(
 )
 
 # IDL MESSAGE COMPILATION
-SET(idls msg/QoT.idl)
-FOREACH(idl ${idls})
-	OpenSplice_IDLGEN (${idl})
-	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
-ENDFOREACH(idl)
+#SET(idls msg/QoT.idl)
+#FOREACH(idl ${idls})
+#	OpenSplice_IDLGEN (${idl})
+#	SET(OpenSplice_DATAMODEL ${OpenSplice_DATAMODEL} ${outsources})
+#ENDFOREACH(idl)
 
 #################################################################################################
 
@@ -77,44 +77,48 @@ ADD_DEFINITIONS(-D_GNU_SOURCE)
 
 # PTP library
 ADD_LIBRARY(ptp SHARED
-	linuxptp/bmc.c
-	linuxptp/clock.c
-	linuxptp/clockadj.c
-	linuxptp/clockcheck.c
-	linuxptp/config.c
-	linuxptp/fault.c
-	linuxptp/filter.c
-	linuxptp/fsm.c
-	linuxptp/linreg.c
-	linuxptp/mave.c
-	linuxptp/mmedian.c
-	linuxptp/msg.c
-	linuxptp/ntpshm.c
-	linuxptp/phc.c
-	linuxptp/pi.c
-	linuxptp/port.c
-	linuxptp/print.c
-	linuxptp/raw.c
-	linuxptp/servo.c
-	linuxptp/sk.c
-	linuxptp/stats.c
-	linuxptp/sysoff.c
-	linuxptp/tlv.c
-	linuxptp/transport.c
-	linuxptp/udp.c
-	linuxptp/udp6.c
-	linuxptp/uds.c
-	linuxptp/util.c
-	linuxptp/version.c
-	linuxptp/ptp.c
+	sync/ptp/linuxptp/bmc.c
+        sync/ptp/linuxptp/servo.c
+	sync/ptp/linuxptp/clock.c
+	sync/ptp/linuxptp/clockadj.c
+	sync/ptp/linuxptp/clockcheck.c
+	sync/ptp/linuxptp/config.c
+	sync/ptp/linuxptp/fault.c
+	sync/ptp/linuxptp/filter.c
+	sync/ptp/linuxptp/fsm.c
+	sync/ptp/linuxptp/linreg.c
+	sync/ptp/linuxptp/mave.c
+	sync/ptp/linuxptp/mmedian.c
+	sync/ptp/linuxptp/msg.c
+	sync/ptp/linuxptp/ntpshm.c
+	sync/ptp/linuxptp/phc.c
+	sync/ptp/linuxptp/pi.c
+	sync/ptp/linuxptp/port.c
+	sync/ptp/linuxptp/print.c
+	sync/ptp/linuxptp/raw.c
+	sync/ptp/linuxptp/sk.c
+	sync/ptp/linuxptp/stats.c
+	sync/ptp/linuxptp/sysoff.c
+	sync/ptp/linuxptp/tlv.c
+	sync/ptp/linuxptp/transport.c
+	sync/ptp/linuxptp/udp.c
+	sync/ptp/linuxptp/udp6.c
+	sync/ptp/linuxptp/uds.c
+	sync/ptp/linuxptp/util.c
+	sync/ptp/linuxptp/version.c
+	sync/ptp/linuxptp/ptp.c
 )
 TARGET_LINK_LIBRARIES(ptp m)
 
 #########################################################################################################
 
 ADD_EXECUTABLE(qotdaemon 
-	Synchronization.hpp
-	Synchronization.cpp
+	sync/ptp/PTP.hpp
+	sync/ptp/PTP.cpp
+	sync/Sync.hpp
+	sync/Sync.cpp
+#	Synchronization.hpp
+#	Synchronization.cpp
 	Coordinator.hpp
 	Coordinator.cpp
 	Timeline.cpp

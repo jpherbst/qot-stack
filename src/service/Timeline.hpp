@@ -52,7 +52,7 @@ namespace qot
 	{
 	// Constructor and destructor
 	public: Timeline(boost::asio::io_service *io, const std::string &name, 
-						const std::string &iface, int id);
+						const std::string &iface, const std::string &addr, int id);
 	public: ~Timeline();
 
 	// Heartbeat timer

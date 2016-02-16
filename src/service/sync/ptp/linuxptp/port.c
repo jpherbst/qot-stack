@@ -1017,6 +1017,7 @@ static void port_synchronize(struct port *p,
 
 	state = clock_synchronize(p->clock, ingress_ts, origin_ts,
 				  correction1, correction2);
+
 	switch (state) {
 	case SERVO_UNLOCKED:
 		port_dispatch(p, EV_SYNCHRONIZATION_FAULT, 0);
@@ -2298,11 +2299,6 @@ int port_prepare_and_send(struct port *p, struct ptp_message *msg, int event)
 		return -1;
 	}
 	if (msg_sots_valid(msg)) {
-
-		// Little hack to project into timeline frame of reference
-		if (clock_qot(p->clock, &msg->hwts.ts))
-			pr_warning("Could not project time");		
-
 		ts_add(&msg->hwts.ts, p->pod.tx_timestamp_offset);
 	}
 	return 0;

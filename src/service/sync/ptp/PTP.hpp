@@ -1,7 +1,7 @@
 /**
- * @file Notifier.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file PTP.hpp
+ * @brief Provides ptp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -23,47 +23,70 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
  */
-#ifndef NOTIFIER_HPP
-#define NOTIFIER_HPP
 
-// System includes
-#include <string>
-#include <map>
+#ifndef PTP_HPP
+#define PTP_HPP
 
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
 #include <boost/log/trivial.hpp>
 
-// Project includes
-#include "Timeline.hpp"
+/* Linuxptp includes */
+extern "C"
+{
+	// Standard includes
+	#include <limits.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
+	#include <linux/net_tstamp.h>
+
+	// Linuxptp includes
+	#include "linuxptp/clock.h"
+	#include "linuxptp/config.h"
+	#include "linuxptp/ntpshm.h"
+	#include "linuxptp/pi.h"
+	#include "linuxptp/print.h"
+	#include "linuxptp/raw.h"
+	#include "linuxptp/sk.h"
+	#include "linuxptp/transport.h"
+	#include "linuxptp/udp6.h"
+	#include "linuxptp/uds.h"
+	#include "linuxptp/util.h"
+	#include "linuxptp/version.h"
+}
 
 namespace qot
 {
-	class Notifier
+	class PTP
 	{
 
-	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
-	public: ~Notifier();
+		// Constructor and destructor
+		public: PTP(boost::asio::io_service *io, const std::string &iface);
+		public: ~PTP();
 
-	// Private methods
-	private: void add(int id);
-	private: void del(int id);
-	private: void watch(const char* dir);
+		// Control functions
+		public: void Reset();
+		public: void Start(bool master, int log_sync_interval, short sync_session, clockid_t *timelines, uint16_t timelines_size);
+		public: void Stop();						// Stop
 
-	// Asynhronous funcitonality
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
+		// This thread performs rhe actual syncrhonization
+		private: int SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size);
 
-	// Private variables
-	private: int fd;
-	private: std::string baseiface;
-	private: std::string basename;
+		// Boost ASIO
+		private: boost::asio::io_service *asio;
+		private: boost::thread thread;
+		private: std::string baseiface;
+		private: bool kill;
 
-	// Data structure to store timelines
-	private: std::map<int,Timeline*> timelines;
+		// PTP settings
+		private: struct config cfg_settings;
+
 	};
 }
 
