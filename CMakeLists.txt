@@ -5,7 +5,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(qot-stack)
 
 # Cross-compile options for the BeagleBone Black
-OPTION(CROSS_AM335X "Build for the am335x" ON)
+OPTION(CROSS_AM335X "Build for the am335x" OFF)
 IF (CROSS_AM335X)
     SET(CROSS_KERNEL /export/bb-kernel/KERNEL
     	CACHE STRING "Path to target kernel source")
@@ -29,8 +29,12 @@ IF (CROSS_AM335X)
 	SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 	SET(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 ELSE (CROSS_AM335X)
-	SET(CROSS_PREFIX "")
-	SET(CROSS_KERNEL /lib/modules/${CMAKE_SYSTEM_VERSION}/build)
+	SET(CROSS_KERNEL /lib/modules/${CMAKE_SYSTEM_VERSION}/build
+    	CACHE STRING "Path to target kernel source")
+	SET(CROSS_PREFIX ""
+		CACHE STRING "Path to target cross compiler")
+	SET(CROSS_COMPILE_ROOTFS ""
+		CACHE STRING "Path to target rootfs")
 	ENABLE_TESTING()
 ENDIF (CROSS_AM335X)
 

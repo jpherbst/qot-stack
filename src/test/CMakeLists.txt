@@ -34,16 +34,6 @@ if (GTEST_FOUND)
         ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
     ADD_TEST(TestQoTMath test_qot_math)
 
-    ADD_EXECUTABLE(test_qot_chardev_usr test_qot_chardev_usr.cpp)
-    TARGET_LINK_LIBRARIES(test_qot_chardev_usr
-        ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
-    ADD_TEST(TestQoTChardevUsr test_qot_chardev_usr)
-
-    ADD_EXECUTABLE(test_qot_chardev_adm test_qot_chardev_adm.cpp)
-    TARGET_LINK_LIBRARIES(test_qot_chardev_adm
-        ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
-    ADD_TEST(TestQoTChardevAdm test_qot_chardev_adm)
-
 ELSE (GTEST_FOUND)
 
 	MESSAGE(FATAL_ERROR "Cannot make tests, because Google test not found")

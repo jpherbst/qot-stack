@@ -44,6 +44,7 @@
 #else
 	#include <time.h>
 	#include <stdint.h>
+ 	#include <string.h>
 	#include <sys/ioctl.h>
  	#define div_u64(X,Y) (uint64_t)X/(uint64_t)Y
  	#define u64 uint64_t
@@ -105,7 +106,7 @@ typedef struct timequality {
 static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
 	t->sec  += (s64)v->sec + (s64)div_u64(t->asec,aSEC_PER_SEC);
-	t->asec %= t->sec*aSEC_PER_SEC;
+	t->asec %= aSEC_PER_SEC;
 }
 
 /* Subtract a length of time from a point in time */
@@ -123,7 +124,7 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
 	l1->sec  += l2->sec + (u64)div_u64(l1->asec, aSEC_PER_SEC);
-	l1->asec %= l1->sec*aSEC_PER_SEC;
+	l1->asec %= aSEC_PER_SEC;
 }
 
 /* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
@@ -167,6 +168,7 @@ static inline void timelength_min(timelength_t *sol,
 static inline void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
 	if (!v || !t1 || !t2)
+		return;
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
 		v->asec = t2->asec - t1->asec;
@@ -231,7 +233,7 @@ typedef struct frequency {
 static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
     l1->hz  += l2->hz + (u64)div_u64(l1->ahz,  aHZ_PER_Hz);
-    l1->ahz %= l1->hz*aHZ_PER_Hz;
+    l1->ahz %= aHZ_PER_Hz;
 }
 
 /* Popular ratios that will be used throughout this file */
@@ -262,7 +264,7 @@ typedef struct power {
 static inline void power_add(power_t *l1, power_t *l2) {
     l1->awatt += l2->awatt;
     l1->watt  += l2->watt + div_u64(l1->awatt, aWATT_PER_WATT);
-    l1->awatt -= l1->watt*aWATT_PER_WATT;
+    l1->awatt %= aWATT_PER_WATT;
 }
 
 /**
