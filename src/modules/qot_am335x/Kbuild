@@ -1,0 +1,1 @@
+obj-m += qot_am335x.o

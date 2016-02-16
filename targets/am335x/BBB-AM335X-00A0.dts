@@ -8,15 +8,14 @@
     /* identification */
     part-number = "BBB-AM335X";
 
-    /* special version ignores EEPROM */
+    /* special version ignores EEPROM  */
     version = "00A0";
 
     /* Resources used */
     exclusive-use =
-        "P8.7",  /*  TIMER4  */
-        "P8.8",  /*  TIMER5  */
-        "P8.9",  /*  TIMER6  */
-        "P8.10"; /*  TIMER7  */
+        "P8.9",  /*  TIMER5  */
+        "P8.10", /*  TIMER6  */
+        "P8.8";  /*  TIMER7  */
 
     /* Pin multiplexing */
     fragment@0 {
@@ -24,7 +23,6 @@
         __overlay__ {
             qot_am335x_pins: qot_am335x_pins {
                 pinctrl-single,pins = <
-                    0x90  0x02      /* P8.7   0x22 = INP PD, 0x02 = OUT PD */
                     0x9C  0x02      /* P8.9   0x22 = INP PD, 0x02 = OUT PD */
                     0x98  0x02      /* P8.10  0x22 = INP PD, 0x02 = OUT PD */
                     0x94  0x02      /* P8.8   0x22 = INP PD, 0x02 = OUT PD */
@@ -43,6 +41,7 @@
                 pinctrl-names = "default";
                 pinctrl-0 = <&qot_am335x_pins>;
                 core  = <&timer3 0>; /* 0 = SYS, 1 = RTC, 2 = TCLKIN */
+                sched = <&timer4 0>;
                 pin3 {
                     label = "TIMER7";
                     timer = <&timer7>;
@@ -59,9 +58,7 @@
                     gpios = <&gpio2 5 0>;
                 };
                 pin0 {
-                    label = "TIMER4";
-                    timer = <&timer4>;
-                    gpios = <&gpio2 2 0>;
+                    label = "NOT_USED";
                 };
             };
         };
