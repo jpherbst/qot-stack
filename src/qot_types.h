@@ -336,19 +336,14 @@ typedef struct qot_event {
 
 /* QoT timeline type */
 typedef struct qot_timeline {
-    char name[QOT_MAX_NAMELEN];          /* Timeline name          */
+    char name[QOT_MAX_NAMELEN];          /* Timeline name */
     int index;                           /* The integer Y in /dev/timelineY */
 } qot_timeline_t;
-
-/* QoT timeline type */
-typedef struct qot_binding {
-    timequality_t demand;                /* Requested QoT          */
-} qot_binding_t;
 
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
-#define QOTUSR_MAGIC_CODE  0xEE
+#define QOTUSR_MAGIC_CODE  0xED
 #define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
 #define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
 #define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
@@ -368,11 +363,31 @@ typedef struct qot_clock {
 /**
  * @brief Key messages supported by /dev/qotadm
  */
-#define QOTADM_MAGIC_CODE 0xEF
+#define QOTADM_MAGIC_CODE 0xEE
 #define QOTADM_GET_NEXT_EVENT     _IOR(QOTADM_MAGIC_CODE, 1, qot_event_t*)
 #define QOTADM_GET_CLOCK_INFO    _IOWR(QOTADM_MAGIC_CODE, 2, qot_clock_t*)
 #define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 3, qot_clock_t*)
 #define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 4, qot_clock_t*)
 #define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 5, qot_clock_t*)
+
+/* QoT timeline type */
+typedef struct qot_binding {
+    char name[QOT_MAX_NAMELEN];          /* Application name */
+    timequality_t demand;                /* Requested QoT */
+    int id;                              /* Binding ID */
+} qot_binding_t;
+
+/**
+ * @brief Key messages supported by /dev/timelineX
+ */
+#define TIMELINE_MAGIC_CODE 0xEF
+#define TIMELINE_GET_INFO           _IOR(TIMELINE_MAGIC_CODE, 1, qot_timeline*)
+#define TIMELINE_BIND_JOIN         _IOWR(TIMELINE_MAGIC_CODE, 2, qot_binding_t*)
+#define TIMELINE_BIND_LEAVE         _IOW(TIMELINE_MAGIC_CODE, 3, qot_binding_t*)
+#define TIMELINE_BIND_UPDATE        _IOW(TIMELINE_MAGIC_CODE, 4, qot_binding_t*)
+#define TIMELINE_CORE_TO_TIMELINE   _IOR(TIMELINE_MAGIC_CODE, 5, timepoint_t*)
+#define TIMELINE_GET_TIME_NOW      _ IOR(TIMELINE_MAGIC_CODE, 6, utimepoint_t*)
+#define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 7, utimepoint_t*)
+
 
 #endif
