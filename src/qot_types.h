@@ -46,7 +46,7 @@
 	#include <stdint.h>
  	#include <string.h>
 	#include <sys/ioctl.h>
- 	#define div_u64(X,Y) (uint64_t)X/(uint64_t)Y
+ 	#define div64_u64_rem(X,Y,Z) (uint64_t)X/(uint64_t)Y; *Z=X%Y;
  	#define u64 uint64_t
  	#define s64 int64_t
  	#define u32 uint32_t
@@ -90,7 +90,7 @@ typedef struct timequality {
 } timequality_t;
 
 /* Popular ratios that will be used throughout this file */
-#define aSEC_PER_SEC (u64)1000000000000000000ULL
+#define aSEC_PER_SEC (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define  SEC(t)  { .sec=(t), 			.asec=0, 						}
@@ -105,8 +105,7 @@ typedef struct timequality {
 /* Add a length of time to a point in time */
 static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
-	t->sec  += (s64)v->sec + (s64)div_u64(t->asec,aSEC_PER_SEC);
-	t->asec %= aSEC_PER_SEC;
+	t->sec += v->sec + div64_u64_rem(t->asec, aSEC_PER_SEC, &t->asec);
 }
 
 /* Subtract a length of time from a point in time */
@@ -123,8 +122,7 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 /* Add two lengths of time together */
 static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
-	l1->sec  += l2->sec + (u64)div_u64(l1->asec, aSEC_PER_SEC);
-	l1->asec %= aSEC_PER_SEC;
+	l1->sec += l2->sec + div64_u64_rem(l1->asec, aSEC_PER_SEC, &l1->asec);
 }
 
 /* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
@@ -191,7 +189,7 @@ static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aHZ_PER_Hz 1000000000000000000ULL
+#define aHZ_PER_Hz (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define EHz(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
@@ -232,12 +230,11 @@ typedef struct frequency {
 /* Add two frequencies together */
 static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
-    l1->hz  += l2->hz + (u64)div_u64(l1->ahz,  aHZ_PER_Hz);
-    l1->ahz %= aHZ_PER_Hz;
+    l1->hz += l2->hz + div64_u64_rem(l1->ahz, aHZ_PER_Hz, &l1->ahz);
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aWATT_PER_WATT 1000000000000000000ULL
+#define aWATT_PER_WATT (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define EWATT(t) { .watt=(t)*1000000000000000000ULL,  .awatt=0, }
@@ -263,14 +260,13 @@ typedef struct power {
 /* Add two frequencies together */
 static inline void power_add(power_t *l1, power_t *l2) {
     l1->awatt += l2->awatt;
-    l1->watt  += l2->watt + div_u64(l1->awatt, aWATT_PER_WATT);
-    l1->awatt %= aWATT_PER_WATT;
+    l1->watt += l2->watt + div64_u64_rem(l1->awatt, aWATT_PER_WATT, &l1->awatt);
 }
 
 /**
  * @brief Scalar type used by the system
  **/
-typedef int64_t scalar_t;
+typedef s64 scalar_t;
 
 /**
  * @brief Edge trigger codes from the QoT stack
