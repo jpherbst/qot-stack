@@ -34,25 +34,35 @@
 #define QOT_MAX_NAMELEN 64
 #define QOT_MAX_NUMCLKS 8
 
+/* For ease of conversion */
+#define ASEC_PER_NSEC (u64)1000000000ULL
+
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
 	#include <linux/ioctl.h>
+ 	#include <linux/math64.h>
 #else
 	#include <time.h>
 	#include <stdint.h>
+ 	#include <string.h>
 	#include <sys/ioctl.h>
+ 	#define div64_u64_rem(X,Y,Z) (uint64_t)X/(uint64_t)Y; *Z=X%Y;
+ 	#define u64 uint64_t
+ 	#define s64 int64_t
+ 	#define u32 uint32_t
+ 	#define s32 int32_t
 #endif
 
 /* A single point in time with respect to some reference */
 typedef struct timepoint {
-	 int64_t sec;	/* Seconds since reference */
-	uint64_t asec;  /* Fractional seconds expressed in attoseconds */
+	s64 sec;	/* Seconds since reference */
+	u64 asec;  	/* Fractional seconds expressed in attoseconds */
 } timepoint_t;
 
 /* An absolute length time */
 typedef struct timelength {
-	uint64_t sec;	/* Seconds */
-	uint64_t asec;  /* Fractional seconds expressed in attoseconds */
+	u64 sec;	/* Seconds */
+	u64 asec;  	/* Fractional seconds expressed in attoseconds */
 } timelength_t;
 
 /* An interval of time */
@@ -80,7 +90,7 @@ typedef struct timequality {
 } timequality_t;
 
 /* Popular ratios that will be used throughout this file */
-#define aSEC_PER_SEC 1000000000000000000ULL
+#define aSEC_PER_SEC (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define  SEC(t)  { .sec=(t), 			.asec=0, 						}
@@ -91,11 +101,11 @@ typedef struct timequality {
 #define fSEC(t)  { .sec=0, 				.asec=(t)*1000ULL, 				}
 #define aSEC(t)  { .sec=0, 				.asec=(t), 						}
 
+
 /* Add a length of time to a point in time */
 static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
 	t->asec += v->asec;
-	t->sec  += v->sec + t->asec / aSEC_PER_SEC;
-	t->asec %= aSEC_PER_SEC;
+	t->sec += v->sec + div64_u64_rem(t->asec, aSEC_PER_SEC, &t->asec);
 }
 
 /* Subtract a length of time from a point in time */
@@ -112,12 +122,13 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 /* Add two lengths of time together */
 static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
 	l1->asec += l2->asec;
-	l1->sec  += l2->sec + l1->asec / aSEC_PER_SEC;
-	l1->asec %= aSEC_PER_SEC;
+	l1->sec += l2->sec + div64_u64_rem(l1->asec, aSEC_PER_SEC, &l1->asec);
 }
 
 /* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
 static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
+	if (!l1 || !l2)
+		return 0;
     if (l1->sec > l2->sec)
         return -1;
     if (l1->sec < l2->sec)
@@ -132,6 +143,8 @@ static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
 /* Copy the maximum value of two timelengths into a third timelength */
 static inline void timelength_max(timelength_t *sol,
     timelength_t *l1, timelength_t *l2) {
+	if (!sol || !l1 || !l2)
+		return;
     if (timelength_cmp(l1,l2) < 0)
         memcpy(sol,l1,sizeof(timelength_t));
     else
@@ -141,6 +154,8 @@ static inline void timelength_max(timelength_t *sol,
 /* Copy the minimum value of two timelengths into a third timelength */
 static inline void timelength_min(timelength_t *sol,
     timelength_t *l1, timelength_t *l2) {
+	if (!sol || !l1 || !l2)
+		return;
     if (timelength_cmp(l1,l2) > 0)
         memcpy(sol,l1,sizeof(timelength_t));
     else
@@ -150,6 +165,8 @@ static inline void timelength_min(timelength_t *sol,
 /* Get the difference between two timepoints as a timelength */
 static inline void timepoint_diff(timelength_t *v,
 	timepoint_t *t1, timepoint_t *t2) {
+	if (!v || !t1 || !t2)
+		return;
 	v->sec = abs(t1->sec - t2->sec);
 	if (t2->asec > t1->asec)
 		v->asec = t2->asec - t1->asec;
@@ -172,7 +189,7 @@ static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aHZ_PER_Hz 1000000000000000000ULL
+#define aHZ_PER_Hz (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define EHz(t) { .hz=(t)*1000000000000000000ULL,  .ahz=0, }
@@ -189,21 +206,35 @@ static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
 #define fHz(t) { .hz=0, .ahz=(t)*1000ULL,                 }
 #define aHz(t) { .hz=0, .ahz=(t),                         }
 
+
+// SUPPORT FUNCTIONS ///////////////
+/*Convert ns to timepoint_t and vice versa*/
+static inline u64 timepoint_to_ns(timepoint_t expiry) {
+	s64 ns = 0;//= expiry.sec*NSEC_PER_SEC + div_u64(expiry.asec, ASEC_PER_NSEC);
+	return (u64)ns;
+}
+
+static inline timepoint_t ns_to_timepoint(u64 ns) {
+     timepoint_t tp;
+     tp.sec	= 0;//(int64_t) div_u64(ns, 1000000000ULL);
+     tp.asec = 0;//(ns - tp.sec*1000000000ULL)*ASEC_PER_NSEC;
+     return tp;
+}
 /* An absolute frequency */
 typedef struct frequency {
-    uint64_t hz;   /* Hertz */
-    uint64_t ahz;  /* Fractional Hertz expressed in attohertz */
+    u64 hz;   /* Hertz */
+    u64 ahz;  /* Fractional Hertz expressed in attohertz */
 } frequency_t;
+
 
 /* Add two frequencies together */
 static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
     l1->ahz += l2->ahz;
-    l1->hz  += l2->hz + l1->ahz / aHZ_PER_Hz;
-    l1->ahz %= aHZ_PER_Hz;
+    l1->hz += l2->hz + div64_u64_rem(l1->ahz, aHZ_PER_Hz, &l1->ahz);
 }
 
 /* Popular ratios that will be used throughout this file */
-#define aWATT_PER_WATT 1000000000000000000ULL
+#define aWATT_PER_WATT (u64)1000000000000000000
 
 /* Some initializers for efficiency */
 #define EWATT(t) { .watt=(t)*1000000000000000000ULL,  .awatt=0, }
@@ -222,21 +253,20 @@ static inline void frequency_add(frequency_t *l1, frequency_t *l2) {
 
 /* An absolute frequency */
 typedef struct power {
-    uint64_t watt;   /* Watts */
-    uint64_t awatt;  /* Fractional Watts expressed in attowatt */
+    u64 watt;   /* Watts */
+    u64 awatt;  /* Fractional Watts expressed in attowatt */
 } power_t;
 
 /* Add two frequencies together */
 static inline void power_add(power_t *l1, power_t *l2) {
     l1->awatt += l2->awatt;
-    l1->watt  += l2->watt + l1->awatt / aWATT_PER_WATT;
-    l1->awatt %= aWATT_PER_WATT;
+    l1->watt += l2->watt + div64_u64_rem(l1->awatt, aWATT_PER_WATT, &l1->awatt);
 }
 
 /**
  * @brief Scalar type used by the system
  **/
-typedef int64_t scalar_t;
+typedef s64 scalar_t;
 
 /**
  * @brief Edge trigger codes from the QoT stack

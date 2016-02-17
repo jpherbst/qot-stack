@@ -1,0 +1,7 @@
+/Module.symvers
+/modules.order
+*.cmd
+/qot_chronos.ko
+/qot_chronos.mod.c
+/qot_chronos.mod.o
+/qot_chronos.o

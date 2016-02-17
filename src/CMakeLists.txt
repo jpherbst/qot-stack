@@ -31,55 +31,34 @@ FIND_PACKAGE(GTest REQUIRED)
 # Everything in our system must know about qot_types.h
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Run the tests
-ADD_SUBDIRECTORY(test)
-ADD_SUBDIRECTORY(modules)
-# ADD_SUBDIRECTORY(api)
+# Build the kernel modules
+OPTION(BUILD_MODULES "Build kernel modules" ON)
+IF (BUILD_MODULES)
+	ADD_SUBDIRECTORY(modules)
+ENDIF (BUILD_MODULES)
 
+# Build the programmer interface
+OPTION(BUILD_PROGAPI "Build programmer interface" ON)
+IF (BUILD_PROGAPI)
+	ADD_SUBDIRECTORY(api)
+ENDIF (BUILD_PROGAPI)
 
-#
-# # Basic options
-# OPTION(CROSS_COMPILE "Cross-compile for arm-linux-gnueabihf" ON)
-#
-# # Configure cross compilation
-# IF (CROSS_COMPILE)
-#
-# 	# User-definable root filesystem location
-# 	SET(CROSS_COMPILE_ROOTFS "/export/rootfs" CACHE STRING "Path to ROOTFS")
-#
-# 	# User-definable root filesystem location
-# 	SET(CMAKE_INSTALL_PREFIX "${CROSS_COMPILE_ROOTFS}/usr/local")
-#
-# 	# System, architecture and version
-# 	SET(CMAKE_SYSTEM_NAME Linux)
-# 	SET(CMAKE_SYSTEM_PROCESSOR arm)
-# 	SET(CMAKE_SYSTEM_VERSION 1)
-# 	#SET(CMAKE_SYSROOT "${CROSS_COMPILE_ROOTFS}")
-#
-# 	# Specify the cross compiler
-# 	SET(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
-# 	SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
-#
-# 	# Location of boost libraries
-# 	LINK_DIRECTORIES(
-# 		"/usr/arm-linux-gnueabihf/lib"
-# 	)
-#
-# 	# Where is the target environment
-# 	SET(CMAKE_FIND_ROOT_PATH ${CROSS_COMPILE_ROOTFS})
-# 	SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-# 	SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-# 	SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-# 	SET(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-#
-#
-# ENDIF (CROSS_COMPILE)
-#
+# Build the system service
+OPTION(BUILD_SERVICE "Build system service" ON)
+IF (BUILD_SERVICE)
+	ADD_SUBDIRECTORY(service)
+ENDIF (BUILD_SERVICE)
 
+# Build example applications
+OPTION(BUILD_EXAMPLE "Build example applications" ON)
+IF (BUILD_EXAMPLE)
+	ADD_SUBDIRECTORY(examples)
+ENDIF (BUILD_EXAMPLE)
 
-#ADD_SUBDIRECTORY(modules)
-#ADD_SUBDIRECTORY(api)
-#ADD_SUBDIRECTORY(service)
-#ADD_SUBDIRECTORY(examples)
-#ADD_SUBDIRECTORY(utils)
-
+# Build the unit tests (doesn't make sense for cross-compilation)
+IF (NOT CROSS_AM335X)
+	OPTION(BUILD_UNITEST "Build unit tests" ON)
+	IF (BUILD_UNITEST)
+		ADD_SUBDIRECTORY(test)
+	ENDIF (BUILD_UNITEST)
+ENDIF (NOT CROSS_AM335X)

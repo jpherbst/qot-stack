@@ -1,0 +1,9 @@
+/.qot_am335x.ko.cmd
+/.qot_am335x.mod.o.cmd
+/.qot_am335x.o.cmd
+/Module.symvers
+/modules.order
+/qot_am335x.ko
+/qot_am335x.mod.c
+/qot_am335x.mod.o
+/qot_am335x.o

@@ -1,0 +1,9 @@
+/.cc1200.ko.cmd
+/.cc1200.mod.o.cmd
+/.cc1200.o.cmd
+/cc1200.ko
+/cc1200.mod.c
+/cc1200.mod.o
+/cc1200.o
+/Module.symvers
+/modules.order

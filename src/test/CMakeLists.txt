@@ -1,3 +1,30 @@
+# @file CMakeLists.txt
+# @brief Base CMake build script for the qot-stack project
+# @author Andrew Symington
+#
+# Copyright (c) Regents of the University of California, 2015.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+# 	1. Redistributions of source code must retain the above copyright notice,
+#     this list of conditions and the following disclaimer.
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 if (GTEST_FOUND)
 
     INCLUDE_DIRECTORIES(${GTEST_INCLUDE_DIRS})
@@ -7,14 +34,8 @@ if (GTEST_FOUND)
         ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
     ADD_TEST(TestQoTMath test_qot_math)
 
-    ADD_EXECUTABLE(test_qot_chardev_usr test_qot_chardev_usr.cpp)
-    TARGET_LINK_LIBRARIES(test_qot_chardev_usr
-        ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
-    ADD_TEST(TestQoTChardevUsr test_qot_chardev_usr)
+ELSE (GTEST_FOUND)
 
-    ADD_EXECUTABLE(test_qot_chardev_adm test_qot_chardev_adm.cpp)
-    TARGET_LINK_LIBRARIES(test_qot_chardev_adm
-        ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
-    ADD_TEST(TestQoTChardevAdm test_qot_chardev_adm)
+	MESSAGE(FATAL_ERROR "Cannot make tests, because Google test not found")
 
-endif()
+ENDIF (GTEST_FOUND)
