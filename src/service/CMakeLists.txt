@@ -49,7 +49,6 @@ ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.54 REQUIRED
 	COMPONENTS thread system program_options log date_time)
-FIND_PACKAGE(Threads REQUIRED)
 
 # Location of header files for the entire project
 INCLUDE_DIRECTORIES("${Boost_INCLUDE_DIR}")

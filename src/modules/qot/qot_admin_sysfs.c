@@ -114,6 +114,7 @@ void qot_admin_sysfs_cleanup(struct device *qot_device) {
 qot_return_t qot_admin_sysfs_init(struct device *qot_device) {
     if (!qot_device)
         return QOT_RETURN_TYPE_ERR;
-    sysfs_create_group(&qot_device->kobj, &qot_admin_group);
+    if (sysfs_create_group(&qot_device->kobj, &qot_admin_group))
+        return QOT_RETURN_TYPE_ERR;
     return QOT_RETURN_TYPE_OK;
 }
