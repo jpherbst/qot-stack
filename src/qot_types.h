@@ -261,6 +261,13 @@ static inline void timepoint_diff(timelength_t *v, timepoint_t *t1,
 		v->asec = t1->asec - t2->asec;
 }
 
+/* Get the difference between two timepoints as a timelength */
+static inline void timepoint_from_timespec(timepoint_t *t, struct timespec *ts)
+{
+	t->sec  = ts->tv_sec;
+	t->asec = ts->tv_nsec*nSEC_PER_SEC;
+}
+
 /* Initializers for timepoints */
 #define  TP_FROM_SEC(d,t) scalar_to_timepoint(&d,t, SEC_PER_SEC,aSEC_PER_SEC)
 #define TP_FROM_mSEC(d,t) scalar_to_timepoint(&d,t,mSEC_PER_SEC,fSEC_PER_SEC)

@@ -239,6 +239,17 @@ TEST(TimelineMath, timepoint_cmp) {
 	EXPECT_EQ(-1,v);
 }
 
+TEST(TimelineMath, timepoint_from_timespec) {
+	timepoint_t t;
+	struct timespec ts = {
+		.tv_sec  = 1,
+		.tv_nsec = 1
+	};
+	timepoint_from_timespec(&t, &ts);
+	EXPECT_EQ(1LL,t.sec);
+	EXPECT_EQ(1000000000ULL,t.asec);
+}
+
 TEST(TimelineMath, utimepoint_add) {
 	int v;
 	utimepoint_t ut;
