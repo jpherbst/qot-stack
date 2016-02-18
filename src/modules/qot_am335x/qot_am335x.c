@@ -49,7 +49,7 @@
 #include <linux/ptp_clock_kernel.h>
 
 /*QoT Core Clock Registration*/
-#include "../qot/qot_exported.h"
+#include "../qot/qot_core.h"
 
 /* DMTimer Code specific to the AM335x */
 #include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
@@ -399,7 +399,7 @@ static int qot_am335x_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	return 0;
 }
 
-timepoint_t qot_am335x_read_time(void)
+static timepoint_t qot_am335x_read_time(void)
 {
 	u64 ns;
 	timepoint_t time_now;
@@ -409,7 +409,7 @@ timepoint_t qot_am335x_read_time(void)
 	spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
 	spin_unlock_irqrestore(&pdata->lock, flags);
-	time_now = ns_to_timepoint(ns);
+	TP_FROM_nSEC(time_now,ns);
 	return time_now;
 }
 
@@ -621,7 +621,7 @@ static long qot_am335x_program_sched_interrupt(timepoint_t expiry, long (*callba
 	struct qot_am335x_sched_interface *interface;
 	u64 ns;
 	interface = container_of(sched_timer, struct qot_am335x_sched_interface, timer);
-	ns = timepoint_to_ns(expiry) - timecounter_read(&interface->parent->tc);
+	ns = TP_TO_nSEC(expiry) - timecounter_read(&interface->parent->tc);
 	interface->callback = callback;
 	retval = clkev_program_event(&interface->qot_clockevent, ns);
 	return retval;

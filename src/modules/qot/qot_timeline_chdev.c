@@ -243,7 +243,7 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     	return 1;
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->last = ns;
-    timeline_impl->nsec = timespec64_to_ns(tp);
+    timeline_impl->nsec = timespec_to_ns(tp);
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
@@ -262,7 +262,7 @@ static int qot_timeline_chdev_gettime(struct posix_clock *pc,
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
     timeline_impl->last = ns;
-    *tp = ns_to_timespec64(timeline_impl->nsec);
+    *tp = ns_to_timespec(timeline_impl->nsec);
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
@@ -479,7 +479,7 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 		pr_err("qot_timeline: cannot register sysfs interface");
 		goto fail_sysfs;
 	}
-	/* Initialize our list heads  to track binding order */
+	/* Initialize our list heads  to track bicd nding order */
 	INIT_LIST_HEAD(&timeline_impl->head_res);
 	INIT_LIST_HEAD(&timeline_impl->head_low);
 	INIT_LIST_HEAD(&timeline_impl->head_upp);
