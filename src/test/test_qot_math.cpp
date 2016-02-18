@@ -239,90 +239,34 @@ TEST(TimelineMath, timepoint_cmp) {
 	EXPECT_EQ(-1,v);
 }
 
-/*
-TEST(TimelineMath, FrequencyInitializers) {
-    frequency_t tE = EHz(1);
-    EXPECT_EQ(1000000000000000000ULL, tE.hz);
-    EXPECT_EQ(0ULL, tE.ahz);
-    frequency_t tP = PHz(1);
-    EXPECT_EQ(1000000000000000ULL, tP.hz);
-    EXPECT_EQ(0ULL, tP.ahz);
-    frequency_t tT = THz(1);
-    EXPECT_EQ(1000000000000ULL, tT.hz);
-    EXPECT_EQ(0ULL, tT.ahz);
-    frequency_t tG = GHz(1);
-    EXPECT_EQ(1000000000ULL, tG.hz);
-    EXPECT_EQ(0ULL, tG.ahz);
-    frequency_t tM = MHz(1);
-    EXPECT_EQ(1000000ULL, tM.hz);
-    EXPECT_EQ(0ULL, tM.ahz);
-    frequency_t tK = KHz(1);
-    EXPECT_EQ(1000ULL, tK.hz);
-    EXPECT_EQ(0ULL, tK.ahz);
-    frequency_t t = Hz(1);
-    EXPECT_EQ(1ULL, t.hz);
-    EXPECT_EQ(0ULL, t.ahz);
-    frequency_t ta = aHz(1);
-    EXPECT_EQ(1ULL, ta.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tf = fHz(1);
-    EXPECT_EQ(1000ULL, tf.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tn = nHz(1);
-    EXPECT_EQ(1000000ULL, tn.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tp = pHz(1);
-    EXPECT_EQ(1000000000ULL, tp.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tu = uHz(1);
-    EXPECT_EQ(1000000000000ULL, tu.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
-    frequency_t tm = mHz(1);
-    EXPECT_EQ(1000000000000000ULL, tm.ahz);
-    EXPECT_EQ(0ULL, ta.hz);
+TEST(TimelineMath, utimepoint_add) {
+	int v;
+	utimepoint_t ut;
+	utimelength_t ul;
+	TP_FROM_SEC(ut.estimate, -2LL);
+	TL_FROM_aSEC(ut.interval.below, 100ULL);
+	TL_FROM_aSEC(ut.interval.above, 100ULL);
+	TL_FROM_SEC(ul.estimate, 1ULL);
+	TL_FROM_aSEC(ul.interval.below, 300ULL);
+	TL_FROM_aSEC(ul.interval.above, 300ULL);
+	utimepoint_add(&ut,&ul);
+	EXPECT_EQ(-1,ut.estimate.sec);
+	EXPECT_EQ(400ULL,ut.interval.below.asec);
+	EXPECT_EQ(400ULL,ut.interval.below.asec);
 }
 
-TEST(TimelineMath, PowerInitializers) {
-    power_t tE = EWATT(1);
-    EXPECT_EQ(1000000000000000000ULL, tE.watt);
-    EXPECT_EQ(0ULL, tE.awatt);
-    power_t tP = PWATT(1);
-    EXPECT_EQ(1000000000000000ULL, tP.watt);
-    EXPECT_EQ(0ULL, tP.awatt);
-    power_t tT = TWATT(1);
-    EXPECT_EQ(1000000000000ULL, tT.watt);
-    EXPECT_EQ(0ULL, tT.awatt);
-    power_t tG = GWATT(1);
-    EXPECT_EQ(1000000000ULL, tG.watt);
-    EXPECT_EQ(0ULL, tG.awatt);
-    power_t tM = MWATT(1);
-    EXPECT_EQ(1000000ULL, tM.watt);
-    EXPECT_EQ(0ULL, tM.awatt);
-    power_t tK = KWATT(1);
-    EXPECT_EQ(1000ULL, tK.watt);
-    EXPECT_EQ(0ULL, tK.awatt);
-    power_t t = WATT(1);
-    EXPECT_EQ(1ULL, t.watt);
-    EXPECT_EQ(0ULL, t.awatt);
-    power_t ta = aWATT(1);
-    EXPECT_EQ(1ULL, ta.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
-    power_t tf = fWATT(1);
-    EXPECT_EQ(1000ULL, tf.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
-    power_t tn = nWATT(1);
-    EXPECT_EQ(1000000ULL, tn.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
-    power_t tp = pWATT(1);
-    EXPECT_EQ(1000000000ULL, tp.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
-    power_t tu = uWATT(1);
-    EXPECT_EQ(1000000000000ULL, tu.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
-    power_t tm = mWATT(1);
-    EXPECT_EQ(1000000000000000ULL, tm.awatt);
-    EXPECT_EQ(0ULL, ta.watt);
+TEST(TimelineMath, utimepoint_sub) {
+	int v;
+	utimepoint_t ut;
+	utimelength_t ul;
+	TP_FROM_SEC(ut.estimate, -2LL);
+	TL_FROM_aSEC(ut.interval.below, 100ULL);
+	TL_FROM_aSEC(ut.interval.above, 100ULL);
+	TL_FROM_SEC(ul.estimate, 1ULL);
+	TL_FROM_aSEC(ul.interval.below, 300ULL);
+	TL_FROM_aSEC(ul.interval.above, 300ULL);
+	utimepoint_sub(&ut,&ul);
+	EXPECT_EQ(-3,ut.estimate.sec);
+	EXPECT_EQ(400ULL,ut.interval.below.asec);
+	EXPECT_EQ(400ULL,ut.interval.below.asec);
 }
-
-
-*/
