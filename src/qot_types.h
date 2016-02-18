@@ -41,6 +41,7 @@
 #ifdef __KERNEL__
 	#include <linux/ioctl.h>
  	#include <linux/math64.h>
+ 	#define llabs abs
 #else
 	#include <time.h>
 	#include <stdint.h>
@@ -75,9 +76,6 @@ typedef struct timelength {
 /* Convert a scalar value to a timelength */
 static inline void scalar_to_timelength(timelength_t *tl, u64 t, u64 dv, u64 ml)
 {
-    u64 tm;
-    int neg;
-
     /* Special case: time or divisor of zero */
     if (!t || !dv || !ml) {
     	if (tl) {
@@ -447,7 +445,7 @@ typedef struct qot_binding {
 #define TIMELINE_BIND_LEAVE         _IOW(TIMELINE_MAGIC_CODE, 3, qot_binding_t*)
 #define TIMELINE_BIND_UPDATE        _IOW(TIMELINE_MAGIC_CODE, 4, qot_binding_t*)
 #define TIMELINE_CORE_TO_TIMELINE   _IOR(TIMELINE_MAGIC_CODE, 5, timepoint_t*)
-#define TIMELINE_GET_TIME_NOW      _ IOR(TIMELINE_MAGIC_CODE, 6, utimepoint_t*)
+#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 6, utimepoint_t*)
 #define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 7, utimepoint_t*)
 
 #endif

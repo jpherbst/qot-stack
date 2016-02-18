@@ -67,33 +67,21 @@ typedef struct timeline_impl {
     s64 nsec;                   /* Discipline: global time offset  */
     spinlock_t lock;            /* Protects driver time registers  */
     struct idr idr_bindings;    /* IDR for trackng bindings        */
-    struct list_head head_acc;  /* Head pointing to accuracy       */
     struct list_head head_res;  /* Head pointing to resolution     */
+    struct list_head head_low;  /* Head pointing to accuracy (low) */
+    struct list_head head_upp;  /* Head pointing to accuracy (upp) */
 } timeline_impl_t;
 
 /* Private data for a binding, not visible outside this code       */
 typedef struct binding_impl {
     qot_binding_t info;         /* Binding information             */
     timeline_impl_t *parent;    /* Parent timeline                 */
-    struct list_head acc_list;  /* Head pointing to accuracy       */
     struct list_head res_list;  /* Head pointing to resolution     */
+    struct list_head low_list;  /* Head pointing to accuracy (low) */
+    struct list_head upp_list;  /* Head pointing to accuracy (upp) */
 } binding_impl_t;
 
 /* Binding structure management */
-
-/* Insert a new binding into the accuracy list */
-static inline void qot_insert_list_acc(qot_binding_t *binding_list,
-    struct list_head *head)
-{
-    qot_binding_t *bind_obj;
-    list_for_each_entry(bind_obj, head, acc_list) {
-        if (bind_obj->request.acc > binding_list->request.acc) {
-            list_add_tail(&binding_list->acc_list, &bind_obj->acc_list);
-            return;
-        }
-    }
-    list_add_tail(&binding_list->acc_list, head);
-}
 
 /* Insert a new binding into the resolution list */
 static inline void qot_insert_list_res(qot_binding_t *binding_list,
@@ -101,12 +89,42 @@ static inline void qot_insert_list_res(qot_binding_t *binding_list,
 {
     qot_binding_t *bind_obj;
     list_for_each_entry(bind_obj, head, res_list) {
-        if (bind_obj->request.res > binding_list->request.res) {
+        if (timelength_cmp(&bind_obj->info.demand.resolution, &binding_list->info.demand.resolution)) {
             list_add_tail(&binding_list->res_list, &bind_obj->res_list);
             return;
         }
     }
     list_add_tail(&binding_list->res_list, head);
+}
+
+/* Insert a new binding into the accuracy lower list */
+static inline void qot_insert_list_low(qot_binding_t *binding_list,
+    struct list_head *head)
+{
+    qot_binding_t *bind_obj;
+    list_for_each_entry(bind_obj, head, low_list) {
+        if (timelength_cmp(bind_obj->info.demand.accuracy.upper,
+        	binding_list->info.demand.accuracy.upper)) {
+            list_add_tail(&binding_list->low_list, &bind_obj->low_list);
+            return;
+        }
+    }
+    list_add_tail(&binding_list->low_list, head);
+}
+
+/* Insert a new binding into the accuracy upper list */
+static inline void qot_insert_list_upp(qot_binding_t *binding_list,
+    struct list_head *head)
+{
+    qot_binding_t *bind_obj;
+    list_for_each_entry(bind_obj, head, upp_list) {
+        if (timelength_cmp(bind_obj->info.demand.accuracy.upper,
+        	binding_list->info.demand.accuracy.upper)) {
+            list_add_tail(&binding_list->upp_list, &bind_obj->upp_list);
+            return;
+        }
+    }
+    list_add_tail(&binding_list->upp_list, head);
 }
 
 /* Add a new binding to a specified timeline */
@@ -131,8 +149,9 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     idr_preload_end();
     /* Insert its metrics into the parent timeline's linked list */
-    qot_insert_list_acc(binding, &timeline_impl->head_acc);
     qot_insert_list_res(binding, &timeline_impl->head_res);
+    qot_insert_list_low(binding, &timeline_impl->head_low);
+    qot_insert_list_upp(binding, &timeline_impl->head_upp);
     /* Success */
     return binding_impl;
 }
@@ -143,8 +162,9 @@ static void qot_binding_del(binding_impl_t *binding_impl)
     /* Remove the binding from the parallel lists */
     if (!binding_impl)
         return;
-    list_del(&binding_impl->acc_list);
     list_del(&binding_impl->res_list);
+    list_del(&binding_impl->low_list);
+    list_del(&binding_impl->upp_list);
     /* Remove the IDR reservation */
     if (binding_impl->parent) {
         idr_remove(&binding_impl->parent->idr_bindings,binding_impl->id);
@@ -324,10 +344,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         /* Copy over the new data */
         memcpy(&binding_impl->info, &msgb, sizeof(qot_binding_t));
         /* Delete and add to resort list */
-        list_del(&binding_impl->acc_list);
         list_del(&binding_impl->res_list);
-        qot_insert_list_acc(binding_impl, &timeline_impl->head_acc);
-        qot_insert_list_res(binding_impl, &timeline_impl->head_res);
+        list_del(&binding_impl->low_list);
+        list_del(&binding_impl->upp_list);
+        qot_insert_list_acc(binding_impl, &timeline_impl->head_res);
+        qot_insert_list_res(binding_impl, &timeline_impl->head_low);
+        qot_insert_list_res(binding_impl, &timeline_impl->head_upp);
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
@@ -389,8 +411,8 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc)
     binding_impl_t *binding_impl;
     timeline_impl_t *timeline_impl = container_of(pc, timeline_impl_t, clock);
     /* Remove all attached timeline_impl */
-    list_for_each_safe(pos, q, &timeline_impl.head_acc){
-        binding_impl = list_entry(pos, binding_impl_t, acc_list);
+    list_for_each_safe(pos, q, &timeline_impl.head_res){
+        binding_impl = list_entry(pos, binding_impl_t, res_list);
         qot_binding_del(binding_impl);
     }
     /* Remove the timeline_impl */
