@@ -62,6 +62,7 @@ typedef struct timeline_impl {
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
     struct posix_clock clock;   /* POSIX clock for this timeline   */
+    u32 max_adj; 			    /* Discipline: maximum adjust      */
     s32 dialed_frequency;       /* Discipline: dialed frequency    */
     s64 last;                   /* Discipline: last cycle count of */
     s64 mult;                   /* Discipline: ppb multiplier      */
@@ -176,32 +177,32 @@ static void qot_binding_del(binding_impl_t *binding_impl)
 
 /* Dicipline operations */
 
-static int qot_timeline_chdev_adjfreq(struct posix_clock *pc, s32 ppb)
+static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
 {
     s64 ns;
     unsigned long flags;
-    timeline_impl_t *timeline = container_of(pc,timeline_impl_t,clock);
-    spin_lock_irqsave(&timeline->lock, flags);
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    spin_lock_irqsave(&timeline_impl->lock, flags);
     ns = qot_clock_get_core_time();
-    timeline->nsec += (ns - timeline->last)
-        + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
-    timeline->mult += ppb;
-    timeline->last  = ns;
-    spin_unlock_irqrestore(&timeline->lock, flags);
+    timeline_impl->nsec += (ns - timeline_impl->last)
+        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
+    timeline_impl->mult += ppb;
+    timeline_impl->last  = ns;
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
 
-static int qot_timeline_chdev_adjtime(struct posix_clock *pc, s64 delta)
+static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
 {
     s64 ns;
     unsigned long flags;
-    timeline_impl_t *timeline = container_of(pc,timeline_impl_t,clock);
-    spin_lock_irqsave(&timeline->lock, flags);
-    ns = qot_core_time();
-    timeline->nsec += (ns - timeline->last)
-        + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL) + delta;
-    timeline->last = ns;
-    spin_unlock_irqrestore(&timeline->lock, flags);
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    spin_lock_irqsave(&timeline_impl->lock, flags);
+    ns = qot_clock_get_core_time();
+    timeline_impl->nsec += (ns - timeline_impl->last)
+        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
+    timeline_impl->last = ns;
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
 
@@ -227,11 +228,11 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     const struct timespec *tp)
 {
     unsigned long flags;
-    timeline_impl_t *timeline = container_of(pc,timeline_impl_t,clock);
-    spin_lock_irqsave(&timeline->lock, flags);
-    timeline->last = qot_core_time();
-    timeline->nsec = timespec64_to_ns(ts);
-    spin_unlock_irqrestore(&timeline->lock, flags);
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    spin_lock_irqsave(&timeline_impl->lock, flags);
+    timeline_impl->last = qot_clock_get_core_time();
+    timeline_impl->nsec = timespec64_to_ns(tp);
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
 
@@ -240,20 +241,20 @@ static int qot_timeline_chdev_gettime(struct posix_clock *pc,
 {
     s64 ns;
     unsigned long flags;
-    timeline_impl_t *timeline = container_of(pc,timeline_impl_t,clock);
-    spin_lock_irqsave(&timeline->lock, flags);
-    ns = qot_core_time();
-    timeline->nsec += (ns - timeline->last)
-        + div_s64(timeline->mult * (ns - timeline->last),1000000000ULL);
-    timeline->last = ns;
-    *ts = ns_to_timespec64(timeline->nsec);
-    spin_unlock_irqrestore(&timeline->lock, flags);
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    spin_lock_irqsave(&timeline_impl->lock, flags);
+    ns = qot_clock_get_core_time();
+    timeline_impl->nsec += (ns - timeline_impl->last)
+        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
+    timeline_impl->last = ns;
+    *tp = ns_to_timespec64(timeline_impl->nsec);
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
 
 static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
 {
-    timeline_impl_t *timeline = container_of(pc,timeline_impl_t,clock);
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     int err = -EOPNOTSUPP;
     if (tx->modes & ADJ_SETOFFSET) {
         struct timespec ts;
@@ -267,15 +268,15 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
             return -EINVAL;
         kt = timespec_to_ktime(ts);
         delta = ktime_to_ns(kt);
-        err = qot_timeline_chdev_adjtime(pc, delta);
+        err = qot_timeline_chdev_adj_adjtime(pc, delta);
     } else if (tx->modes & ADJ_FREQUENCY) {
         s32 ppb = qot_timeline_chdev_ppm_to_ppb(tx->freq);
-        if (ppb > ops->max_adj || ppb < -ops->max_adj)
+        if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
             return -ERANGE;
-        err = qot_timeline_chdev_adjfreq(pc, ppb);
-        timeline->dialed_frequency = tx->freq;
+        err = qot_timeline_chdev_adj_adjfreq(pc, ppb);
+        timeline_impl->dialed_frequency = tx->freq;
     } else if (tx->modes == 0) {
-        tx->freq = timeline->dialed_frequency;
+        tx->freq = timeline_impl->dialed_frequency;
         err = 0;
     }
     return err;
@@ -297,9 +298,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
     unsigned long arg)
 {
     struct timespec tp;
-    qot_timeline_t msgt;
     qot_binding_t msgb;
-    timepoint_t msgp;
     utimepoint_t msgu;
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
@@ -348,9 +347,9 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         list_del(&binding_impl->list_res);
         list_del(&binding_impl->list_low);
         list_del(&binding_impl->list_upp);
-        qot_insert_list_acc(binding_impl, &timeline_impl->head_res);
-        qot_insert_list_res(binding_impl, &timeline_impl->head_low);
-        qot_insert_list_res(binding_impl, &timeline_impl->head_upp);
+        qot_insert_list_res(binding_impl, &timeline_impl->head_res);
+        qot_insert_list_low(binding_impl, &timeline_impl->head_low);
+        qot_insert_list_upp(binding_impl, &timeline_impl->head_upp);
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
@@ -363,14 +362,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         /* Get the current time */
         if (qot_timeline_chdev_gettime(pc,&tp));
             return -EACCES;
-
         /* Convert the time estimate to an uncertain timepoint */
-        utimepoint_from_timespec(&msgu,&tp);
-
-        /* Add the time error introduced by the clock query latency */
-        utimepoint_add(&msgu,core_get_latency());
-        /* Add the time error introduced by synchronization */
-        utimepoint_add(&msgu,qot_timeline_sync_error());
+        timepoint_from_timespec(&msgu.estimate, &tp);
+        /* TODO:Add the time error introduced by the clock query latency */
+        //utimepoint_add(&msgu,qot_clock_get_latency());
+        /* TODO: Add the time error introduced by synchronization */
+        //utimepoint_add(&msgu,qot_timeline_sync_error());
         /* Copy the ID back to the user */
         if (copy_to_user((utimepoint_t*)arg, &msgu, sizeof(utimepoint_t)))
             return -EACCES;
@@ -414,8 +411,8 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc)
     binding_impl_t *binding_impl;
     timeline_impl_t *timeline_impl = container_of(pc, timeline_impl_t, clock);
     /* Remove all attached timeline_impl */
-    list_for_each_safe(pos, q, &timeline_impl.head_res){
-        binding_impl = list_entry(pos, binding_impl_t, res_list);
+    list_for_each_safe(pos, q, &timeline_impl->head_res){
+        binding_impl = list_entry(pos, binding_impl_t, list_res);
         qot_binding_del(binding_impl);
     }
     /* Remove the timeline_impl */
@@ -430,8 +427,8 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 {
     timeline_impl_t *timeline_impl;
     int major;
-    if (!name)
-        goto fail_noname;
+    if (!info)
+        goto fail_noinfo;
     /* Allocate a major number for device */
     major = MAJOR(timeline_devt);
     /* Allocate some memory for the timeline and copy name */
@@ -440,7 +437,7 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         pr_err("qot_timeline: cannot allocate memory for timeline_impl");
         goto fail_memoryalloc;
     }
-    memcpy(timeline_impl->info,info,sizeof(qot_timeline_t));
+    memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
@@ -471,7 +468,7 @@ fail_posixclock:
 fail_idasimpleget:
     kfree(timeline_impl);
 fail_memoryalloc:
-fail_noname:
+fail_noinfo:
     return -1;  /* Negative IDR values are not valid */
 }
 

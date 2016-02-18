@@ -33,6 +33,12 @@
 #include "qot_core.h"
 
 /**
+ * @brief get the current core time
+ * @return The core time in nanoseconds
+ **/
+s64 qot_clock_get_core_time(void);
+
+/**
  * @brief Register a clock with the QoT stack
  * @param impl A struct containing the clock implementation
  * @return A status code indicating success (0) or other (no more clocks)

@@ -451,8 +451,9 @@ typedef struct qot_binding {
 #define TIMELINE_BIND_JOIN         _IOWR(TIMELINE_MAGIC_CODE, 2, qot_binding_t*)
 #define TIMELINE_BIND_LEAVE         _IOW(TIMELINE_MAGIC_CODE, 3, qot_binding_t*)
 #define TIMELINE_BIND_UPDATE        _IOW(TIMELINE_MAGIC_CODE, 4, qot_binding_t*)
-#define TIMELINE_CORE_TO_TIMELINE   _IOR(TIMELINE_MAGIC_CODE, 5, timepoint_t*)
-#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 6, utimepoint_t*)
-#define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 7, utimepoint_t*)
+#define TIMELINE_CORE_TO_REMOTE    _IOWR(TIMELINE_MAGIC_CODE, 5, timepoint_t*)
+#define TIMELINE_REMOTE_TO_CORE    _IOWR(TIMELINE_MAGIC_CODE, 6, timepoint_t*)
+#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 7, utimepoint_t*)
+#define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 8, utimepoint_t*)
 
 #endif

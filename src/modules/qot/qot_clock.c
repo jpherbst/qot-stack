@@ -87,6 +87,13 @@ static qot_return_t qot_clock_insert(clk_t *clk)
 
 /* Public functions */
 
+/* Get the current core time */
+s64 qot_clock_get_core_time(void)
+{
+	/* TODO: implement this */
+	return 0;
+}
+
 qot_return_t qot_clock_register(qot_clock_impl_t *impl)
 {
     clk_t *clk_priv = NULL;
@@ -182,7 +189,6 @@ qot_return_t qot_clock_remove(qot_clock_t *clk)
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Remove all timelines */
 void qot_clock_remove_all(void)
 {
     clk_t *clk, *clk_next;

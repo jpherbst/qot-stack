@@ -32,19 +32,13 @@
 #include "qot_admin.h"
 
 /* Default OS latency */
-static utimelength_t os_latency = {
-    .estimate = mSEC(1),
-    .interval = {
-        .below = uSEC(500),
-        .above = uSEC(500),
-    }
-};
+static utimelength_t os_latency;
 
 /* Set the OS latency */
 qot_return_t qot_admin_set_os_latency(utimelength_t *timelength)
 {
     if (!timelength)
-        QOT_RETURN_TYPE_ERR;
+        return QOT_RETURN_TYPE_ERR;
     memcpy(&os_latency,timelength,sizeof(utimelength_t));
     return QOT_RETURN_TYPE_OK;
 }
@@ -53,8 +47,8 @@ qot_return_t qot_admin_set_os_latency(utimelength_t *timelength)
 qot_return_t qot_admin_get_os_latency(utimelength_t *timelength)
 {
     if (!timelength)
-        QOT_RETURN_TYPE_ERR;
-    memcpy(timelength,&os_latency.sizeof(utimelength_t));
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(timelength,&os_latency,sizeof(utimelength_t));
     return QOT_RETURN_TYPE_OK;
 }
 
