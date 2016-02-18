@@ -37,7 +37,8 @@
 #include <msg/QoT_DCPS.hpp>
 
 // Synchronization engine
-#include "Synchronization.hpp"
+//#include "Synchronization.hpp"
+#include "sync/Sync.hpp"
 
 std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts);
 
@@ -47,7 +48,7 @@ namespace qot
 	class Coordinator : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineType>
 	{
 		// Constructor and destructor
-		public: Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface);
+		public: Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
 		public: ~Coordinator();
 
 		// Required by dds::sub::NoOpDataReaderListene
@@ -75,7 +76,7 @@ namespace qot
 		// Coordinator state
 		private: int phc;
 		private: int qotfd;
-		private: Synchronization sync;
+		//private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines
 		private: dds::domain::DomainParticipant dp;
@@ -85,6 +86,8 @@ namespace qot
 		private: dds::sub::Subscriber sub;
 		private: dds::sub::DataReader<qot_msgs::TimelineType> dr;
 		private: qot_msgs::TimelineType timeline;
+
+		private: boost::shared_ptr<Sync> sync;
 	};
 }
 

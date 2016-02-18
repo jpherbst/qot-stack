@@ -53,7 +53,7 @@ extern "C"
 using namespace qot;
 
 // Constructor
-Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface) 
+Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr) 
 	: asio(io), basename(name), baseiface(iface)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier";

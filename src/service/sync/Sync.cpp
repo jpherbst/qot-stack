@@ -1,13 +1,13 @@
 /**
- * @file Notifier.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file Sync.cpp
+ * @brief Factory class prepares a synchronization session
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ *      1. Redistributions of source code must retain the above copyright notice, 
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice, 
  *     this list of conditions and the following disclaimer in the documentation
@@ -23,48 +23,55 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
  */
-#ifndef NOTIFIER_HPP
-#define NOTIFIER_HPP
 
-// System includes
-#include <string>
-#include <map>
+#include "Sync.hpp"
 
-// Boost includes
-#include <boost/asio.hpp>
-#include <boost/thread.hpp> 
-#include <boost/log/trivial.hpp>
+// Subtypes
+#include "ptp/PTP.hpp"
 
-// Project includes
-#include "Timeline.hpp"
+using namespace qot;
 
-namespace qot
+// All sync algorithms get parameter updates from the qot module
+Sync::Sync() : flag(true)
 {
-	class Notifier
-	{
-
-	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
-	public: ~Notifier();
-
-	// Private methods
-	private: void add(int id);
-	private: void del(int id);
-	private: void watch(const char* dir);
-
-	// Asynhronous funcitonality
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
-
-	// Private variables
-	private: int fd;
-	private: std::string baseiface;
-	private: std::string basename;
-
-	// Data structure to store timelines
-	private: std::map<int,Timeline*> timelines;
-	};
+	// Open an IOCTL handle
+	/*const char *file_name = "/dev/timeline";
+	fd = open(file_name, O_RDWR);
+	if (fd == -1)
+		std::cerr << "Sync::ERROR IOCTL open() problem" << std::endl;
+	*/
+	// Protocol to listen for time sync updates
+	//thread = boost::thread(boost::bind(&Sync::worker,this));
 }
 
-#endif
+Sync::~Sync()
+{
+	// Stop and join thread
+	this->flag = false;
+	//thread.join();
+
+	// Close ioctl
+	//close(fd);
+}
+
+// Worker thread to poll for new parameters
+void Sync::worker()
+{}
+
+
+// Factory method
+boost::shared_ptr<Sync> Sync::Factory(
+			boost::asio::io_service *io,		// IO service
+			const std::string &address,			// IP address of the node
+			const std::string &iface)				// interface for synchronization
+{
+	// Instantiate a new sync algorithm
+/*	switch(iface)
+	{
+		case ETH: 	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));
+	}
+*/	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));
+}
