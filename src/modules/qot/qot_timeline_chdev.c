@@ -423,10 +423,12 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc)
     binding_impl_t *binding_impl;
     timeline_impl_t *timeline_impl = container_of(pc, timeline_impl_t, clock);
     /* Remove all attached timeline_impl */
-    list_for_each_safe(pos, q, &timeline_impl->head_res){
-        binding_impl = list_entry(pos, binding_impl_t, list_res);
-        qot_binding_del(binding_impl);
-    }
+    if (!list_empty(&timeline_impl->head_res)) {
+	    list_for_each_safe(pos, q, &timeline_impl->head_res){
+	        binding_impl = list_entry(pos, binding_impl_t, list_res);
+	        qot_binding_del(binding_impl);
+	    }
+	}
     /* Remove the timeline_impl */
     idr_remove(&qot_timelines_map, timeline_impl->index);
     kfree(timeline_impl);
@@ -477,6 +479,10 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 		pr_err("qot_timeline: cannot register sysfs interface");
 		goto fail_sysfs;
 	}
+	/* Initialize our list heads  to track binding order */
+	INIT_LIST_HEAD(&timeline_impl->head_res);
+	INIT_LIST_HEAD(&timeline_impl->head_low);
+	INIT_LIST_HEAD(&timeline_impl->head_upp);
     /* Update the index before returning OK */
     return timeline_impl->index;
 
@@ -500,7 +506,7 @@ qot_return_t qot_timeline_chdev_unregister(int index)
 	/* Clean up the sysfs interface */
 	qot_timeline_sysfs_cleanup(timeline_impl->dev);
     /* Delete the character device - also deletes IDR */
-    device_destroy(timeline_class, timeline_impl->devid);
+    device_destroy(timeline_class,timeline_impl->devid);
     /* Remove the posix clock */
     posix_clock_unregister(&timeline_impl->clock);
     return QOT_RETURN_TYPE_OK;
