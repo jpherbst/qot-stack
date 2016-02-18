@@ -57,7 +57,6 @@ static spinlock_t qot_timelines_lock;
 /* Private data for a timeline, not visible outside this code      */
 typedef struct timeline_impl {
     qot_timeline_t info;        /* Timeline info                   */
-    struct rb_node node;        /* Red-black tree indexes by name  */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
@@ -263,13 +262,13 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
 
 static int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode)
 {
-    /* Privately allocated data */
+    /* TODO: Privately allocated data */
 	return 0;
 }
 
 static int qot_timeline_chdev_release(struct posix_clock *pc)
 {
-    /* Privately allocated data */
+    /* TODO: Privately allocated data */
     return 0;
 }
 
@@ -341,13 +340,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         /* Get the current time */
         if (qot_timeline_chdev_gettime(pc,&tp));
             return -EACCES;
+        /* Convert the time estimate to an uncertain timepoint */
         utimepoint_from_timespec(&msgu,&tp);
         /* Add the time error introduced by the clock query latency */
         utimepoint_add(&msgu,core_get_latency());
         /* Add the time error introduced by synchronization */
         utimepoint_add(&msgu,qot_timeline_sync_error());
-        /* Add the time error introduced by OS query latency */
-        utimepoint_add(&msgu,qot_timeline_os_error());
         /* Copy the ID back to the user */
         if (copy_to_user((utimepoint_t*)arg, &msgu, sizeof(utimepoint_t)))
             return -EACCES;
@@ -403,7 +401,7 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc)
 /* PUBLIC */
 
 /* Create the timeline and return an index that identifies it uniquely */
-int qot_timeline_chdev_register(char* name)
+int qot_timeline_chdev_register(qot_timeline_t *info)
 {
     timeline_impl_t *timeline_impl;
     int major;
@@ -417,7 +415,7 @@ int qot_timeline_chdev_register(char* name)
         pr_err("qot_timeline: cannot allocate memory for timeline_impl");
         goto fail_memoryalloc;
     }
-    strncpy(timeline_impl->name,name,strlen(timeline_impl->name));
+    memcpy(timeline_impl->info,info,sizeof(qot_timeline_t));
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
