@@ -44,6 +44,30 @@
 #define N_CLOCK_PFD (N_POLLFD + 1) /* one extra per port, for the fault timer */
 #define POW2_41 ((double)(1ULL << 41))
 
+struct servo {
+        LIST_ENTRY(servo) list; /* QOT */
+        clockid_t tml_id; /* timeline id */
+        
+        double max_frequency;
+        double step_threshold;
+        double first_step_threshold;
+        int first_update;
+
+        void (*destroy)(struct servo *servo);
+
+        double (*sample)(struct servo *servo,
+                         int64_t offset, uint64_t local_ts,
+                         enum servo_state *state);
+
+        void (*sync_interval)(struct servo *servo, double interval);
+
+        void (*reset)(struct servo *servo);
+
+        double (*rate_ratio)(struct servo *servo);
+
+        void (*leap)(struct servo *servo, int leap);
+};
+
 struct port {
 	LIST_ENTRY(port) list;
 };
@@ -116,7 +140,9 @@ struct clock {
 	struct clockcheck *sanity_check;
 	struct interface uds_interface;
 	LIST_HEAD(clock_subscribers_head, clock_subscriber) subscribers;
-	int qotfd;	// qot ioctl link	
+	LIST_HEAD(tmls_servo_head, servo) tmls_servos; /* QOT */
+	clockid_t *timelines; /* QOT */
+	int timelines_size; /* QOT */
 };
 
 struct clock the_clock;
@@ -136,6 +162,44 @@ static int cid_eq(struct ClockIdentity *a, struct ClockIdentity *b)
 	    (var) && ((tvar) = LIST_NEXT((var), field), 1);		\
 	    (var) = (tvar))
 #endif
+
+/* QOT */
+static void destroy_timelines_servos(struct clock *c){
+        struct servo *s, *tmp;
+        LIST_FOREACH_SAFE(s, &c->tmls_servos, list, tmp) {
+                LIST_REMOVE(s, list);
+                servo_destroy(s);
+        }
+}
+static int create_timelines_servos(struct clock *c, int fadj, int max_adj, int sw_ts, enum servo_type servo){
+        int i;
+        for (i = 0; i < c->timelines_size; i++) {
+                
+                struct servo *s, *piter, *lasts = NULL;
+                s = servo_create(servo, -fadj, max_adj, sw_ts);
+                 
+                if (!s) {
+                        pr_err("Failed to create timeline%d servo", c->timelines[i]);
+                        return -1;
+                }
+                s->tml_id = c->timelines[i];
+
+                LIST_FOREACH(piter, &c->tmls_servos, list)
+                lasts = piter;
+                if (lasts)
+                        LIST_INSERT_AFTER(lasts, s, list);
+                else
+                        LIST_INSERT_HEAD(&c->tmls_servos, s, list);
+        } 
+        return 0;
+}
+static void timelines_servos_sync_interval(struct clock *c, double interval){
+        struct servo *s;
+        LIST_FOREACH(s, &c->tmls_servos, list){
+                servo_sync_interval(s, interval);
+        }       
+}
+/* QOT */
 
 static void remove_subscriber(struct clock_subscriber *s)
 {
@@ -273,7 +337,9 @@ void clock_destroy(struct clock *c)
 	if (c->clkid != CLOCK_REALTIME) {
 		phc_close(c->clkid);
 	}
-	servo_destroy(c->servo);
+	//servo_destroy(c->servo);
+	/* QOT, destroying servos for all timelines */
+	destroy_timelines_servos(c);
 	filter_destroy(c->delay_filter);
 	stats_destroy(c->stats.offset);
 	stats_destroy(c->stats.freq);
@@ -792,9 +858,9 @@ static void clock_remove_port(struct clock *c, struct port *p)
 	port_close(p);
 }
 
-struct clock *clock_create(int phc_index, int qotfd, struct interfaces_head *ifaces,
+struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
-			   enum servo_type servo)
+			   enum servo_type servo, clockid_t *timelines, int timelines_size) /* QOT */
 {
 	int fadj = 0, max_adj = 0, sw_ts = timestamping == TS_SOFTWARE ? 1 : 0;
 	struct clock *c = &the_clock;
@@ -814,7 +880,6 @@ struct clock *clock_create(int phc_index, int qotfd, struct interfaces_head *ifa
 	udsif->transport = TRANS_UDS;
 	udsif->delay_filter_length = 1;
 
-	c->qotfd = qotfd;
 	c->free_running = dds->free_running;
 	c->freq_est_interval = dds->freq_est_interval;
 	c->grand_master_capable = dds->grand_master_capable;
@@ -859,11 +924,17 @@ struct clock *clock_create(int phc_index, int qotfd, struct interfaces_head *ifa
 		   the actual frequency of the clock. */
 		clockadj_set_freq(c->clkid, fadj);
 	}
-	c->servo = servo_create(servo, -fadj, max_adj, sw_ts);
-	if (!c->servo) {
-		pr_err("Failed to create clock servo");
+
+	/* QOT, Creating individual servos for all the timelines */
+	c->timelines = timelines; 
+	c->timelines_size = timelines_size;
+
+	LIST_INIT(&c->tmls_servos);
+	if(create_timelines_servos(c, fadj, max_adj, sw_ts, servo)){
 		return NULL;
 	}
+	/* QOT */
+
 	c->servo_state = SERVO_UNLOCKED;
 	c->servo_type = servo;
 	c->delay_filter = filter_create(dds->delay_filter,
@@ -1307,7 +1378,8 @@ void clock_path_delay(struct clock *c, struct timespec req, struct timestamp rx,
 	t2 = c->t2;
 	t3 = timespec_to_tmv(req);
 	t4 = timestamp_to_tmv(rx);
-	rr = clock_rate_ratio(c);
+	// rr = clock_rate_ratio(c); /* QOT, clock drift between path delay message exchange is negligible */
+	rr = 1.0; /* QOT */
 
 	/*
 	 * c->path_delay = (t2 - t3) * rr + (t4 - t1);
@@ -1383,16 +1455,28 @@ int clock_switch_phc(struct clock *c, int phc_index)
 	}
 	fadj = (int) clockadj_get_freq(clkid);
 	clockadj_set_freq(clkid, fadj);
-	servo = servo_create(c->servo_type, -fadj, max_adj, 0);
+
+	/* QOT, destroying servos for all timelines */
+	destroy_timelines_servos(c);
+
+	if(create_timelines_servos(c, fadj, max_adj, 0, c->servo_type)){
+		pr_err("Switching PHC, failed to create timeline servo");
+		phc_close(clkid);
+		return -1;
+	}
+
+	/*servo = servo_create(c->servo_type, -fadj, max_adj, 0);
 	if (!servo) {
 		pr_err("Switching PHC, failed to create clock servo");
 		phc_close(clkid);
 		return -1;
-	}
+	}*/
+	/* QOT */
+
 	phc_close(c->clkid);
-	servo_destroy(c->servo);
+	//servo_destroy(c->servo); /* QOT */
 	c->clkid = clkid;
-	c->servo = servo;
+	//c->servo = servo; /* QOT */
 	c->servo_state = SERVO_UNLOCKED;
 	return 0;
 }
@@ -1405,8 +1489,15 @@ enum servo_state clock_synchronize(struct clock *c,
 {
 	double adj;
 	tmv_t ingress, origin;
-	enum servo_state state = SERVO_UNLOCKED;
+	enum servo_state state;
+	struct servo *s;
 
+	/* QOT, synchronize all the timelines */
+	LIST_FOREACH(s, &c->tmls_servos, list) {
+		state = SERVO_UNLOCKED;
+
+	/* TODO: QOT, Project received timestamp to timeline reference */
+	// qot_project_timeline(s->tml_id, timespec_to_tmv(ingress_ts), &ingress)
 	ingress = timespec_to_tmv(ingress_ts);
 	origin  = timestamp_to_tmv(origin_ts);
 
@@ -1433,26 +1524,35 @@ enum servo_state clock_synchronize(struct clock *c,
 	if (c->free_running)
 		return clock_no_adjust(c);
 
-	adj = servo_sample(c->servo, tmv_to_nanoseconds(c->master_offset),
-			   tmv_to_nanoseconds(ingress), &state);
+	/*adj = servo_sample(c->servo, tmv_to_nanoseconds(c->master_offset),
+			   tmv_to_nanoseconds(ingress), &state);*/
+	adj = servo_sample(s, tmv_to_nanoseconds(c->master_offset),
+			   tmv_to_nanoseconds(ingress), &state); /* QOT */
+
 	c->servo_state = state;
 
-	if (c->stats.max_count > 1) {
+	/* QOT, Stats maintained in QOT core */
+	/*if (c->stats.max_count > 1) {
 		clock_stats_update(&c->stats,
 				   tmv_to_nanoseconds(c->master_offset), adj);
 	} else {
-		pr_info("master offset %10" PRId64 " s%d freq %+7.0f "
+		*/
+		pr_info("timeline id: %i master offset %10" PRId64 " s%d freq %+7.0f "
 			"path delay %9" PRId64,
+			s->tml_id,
 			tmv_to_nanoseconds(c->master_offset), state, adj,
 			tmv_to_nanoseconds(c->path_delay));
-	}
+	//}
 
 	switch (state) {
 	case SERVO_UNLOCKED:
 		break;
 	case SERVO_JUMP:
-		clockadj_set_freq(c->clkid, -adj);
-		clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset));
+		//clockadj_set_freq(c->clkid, -adj); /* QOT */
+		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
+		// Adjust the timeline
+		clockadj_set_freq(s->tml_id, -adj); /* QOT */
+		clockadj_step(s->tml_id, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1462,12 +1562,17 @@ enum servo_state clock_synchronize(struct clock *c,
 		}
 		break;
 	case SERVO_LOCKED:
-		clockadj_set_freq(c->clkid, -adj);
+	 	/* QOT */
+		/*clockadj_set_freq(c->clkid, -adj);
 		if (c->clkid == CLOCK_REALTIME)
 			sysclk_set_sync();
+		*/
+		// Adjust the timeline
+		clockadj_set_freq(s->tml_id, -adj); /* QOT */
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
 		break;
+	}
 	}
 	return state;
 }
@@ -1494,7 +1599,9 @@ void clock_sync_interval(struct clock *c, int n)
 	}
 	c->stats.max_count = (1 << shift);
 
-	servo_sync_interval(c->servo, n < 0 ? 1.0 / (1 << -n) : 1 << n);
+	/* QOT, setting sync interval for all timelines servos */
+	//servo_sync_interval(c->servo, n < 0 ? 1.0 / (1 << -n) : 1 << n);
+	timelines_servos_sync_interval(c, n < 0 ? 1.0 / (1 << -n) : 1 << n);
 }
 
 struct timePropertiesDS *clock_time_properties(struct clock *c)
@@ -1587,24 +1694,16 @@ int clock_num_ports(struct clock *c)
 
 void clock_check_ts(struct clock *c, struct timespec ts)
 {
-	if (c->sanity_check &&
+	/* QOT, removed sanity check for now */
+	/*if (c->sanity_check &&
 	    clockcheck_sample(c->sanity_check,
 			      ts.tv_sec * NS_PER_SEC + ts.tv_nsec)) {
 		servo_reset(c->servo);
 	}
+	*/
 }
 
 double clock_rate_ratio(struct clock *c)
 {
 	return servo_rate_ratio(c->servo);
-}
-
-int clock_qot(struct clock *c, struct timespec *ts)
-{
-	int64_t ns =  (int64_t) ts->tv_sec * 1000000000LL + (int64_t) ts->tv_nsec;
-	if (ioctl(c->qotfd, QOT_PROJECT_TIME, &ns))
-	{
-		ts->tv_nsec = ns % NS_PER_SEC;
-		ts->tv_sec  = ns / NS_PER_SEC;
-	}
 }

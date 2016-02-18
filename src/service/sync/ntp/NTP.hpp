@@ -1,7 +1,7 @@
 /**
- * @file Timeline.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file NTP.hpp
+ * @brief Provides ntp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -23,54 +23,60 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
  */
-#ifndef TIMELINE_HPP
-#define TIMELINE_HPP
 
-// std includes
-#include <thread>
-#include <mutex>
-#include <condition_variable>
+#ifndef NTP_HPP
+#define NTP_HPP
 
 // Boost includes
 #include <boost/asio.hpp>
-#include <boost/thread.hpp>
+#include <boost/thread.hpp> 
 #include <boost/log/trivial.hpp>
 
-// Network coordination
-#include "Coordinator.hpp"
+#include "../Sync.hpp"
 
-// Include the QOT api
+/* Linuxptp includes */
 extern "C"
 {
-	#include "../../module/qot.h"
+	// Standard includes
+	#include <limits.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
+	#include <linux/net_tstamp.h>
+
+	// ntpv4 includes
+	//#include "ntpv4/clock.h"
 }
 
 namespace qot
 {
-	class Timeline
+	class NTP : public Sync
 	{
-	// Constructor and destructor
-	public: Timeline(boost::asio::io_service *io, const std::string &name, 
-						const std::string &iface, const std::string &addr, int id);
-	public: ~Timeline();
 
-	// Heartbeat timer
-	private: void MonitorThread();				// Polling thread for params
-	private: void Heartbeat(const boost::system::error_code& /*e*/);
+		// Constructor and destructor
+		public: NTP(boost::asio::io_service *io, const std::string &iface);
+		public: ~NTP();
 
-	// Asynchronous service
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;				// Worker thread for capture
+		// Control functions
+		public: void Reset();
+		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size);
+		public: void Stop();						// Stop
 
-	// Communication with local timeline
-	private: int fd;							// IOCTL link
-	private: struct qot_message msg;			// Information about the timeline
-	private: bool kill;							// Kill flag
-	private: std::string basename;				// Name of service
+		// This thread performs rhe actual syncrhonization
+		private: int SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size);
 
-	// Network (DDS) coordinator
-	private: Coordinator coordinator;
+		// Boost ASIO
+		private: boost::asio::io_service *asio;
+		private: boost::thread thread;
+		private: std::string baseiface;
+		private: bool kill;
+
+		// NTP settings
+		//private: struct config cfg_settings;
 
 	};
 }
