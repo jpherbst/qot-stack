@@ -1,7 +1,7 @@
 /**
- * @file Notifier.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file NTP.hpp
+ * @brief Provides ntp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -23,48 +23,61 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *
  */
-#ifndef NOTIFIER_HPP
-#define NOTIFIER_HPP
 
-// System includes
-#include <string>
-#include <map>
+#ifndef NTP_HPP
+#define NTP_HPP
 
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
 #include <boost/log/trivial.hpp>
 
-// Project includes
-#include "Timeline.hpp"
+#include "../Sync.hpp"
+
+/* Linuxptp includes */
+extern "C"
+{
+	// Standard includes
+	#include <limits.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#include <unistd.h>
+	#include <linux/net_tstamp.h>
+
+	// ntpv4 includes
+	//#include "ntpv4/clock.h"
+}
 
 namespace qot
 {
-	class Notifier
+	class NTP : public Sync
 	{
 
-	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
-	public: ~Notifier();
+		// Constructor and destructor
+		public: NTP(boost::asio::io_service *io, const std::string &iface);
+		public: ~NTP();
 
-	// Private methods
-	private: void add(int id);
-	private: void del(int id);
-	private: void watch(const char* dir);
+		// Control functions
+		public: void Reset();
+		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size);
+		public: void Stop();						// Stop
 
-	// Asynhronous funcitonality
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
+		// This thread performs rhe actual syncrhonization
+		private: int SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size);
 
-	// Private variables
-	private: int fd;
-	private: std::string baseiface;
-	private: std::string basename;
-	private: std::string baseaddr;
+		// Boost ASIO
+		private: boost::asio::io_service *asio;
+		private: boost::thread thread;
+		private: std::string baseiface;
+		private: bool kill;
 
-	// Data structure to store timelines
-	private: std::map<int,Timeline*> timelines;
+		// NTP settings
+		//private: struct config cfg_settings;
+
 	};
 }
 

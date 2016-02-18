@@ -35,9 +35,10 @@ using namespace qot;
 #define DEBUG true
 #define TEST  true
 
-PTP::PTP(boost::asio::io_service *io,		// ASIO handle
-		const std::string &iface)			// interface			
-	: asio(io), baseiface(iface)
+PTP::PTP(boost::asio::io_service *io,	// ASIO handle
+		const std::string &iface,		// interface
+		int ptp_index)					// index of the ptp char device						
+	: Sync(), asio(io), baseiface(iface), ptpindex(ptp_index)
 {	
 	this->Reset();	
 }
@@ -122,7 +123,7 @@ void PTP::Reset()
 	cfg_settings.cfg_ignore = 0;
 }
 
-void PTP::Start(bool master, int log_sync_interval, short sync_session, clockid_t *timelines, uint16_t timelines_size)
+void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size)
 {
 	// First stop any sync that is currently underway
 	this->Stop();
@@ -138,10 +139,7 @@ void PTP::Start(bool master, int log_sync_interval, short sync_session, clockid_
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
 
-	// TODO: How to see if /dev/ptp0 is always the ethernet controller clock?
-	int phc_index = 0;
-
-	thread = boost::thread(boost::bind(&PTP::SyncThread, this, phc_index, timelines, timelines_size));
+	thread = boost::thread(boost::bind(&PTP::SyncThread, this, ptpindex, timelines, timelines_size));
 }
 
 void PTP::Stop()
@@ -152,7 +150,7 @@ void PTP::Stop()
 }
 
 
-int PTP::SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size)
+int PTP::SyncThread(int ptp_index, clockid_t *timelines, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL;
@@ -264,7 +262,7 @@ int PTP::SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size
 	}
 
 	// Create the clock
-	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, 
+	clock = clock_create(ptp_index, (struct interfaces_head*)&cfg_settings.interfaces, 
 		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelines, timelines_size);
 	if (!clock)
 	{

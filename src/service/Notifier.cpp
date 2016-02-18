@@ -54,7 +54,7 @@ using namespace qot;
 
 // Constructor
 Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr) 
-	: asio(io), basename(name), baseiface(iface)
+	: asio(io), basename(name), baseiface(iface), baseaddr(addr)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier";
 
@@ -105,7 +105,7 @@ void Notifier::add(int id)
 	// If we get to this point then this is a valid timeline
 	std::map<int,Timeline*>::iterator it = timelines.find(id);
 	if (it == timelines.end())
-		timelines[id] = new Timeline(asio, basename, baseiface, id);
+		timelines[id] = new Timeline(asio, basename, baseiface, baseaddr, id);
 	else
 		BOOST_LOG_TRIVIAL(warning) << "The timeline already exists in our data structure";
 }

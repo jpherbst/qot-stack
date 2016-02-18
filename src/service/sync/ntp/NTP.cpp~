@@ -1,13 +1,13 @@
 /**
- * @file Notifier.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file NTP.cpp
+ * @brief Provides ptp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ *      1. Redistributions of source code must retain the above copyright notice, 
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice, 
  *     this list of conditions and the following disclaimer in the documentation
@@ -23,49 +23,57 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * The code in this file is an adaptation of ptp4l  
+ *
  */
-#ifndef NOTIFIER_HPP
-#define NOTIFIER_HPP
 
-// System includes
-#include <string>
-#include <map>
+#include "NTP.hpp"
 
-// Boost includes
-#include <boost/asio.hpp>
-#include <boost/thread.hpp> 
-#include <boost/log/trivial.hpp>
+using namespace qot;
 
-// Project includes
-#include "Timeline.hpp"
+#define DEBUG true
+#define TEST  true
 
-namespace qot
-{
-	class Notifier
-	{
-
-	// Constructor and destructor
-	public: Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
-	public: ~Notifier();
-
-	// Private methods
-	private: void add(int id);
-	private: void del(int id);
-	private: void watch(const char* dir);
-
-	// Asynhronous funcitonality
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
-
-	// Private variables
-	private: int fd;
-	private: std::string baseiface;
-	private: std::string basename;
-	private: std::string baseaddr;
-
-	// Data structure to store timelines
-	private: std::map<int,Timeline*> timelines;
-	};
+NTP::NTP(boost::asio::io_service *io,		// ASIO handle
+		const std::string &iface)			// interface			
+	: asio(io), baseiface(iface)
+{	
+	this->Reset();	
 }
 
-#endif
+NTP::~NTP()
+{
+	this->Stop();
+}
+
+void NTP::Reset() 
+{}
+
+void NTP::Start(bool master, int log_sync_interval, short sync_session, clockid_t *timelines, uint16_t timelines_size)
+{
+	// First stop any sync that is currently underway
+	this->Stop();
+
+	// Restart sync
+	BOOST_LOG_TRIVIAL(info) << "Starting NTP synchronization";
+	kill = false;
+
+	// TODO: How to see if /dev/ptp0 is always the ethernet controller clock?
+	int phc_index = 0;
+
+	thread = boost::thread(boost::bind(&NTP::SyncThread, this, phc_index, timelines, timelines_size));
+}
+
+void NTP::Stop()
+{
+	BOOST_LOG_TRIVIAL(info) << "Stopping NTP synchronization ";
+	kill = true;
+	thread.join();
+}
+
+
+int NTP::SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size)
+{
+	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
+}

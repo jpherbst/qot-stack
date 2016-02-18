@@ -1,7 +1,7 @@
 /**
- * @file Syncrhonization.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file NTP.hpp
+ * @brief Provides ntp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -24,17 +24,18 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * The code in this file is an adaptation of ptp4l  
  *
  */
 
-#ifndef SYNCHRONIZATION_HPP
-#define SYNCHRONIZATION_HPP
+#ifndef NTP_HPP
+#define NTP_HPP
 
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
 #include <boost/log/trivial.hpp>
+
+#include "../Sync.hpp"
 
 /* Linuxptp includes */
 extern "C"
@@ -47,45 +48,35 @@ extern "C"
 	#include <unistd.h>
 	#include <linux/net_tstamp.h>
 
-	// Linuxptp includes
-	#include "linuxptp/clock.h"
-	#include "linuxptp/config.h"
-	#include "linuxptp/ntpshm.h"
-	#include "linuxptp/pi.h"
-	#include "linuxptp/print.h"
-	#include "linuxptp/raw.h"
-	#include "linuxptp/sk.h"
-	#include "linuxptp/transport.h"
-	#include "linuxptp/udp6.h"
-	#include "linuxptp/uds.h"
-	#include "linuxptp/util.h"
-	#include "linuxptp/version.h"
+	// ntpv4 includes
+	//#include "ntpv4/clock.h"
 }
 
 namespace qot
 {
-	class Synchronization
+	class NTP : public Sync
 	{
 
-	// Constructor and destructor
-	public: Synchronization(boost::asio::io_service *io, const std::string &iface);
-	public: ~Synchronization();
+		// Constructor and destructor
+		public: NTP(boost::asio::io_service *io, const std::string &iface);
+		public: ~NTP();
 
-	// Control dunctions
-	public: void Start(int phc_index, int qotfd, short domain, bool master, uint64_t accuracy);
-	public: void Stop();						// Stop
+		// Control functions
+		public: void Reset();
+		public: void Start(bool master, int log_sync_interval, short sync_session, clockid_t *timelines, uint16_t timelines_size);
+		public: void Stop();						// Stop
 
-	// This thread performs rhe actual syncrhonization
-	private: int SyncThread(int phc_index, int qotfd);
+		// This thread performs rhe actual syncrhonization
+		private: int SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size);
 
-	// Boost ASIO
-	private: boost::asio::io_service *asio;
-	private: boost::thread thread;
-	private: std::string baseiface;
-	private: bool kill;
+		// Boost ASIO
+		private: boost::asio::io_service *asio;
+		private: boost::thread thread;
+		private: std::string baseiface;
+		private: bool kill;
 
-	// PTP settings
-	private: struct config cfg_settings;
+		// NTP settings
+		//private: struct config cfg_settings;
 
 	};
 }

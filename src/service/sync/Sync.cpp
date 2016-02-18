@@ -31,47 +31,77 @@
 
 // Subtypes
 #include "ptp/PTP.hpp"
+#include "ntp/NTP.hpp"
+
+#define QOT_IOCTL_BASE		"/dev"
+#define QOT_IOCTL_PTP		"ptp"
+#define QOT_IOCTL_FORMAT	"%3s%d"
+#define QOT_MAX_NAMELEN 	(32)
 
 using namespace qot;
-
-// All sync algorithms get parameter updates from the qot module
-Sync::Sync() : flag(true)
-{
-	// Open an IOCTL handle
-	/*const char *file_name = "/dev/timeline";
-	fd = open(file_name, O_RDWR);
-	if (fd == -1)
-		std::cerr << "Sync::ERROR IOCTL open() problem" << std::endl;
-	*/
-	// Protocol to listen for time sync updates
-	//thread = boost::thread(boost::bind(&Sync::worker,this));
-}
-
-Sync::~Sync()
-{
-	// Stop and join thread
-	this->flag = false;
-	//thread.join();
-
-	// Close ioctl
-	//close(fd);
-}
-
-// Worker thread to poll for new parameters
-void Sync::worker()
-{}
-
 
 // Factory method
 boost::shared_ptr<Sync> Sync::Factory(
 			boost::asio::io_service *io,		// IO service
 			const std::string &address,			// IP address of the node
-			const std::string &iface)				// interface for synchronization
+			const std::string &iface)			// interface for synchronization
 {
-	// Instantiate a new sync algorithm
-/*	switch(iface)
-	{
-		case ETH: 	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));
-	}
-*/	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));
+
+	// If IP address is private (LAN) and interface specified is ethernet
+	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0){
+
+		// Open dev directory
+		DIR *dir = opendir(QOT_IOCTL_BASE);
+		if(dir){
+			BOOST_LOG_TRIVIAL(info) << "directory open" << QOT_IOCTL_BASE;
+			// Read the entries from dev directory
+    		struct dirent *entry;
+			while ((entry = readdir(dir)) != NULL) {
+				BOOST_LOG_TRIVIAL(info) << "entry in directory found" << QOT_IOCTL_BASE;
+				// Check if we have a ptp device
+				char str[QOT_MAX_NAMELEN]; 
+				int ret, val;	
+				ret = sscanf(entry->d_name, QOT_IOCTL_FORMAT, str, &val);
+				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_NAMELEN)==0)){
+					BOOST_LOG_TRIVIAL(info) << "found in directory ptp" << val;
+					closedir(dir);
+    				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val)); 	// Instantiate a ptp sync algorithm
+    			}
+    		}
+    		//BOOST_LOG_TRIVIAL(error) << "No entry in the directory " << QOT_IOCTL_BASE;
+    	}else{
+    		BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
+    	}
+    }
+    return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 				// Instantiate ntp sync algorithm
+}
+
+uint32_t Sync::IPtoUint(const std::string ip) {
+    int a, b, c, d;
+    uint32_t addr = 0;
+
+    if (sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4)
+        return 0;
+
+    addr = a << 24;
+    addr |= b << 16;
+    addr |= c << 8;
+    addr |= d;
+    return addr;
+}
+
+bool Sync::IsIPprivate(const std::string ip) {
+    uint32_t ip_addr = IPtoUint(ip);
+
+    uint32_t classA_mask = 0x0A000000; // 10.0.0.0 ~ 10.255.255.255
+    uint32_t classB_mask = 0xAC100000; // 172.16.0.0 ~ 172.31.255.255
+    uint32_t classC_mask = 0xC0A80000; // 192.168.0.0 ~ 192.168.255.255
+
+    if(((ip_addr & classA_mask) == classA_mask) || 
+    	((ip_addr & classB_mask) == classB_mask) || 
+    	((ip_addr & classC_mask) == classC_mask)){
+
+    	return true;
+    }
+    return false;
 }

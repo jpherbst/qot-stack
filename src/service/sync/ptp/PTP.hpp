@@ -30,6 +30,9 @@
 #ifndef PTP_HPP
 #define PTP_HPP
 
+// Parent class include
+#include "../Sync.hpp"
+
 // Boost includes
 #include <boost/asio.hpp>
 #include <boost/thread.hpp> 
@@ -63,16 +66,16 @@ extern "C"
 
 namespace qot
 {
-	class PTP
+	class PTP  : public Sync
 	{
 
 		// Constructor and destructor
-		public: PTP(boost::asio::io_service *io, const std::string &iface);
+		public: PTP(boost::asio::io_service *io, const std::string &iface, int ptp_index);
 		public: ~PTP();
 
 		// Control functions
 		public: void Reset();
-		public: void Start(bool master, int log_sync_interval, short sync_session, clockid_t *timelines, uint16_t timelines_size);
+		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size);
 		public: void Stop();						// Stop
 
 		// This thread performs rhe actual syncrhonization
@@ -82,6 +85,7 @@ namespace qot
 		private: boost::asio::io_service *asio;
 		private: boost::thread thread;
 		private: std::string baseiface;
+		private: int ptpindex = 0;
 		private: bool kill;
 
 		// PTP settings

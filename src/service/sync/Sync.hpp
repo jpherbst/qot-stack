@@ -30,33 +30,44 @@
 #ifndef SYNC_H
 #define SYNC_H
 
-// Standard integer types
+// System includes
 #include <cstdint>
+#include <string.h>
 
 // Required for logging and shared pointers
 #include <boost/asio.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
+#include <boost/log/trivial.hpp>
+
+// SYstem dependencies
+extern "C"
+{
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <dirent.h>
+}
 
 namespace qot
 {
-        // Filter type
+        // Algorithm for synchronization
         enum SyncType
         {
         	SYNC_NTP,
         	SYNC_PTP,
-			SYNC_PULSESYNC,
-			SYNC_FTSP
+		SYNC_PULSESYNC,
+		SYNC_FTSP
         };
 
-		// Interface type
+	// Interface type
         enum SyncInterface
         {
         	ETH,
         	WLAN,
-			WPAN
+		WPAN
         };
 
+        // Mode of synchronization
         enum SyncMode
         {
         	MASTER,
@@ -66,22 +77,24 @@ namespace qot
         // Base functionality
         class Sync
         {
-        	// Constructor and destructor
-        	public: Sync();
-        	public: ~Sync();
+                public: virtual void Reset() = 0;                       // Reset the synchronization algorithm
+                public: virtual void Start(bool master, 
+                                        int log_sync_interval, 
+                                        uint32_t sync_session, 
+                                        clockid_t *timelines, 
+                                        uint16_t timelines_size) = 0;   // Start syncronization
+                public: virtual void Stop() = 0;                        // Stop synchronization
 
-        	// Used by all sync algorithms
-        	private: int fd;							// ioctl file descriptor
-        	private: bool flag;							// Thread termination flag
-        	private: boost::thread thread;				// Thread handle
-        	private: void worker();						// Thread worker
-		
-			// Factory method to produce a handle to a sync algorithm
-			public: static boost::shared_ptr<Sync> Factory(
-				boost::asio::io_service *io,		// IO service
-				const std::string &address,			// address of the Master
-				const std::string &iface					// interface for synchronization
-			);
+		// Factory method to produce a handle to a sync algorithm
+		public: static boost::shared_ptr<Sync> Factory(
+			boost::asio::io_service *io,		// IO service
+			const std::string &address,		// address of the Master
+			const std::string &iface		// interface for synchronization
+		);
+
+                // Helper functions to check if the IP address is private
+                private: static bool IsIPprivate(const std::string ip);
+                private: static uint32_t IPtoUint(const std::string ip);
         };
 }
 

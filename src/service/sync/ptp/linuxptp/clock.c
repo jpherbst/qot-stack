@@ -1550,6 +1550,7 @@ enum servo_state clock_synchronize(struct clock *c,
 	case SERVO_JUMP:
 		//clockadj_set_freq(c->clkid, -adj); /* QOT */
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
+		// Adjust the timeline
 		clockadj_set_freq(s->tml_id, -adj); /* QOT */
 		clockadj_step(s->tml_id, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
 		c->t1 = tmv_zero();
@@ -1566,6 +1567,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		if (c->clkid == CLOCK_REALTIME)
 			sysclk_set_sync();
 		*/
+		// Adjust the timeline
 		clockadj_set_freq(s->tml_id, -adj); /* QOT */
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
