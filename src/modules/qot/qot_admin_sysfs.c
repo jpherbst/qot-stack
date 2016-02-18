@@ -105,14 +105,12 @@ static ssize_t os_latency_usec_show(struct device *dev,
     struct device_attribute *attr, char *buf)
 {
     u64 est, below, above;
-    /*
     utimelength_t timelength;
-    if (qot_admin_get_os_latency(&timelength))
+    if (qot_admin_get_latency(&timelength))
         return -EINVAL;
-    est = TO_uSEC(timelength.estimate);
-    below = TO_uSEC(timelength.interval.below);
-    above = TO_uSEC(timelength.interval.above);
-    */
+    est = TL_TO_uSEC(timelength.estimate);
+    below = TL_TO_uSEC(timelength.interval.below);
+    above = TL_TO_uSEC(timelength.interval.above);
     return scnprintf(buf, PAGE_SIZE, "%llu %llu %llu\n",
     	(unsigned long long) est, (unsigned long long) below,
     		(unsigned long long) above);
@@ -132,7 +130,7 @@ static ssize_t os_latency_usec_store(struct device *dev,
         TL_FROM_uSEC(timelength.estimate,est);
         TL_FROM_uSEC(timelength.interval.below,below);
         TL_FROM_uSEC(timelength.interval.above,above);
-        if (qot_admin_set_os_latency(&timelength))
+        if (qot_admin_set_latency(&timelength))
             return -EINVAL;
         break;
     default:

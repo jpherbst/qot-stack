@@ -33,66 +33,15 @@
 
 #include "qot_timeline.h"
 
-/*
-static ssize_t ptp_pin_show(struct device *dev, struct device_attribute *attr,
-    char *page) {
-
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int index;
-
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
-        return -EINVAL;
-
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-
-    func = ptp->info->pin_config[index].func;
-    chan = ptp->info->pin_config[index].chan;
-
-    mutex_unlock(&ptp->pincfg_mux);
-
-    return snprintf(page, PAGE_SIZE, "%u %u\n", func, chan);
+static ssize_t name_show(struct device *dev, struct device_attribute *attr,
+	char *buf)
+{
+ 	return scnprintf(buf, PAGE_SIZE, "%s\n", "default");
 }
-
-static ssize_t ptp_pin_store(struct device *dev, struct device_attribute *attr,
-    const char *buf, size_t count) {
-    struct ptp_clock *ptp = dev_get_drvdata(dev);
-    unsigned int func, chan;
-    int cnt, err, index;
-
-    cnt = sscanf(buf, "%u %u", &func, &chan);
-    if (cnt != 2)
-        return -EINVAL;
-
-    index = ptp_pin_name2index(ptp, attr->attr.name);
-    if (index < 0)
-        return -EINVAL;
-
-    if (mutex_lock_interruptible(&ptp->pincfg_mux))
-        return -ERESTARTSYS;
-    err = ptp_set_pinfunc(ptp, index, func, chan);
-    mutex_unlock(&ptp->pincfg_mux);
-    if (err)
-        return err;
-
-    return count;
-}
-*/
-
-DEVICE_ATTR(get_name,                    0600,   NULL, NULL);
-DEVICE_ATTR(get_target_resolution,       0600,   NULL, NULL);
-DEVICE_ATTR(get_target_accuracy,         0600,   NULL, NULL);
-DEVICE_ATTR(get_achieved_resolution,     0600,   NULL, NULL);
-DEVICE_ATTR(get_achieved_accuracy,       0600,   NULL, NULL);
+DEVICE_ATTR(name, 0444, name_show, NULL);
 
 static struct attribute *qot_timeline_attrs[] = {
-    &dev_attr_get_name.attr,
-    &dev_attr_get_target_resolution.attr,
-    &dev_attr_get_target_accuracy.attr,
-    &dev_attr_get_achieved_resolution.attr,
-    &dev_attr_get_achieved_accuracy.attr,
+    &dev_attr_name.attr,
     NULL,
 };
 

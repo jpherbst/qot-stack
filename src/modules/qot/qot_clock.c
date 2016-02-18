@@ -45,6 +45,9 @@ typedef struct clk {
 /* Root of the red-black tree used to store clocks */
 static struct rb_root qot_clock_root = RB_ROOT;
 
+/* Root of the red-black tree used to store clocks */
+static clk_t *core = NULL;
+
 /* Search for a clock given by a name */
 static clk_t *qot_clock_find(char *name) {
     int result;
@@ -87,11 +90,17 @@ static qot_return_t qot_clock_insert(clk_t *clk)
 
 /* Public functions */
 
-/* Get the current core time */
-s64 qot_clock_get_core_time(void)
+/* Get the core time (with query uncertainty added) */
+qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
 {
-	/* TODO: implement this */
-	return 0;
+    if (!utp || !core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Get a measurement of core time */
+    utp->estimate = core->impl.read_time();
+    /* Add the uncertainty to the measurement */
+    utimepoint_add(utp, &core->impl.info.read_latency);
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
 }
 
 qot_return_t qot_clock_register(qot_clock_impl_t *impl)

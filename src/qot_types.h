@@ -418,8 +418,8 @@ typedef struct qot_clock {
     qot_clk_state_t state;              /* Clock state                  */
     u64 nom_freq_nhz;           		/* Frequency in nHz             */
     u64 nom_freq_nwatt;   		        /* Power draw in nWatt          */
-    timeinterval_t read_latency;        /* Latency in seconds           */
-    timeinterval_t interrupt_latency;   /* Interrupt latency            */
+    utimelength_t read_latency;         /* Read latency                 */
+    utimelength_t interrupt_latency;    /* Interrupt latency            */
     u64 errors[QOT_CLK_ERR_NUM];   		/* Error characteristics        */
     int phc_id;                         /* The integer X in /dev/ptpX   */
 } qot_clock_t;

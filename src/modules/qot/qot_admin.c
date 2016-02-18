@@ -35,7 +35,7 @@
 static utimelength_t os_latency;
 
 /* Set the OS latency */
-qot_return_t qot_admin_set_os_latency(utimelength_t *timelength)
+qot_return_t qot_admin_set_latency(utimelength_t *timelength)
 {
     if (!timelength)
         return QOT_RETURN_TYPE_ERR;
@@ -44,11 +44,20 @@ qot_return_t qot_admin_set_os_latency(utimelength_t *timelength)
 }
 
 /* Set the OS latency */
-qot_return_t qot_admin_get_os_latency(utimelength_t *timelength)
+qot_return_t qot_admin_get_latency(utimelength_t *timelength)
 {
     if (!timelength)
         return QOT_RETURN_TYPE_ERR;
     memcpy(timelength,&os_latency,sizeof(utimelength_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Add the OS latency to an uncertain time length */
+qot_return_t qot_admin_add_latency(utimepoint_t *utp)
+{
+    if (!utp)
+        return QOT_RETURN_TYPE_ERR;
+    utimepoint_add(utp, &os_latency);
     return QOT_RETURN_TYPE_OK;
 }
 

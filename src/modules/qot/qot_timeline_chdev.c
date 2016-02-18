@@ -40,6 +40,7 @@
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
 
+#include "qot_admin.h"
 #include "qot_clock.h"
 #include "qot_timeline.h"
 
@@ -179,11 +180,14 @@ static void qot_binding_del(binding_impl_t *binding_impl)
 
 static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
 {
+	utimepoint_t utp;
     s64 ns;
     unsigned long flags;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
-    ns = qot_clock_get_core_time();
+    if (qot_clock_get_core_time(&utp))
+    	return 1;
+    ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
     timeline_impl->mult += ppb;
@@ -194,11 +198,14 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
 
 static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
 {
+	utimepoint_t utp;
     s64 ns;
     unsigned long flags;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
-    ns = qot_clock_get_core_time();
+    if (qot_clock_get_core_time(&utp))
+    	return 1;
+    ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
     timeline_impl->last = ns;
@@ -227,10 +234,15 @@ static int qot_timeline_chdev_getres(struct posix_clock *pc,
 static int qot_timeline_chdev_settime(struct posix_clock *pc,
     const struct timespec *tp)
 {
+	utimepoint_t utp;
+	s64 ns;
     unsigned long flags;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
-    timeline_impl->last = qot_clock_get_core_time();
+    if (qot_clock_get_core_time(&utp))
+    	return 1;
+    ns = TP_TO_nSEC(utp.estimate);
+    timeline_impl->last = ns;
     timeline_impl->nsec = timespec64_to_ns(tp);
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
@@ -239,11 +251,14 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
 static int qot_timeline_chdev_gettime(struct posix_clock *pc,
     struct timespec *tp)
 {
+	utimepoint_t utp;
     s64 ns;
     unsigned long flags;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
-    ns = qot_clock_get_core_time();
+    if (qot_clock_get_core_time(&utp))
+    	return 1;
+    ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
     timeline_impl->last = ns;
@@ -297,7 +312,7 @@ static int qot_timeline_chdev_release(struct posix_clock *pc)
 static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
     unsigned long arg)
 {
-    struct timespec tp;
+    utimepoint_t utp;
     qot_binding_t msgb;
     utimepoint_t msgu;
     binding_impl_t *binding_impl = NULL;
@@ -359,16 +374,13 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         break;
     /* Get the current time */
     case TIMELINE_GET_TIME_NOW:
-        /* Get the current time */
-        if (qot_timeline_chdev_gettime(pc,&tp));
-            return -EACCES;
-        /* Convert the time estimate to an uncertain timepoint */
-        timepoint_from_timespec(&msgu.estimate, &tp);
-        /* TODO:Add the time error introduced by the clock query latency */
-        //utimepoint_add(&msgu,qot_clock_get_latency());
-        /* TODO: Add the time error introduced by synchronization */
-        //utimepoint_add(&msgu,qot_timeline_sync_error());
-        /* Copy the ID back to the user */
+    	if (qot_clock_get_core_time(&utp))
+    		return -EACCES;
+        /* Add the latency due to the OS query */
+        qot_admin_add_latency(&utp);
+        /* Add the latency due to the CORE clock */
+        // qot_tsync_add_latency(&msgu.interval);
+        /* Add the latency due to the CORE clock */
         if (copy_to_user((utimepoint_t*)arg, &msgu, sizeof(utimepoint_t)))
             return -EACCES;
         break;
@@ -460,9 +472,16 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         pr_err("qot_timeline: cannot register POSIX clock");
         goto fail_posixclock;
     }
+    /* Create the sysfs interface into the timeline */
+	if (qot_timeline_sysfs_init(timeline_impl->dev)) {
+		pr_err("qot_timeline: cannot register sysfs interface");
+		goto fail_sysfs;
+	}
     /* Update the index before returning OK */
     return timeline_impl->index;
 
+fail_sysfs:
+	posix_clock_unregister(&timeline_impl->clock);
 fail_posixclock:
     idr_remove(&qot_timelines_map, timeline_impl->index);
 fail_idasimpleget:
@@ -478,10 +497,12 @@ qot_return_t qot_timeline_chdev_unregister(int index)
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
     if (!timeline_impl)
         return QOT_RETURN_TYPE_ERR;
-    /* Remove the posix clock */
-    posix_clock_unregister(&timeline_impl->clock);
+	/* Clean up the sysfs interface */
+	qot_timeline_sysfs_cleanup(timeline_impl->dev);
     /* Delete the character device - also deletes IDR */
     device_destroy(timeline_class, timeline_impl->devid);
+    /* Remove the posix clock */
+    posix_clock_unregister(&timeline_impl->clock);
     return QOT_RETURN_TYPE_OK;
 }
 

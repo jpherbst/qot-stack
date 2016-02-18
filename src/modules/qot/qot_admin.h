@@ -36,17 +36,24 @@
 
 /**
  * @brief Set the OS latency
- * @param timelength Uncertain length of time representing latency
+ * @param utl Uncertain length of time representing latency
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_admin_set_os_latency(utimelength_t *timelength);
+qot_return_t qot_admin_set_latency(utimelength_t *utl);
 
 /**
  * @brief Get the OS latency
- * @param timelength Uncertain length of time representing latency
+ * @param utl Uncertain length of time representing latency
  * @return A status code indicating success (0) or other
  **/
-qot_return_t qot_admin_get_os_latency(utimelength_t *timelength);
+qot_return_t qot_admin_get_latency(utimelength_t *utl);
+
+/**
+ * @brief Add the OS latency to an uncertain time point
+ * @param utp Uncertain time point to adjust
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_admin_add_latency(utimepoint_t *utp);
 
 /**
  * @brief Clean up the admin device subsystem
