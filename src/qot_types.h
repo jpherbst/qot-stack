@@ -447,7 +447,7 @@ typedef struct qot_binding {
  * @brief Key messages supported by /dev/timelineX
  */
 #define TIMELINE_MAGIC_CODE 0xEF
-#define TIMELINE_GET_INFO           _IOR(TIMELINE_MAGIC_CODE, 1, qot_timeline*)
+#define TIMELINE_GET_INFO           _IOR(TIMELINE_MAGIC_CODE, 1, qot_timeline_t*)
 #define TIMELINE_BIND_JOIN         _IOWR(TIMELINE_MAGIC_CODE, 2, qot_binding_t*)
 #define TIMELINE_BIND_LEAVE         _IOW(TIMELINE_MAGIC_CODE, 3, qot_binding_t*)
 #define TIMELINE_BIND_UPDATE        _IOW(TIMELINE_MAGIC_CODE, 4, qot_binding_t*)

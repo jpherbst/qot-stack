@@ -32,12 +32,14 @@
 #include "qot_core.h"
 
 /* Cleanup the timeline subsystem */
-void qot_scheduler_cleanup(struct class *qot_class) {
+void qot_scheduler_cleanup(struct class *qot_class)
+{
 	/* TODO */
 }
 
 /* Initialize the timeline subsystem */
-qot_return_t qot_scheduler_init(struct class *qot_class) {
+qot_return_t qot_scheduler_init(struct class *qot_class)
+{
     /* TODO */
     return QOT_RETURN_TYPE_OK;
 }

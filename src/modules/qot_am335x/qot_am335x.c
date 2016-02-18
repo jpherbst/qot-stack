@@ -49,7 +49,7 @@
 #include <linux/ptp_clock_kernel.h>
 
 /*QoT Core Clock Registration*/
-#include "../qot/qot_core.h"
+#include "../qot/qot_exported.h"
 
 /* DMTimer Code specific to the AM335x */
 #include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
