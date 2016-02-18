@@ -47,10 +47,12 @@
  	#include <string.h>
 	#include <sys/ioctl.h>
  	#define div64_u64_rem(X,Y,Z) (uint64_t)X/(uint64_t)Y; *Z=X%Y;
+    #define div64_u64(X,Y) (uint64_t)X/(uint64_t)Y;
+    #define div64_s64(X,Y) ( int64_t)X/( int64_t)Y;
  	#define u64 uint64_t
- 	#define s64 int64_t
+ 	#define s64  int64_t
  	#define u32 uint32_t
- 	#define s32 int32_t
+ 	#define s32  int32_t
 #endif
 
 /* A single point in time with respect to some reference */
@@ -90,26 +92,72 @@ typedef struct timequality {
 } timequality_t;
 
 /* Popular ratios that will be used throughout this file */
-#define aSEC_PER_SEC (u64)1000000000000000000
+#define  SEC_PER_SEC  1ULL
+#define mSEC_PER_SEC  1000ULL
+#define uSEC_PER_SEC  1000000ULL
+#define pSEC_PER_SEC  1000000000ULL
+#define nSEC_PER_SEC  1000000000000ULL
+#define fSEC_PER_SEC  1000000000000000ULL
+#define aSEC_PER_SEC  1000000000000000000ULL
 
-/* Some initializers for efficiency */
-#define  SEC(t)  { .sec=(t), 			.asec=0, 						}
-#define mSEC(t)  { .sec=0, 				.asec=(t)*1000000000000000ULL, 	}
-#define uSEC(t)  { .sec=0, 				.asec=(t)*1000000000000ULL, 	}
-#define pSEC(t)  { .sec=0, 				.asec=(t)*1000000000ULL, 		}
-#define nSEC(t)  { .sec=0, 				.asec=(t)*1000000ULL, 			}
-#define fSEC(t)  { .sec=0, 				.asec=(t)*1000ULL, 				}
-#define aSEC(t)  { .sec=0, 				.asec=(t), 						}
+/* Initializing the timelength is simple */
+#define  TL_SEC(d,t) d.sec = div64_u64(t,  SEC_PER_SEC); d.asec = (t %  SEC_PER_SEC) * aSEC_PER_SEC
+#define TL_mSEC(d,t) d.sec = div64_u64(t, mSEC_PER_SEC); d.asec = (t % mSEC_PER_SEC) * fSEC_PER_SEC
+#define TL_uSEC(d,t) d.sec = div64_u64(t, uSEC_PER_SEC); d.asec = (t % uSEC_PER_SEC) * nSEC_PER_SEC
+#define TL_pSEC(d,t) d.sec = div64_u64(t, pSEC_PER_SEC); d.asec = (t % pSEC_PER_SEC) * pSEC_PER_SEC
+#define TL_nSEC(d,t) d.sec = div64_u64(t, nSEC_PER_SEC); d.asec = (t % nSEC_PER_SEC) * uSEC_PER_SEC
+#define TL_fSEC(d,t) d.sec = div64_u64(t, fSEC_PER_SEC); d.asec = (t % fSEC_PER_SEC) * mSEC_PER_SEC
+#define TL_aSEC(d,t) d.sec = div64_u64(t, aSEC_PER_SEC); d.asec = (t % aSEC_PER_SEC) *  SEC_PER_SEC
 
+/* Initializing the */
+#define  TP_SEC(d,t) d.sec = div64_s64((s64)t- SEC_PER_SEC,(s64) SEC_PER_SEC);  d.asec = (t % SEC_PER_SEC)  * aSEC_PER_SEC
+#define TP_mSEC(d,t) d.sec = div64_s64((s64)t-mSEC_PER_SEC,(s64)mSEC_PER_SEC); d.asec = (t % mSEC_PER_SEC) * fSEC_PER_SEC
+#define TP_uSEC(d,t) d.sec = div64_s64((s64)t-uSEC_PER_SEC,(s64)uSEC_PER_SEC); d.asec = (t % uSEC_PER_SEC) * nSEC_PER_SEC
+#define TP_pSEC(d,t) d.sec = div64_s64((s64)t-nSEC_PER_SEC,(s64)pSEC_PER_SEC); d.asec = (t % pSEC_PER_SEC) * pSEC_PER_SEC
+#define TP_nSEC(d,t) d.sec = div64_s64((s64)t-pSEC_PER_SEC,(s64)nSEC_PER_SEC); d.asec = (t % nSEC_PER_SEC) * uSEC_PER_SEC
+#define TP_fSEC(d,t) d.sec = div64_s64((s64)t-fSEC_PER_SEC,(s64)fSEC_PER_SEC); d.asec = (t % fSEC_PER_SEC) * mSEC_PER_SEC
+#define TP_aSEC(d,t) d.sec = div64_s64((s64)t-aSEC_PER_SEC,(s64)aSEC_PER_SEC); d.asec = (t % aSEC_PER_SEC) *  SEC_PER_SEC
 
-/* Add a length of time to a point in time */
-static inline void timepoint_add(timepoint_t *t, timelength_t *v) {
+/* Some casts for efficiency */
+#define  TO_SEC(d) (d.sec * (s64)  SEC_PER_SEC) + (s64) div64_u64(d.asec, aSEC_PER_SEC)
+#define TO_mSEC(d) (d.sec * (s64) mSEC_PER_SEC) + (s64) div64_u64(d.asec, fSEC_PER_SEC)
+#define TO_uSEC(d) (d.sec * (s64) uSEC_PER_SEC) + (s64) div64_u64(d.asec, pSEC_PER_SEC)
+#define TO_pSEC(d) (d.sec * (s64) pSEC_PER_SEC) + (s64) div64_u64(d.asec, nSEC_PER_SEC)
+#define TO_nSEC(d) (d.sec * (s64) nSEC_PER_SEC) + (s64) div64_u64(d.asec, uSEC_PER_SEC)
+#define TO_fSEC(d) (d.sec * (s64) fSEC_PER_SEC) + (s64) div64_u64(d.asec, mSEC_PER_SEC)
+#define TO_aSEC(d) (d.sec * (s64) aSEC_PER_SEC) + (s64) div64_u64(d.asec,  SEC_PER_SEC)
+
+/* Convert a scalar value to a timepoint */
+static inline void scalar_to_timepoint(timepoint_t *tp, s64 t, s64 divisor)
+{
+    struct timespec ts;
+    s32 rem;
+
+    if (!t) {
+        tp->sec  = 0;
+        tp->asec = 0;
+    }
+
+    ts.tv_sec = div_s64_rem(nsec, divisor, &rem);
+    if (rem < 0) {
+        ts.tv_sec--;
+        rem += NSEC_PER_SEC;
+    }
+    ts.tv_nsec = rem;
+
+    return ts;
+}
+
+/* Add a length of time to a point in time */`
+static inline void timepoint_add(timepoint_t *t, timelength_t *v)
+{
 	t->asec += v->asec;
 	t->sec += v->sec + div64_u64_rem(t->asec, aSEC_PER_SEC, &t->asec);
 }
 
 /* Subtract a length of time from a point in time */
-static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
+static inline void timepoint_sub(timepoint_t *t, timelength_t *v)
+{
 	t->sec -= v->sec;
 	if (t->asec < v->asec) { /* Special case */
 		t->sec--;
@@ -120,13 +168,15 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v) {
 }
 
 /* Add two lengths of time together */
-static inline void timelength_add(timelength_t *l1, timelength_t *l2) {
+static inline void timelength_add(timelength_t *l1, timelength_t *l2)
+{
 	l1->asec += l2->asec;
 	l1->sec += l2->sec + div64_u64_rem(l1->asec, aSEC_PER_SEC, &l1->asec);
 }
 
 /* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
-static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
+static inline int timelength_cmp(timelength_t *l1, timelength_t *l2)
+{
 	if (!l1 || !l2)
 		return 0;
     if (l1->sec > l2->sec)
@@ -141,8 +191,9 @@ static inline int timelength_cmp(timelength_t *l1, timelength_t *l2) {
 }
 
 /* Copy the maximum value of two timelengths into a third timelength */
-static inline void timelength_max(timelength_t *sol,
-    timelength_t *l1, timelength_t *l2) {
+static inline void timelength_max(timelength_t *sol, timelength_t *l1,
+    timelength_t *l2)
+{
 	if (!sol || !l1 || !l2)
 		return;
     if (timelength_cmp(l1,l2) < 0)
@@ -152,8 +203,9 @@ static inline void timelength_max(timelength_t *sol,
 }
 
 /* Copy the minimum value of two timelengths into a third timelength */
-static inline void timelength_min(timelength_t *sol,
-    timelength_t *l1, timelength_t *l2) {
+static inline void timelength_min(timelength_t *sol, timelength_t *l1,
+    timelength_t *l2)
+{
 	if (!sol || !l1 || !l2)
 		return;
     if (timelength_cmp(l1,l2) > 0)
@@ -163,8 +215,9 @@ static inline void timelength_min(timelength_t *sol,
 }
 
 /* Get the difference between two timepoints as a timelength */
-static inline void timepoint_diff(timelength_t *v,
-	timepoint_t *t1, timepoint_t *t2) {
+static inline void timepoint_diff(timelength_t *v, timepoint_t *t1,
+    timepoint_t *t2)
+{
 	if (!v || !t1 || !t2)
 		return;
 	v->sec = abs(t1->sec - t2->sec);
@@ -175,14 +228,16 @@ static inline void timepoint_diff(timelength_t *v,
 }
 
 /* Add a length of uncertain time to an uncertain point in time */
-static inline void utimepoint_add(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_add(utimepoint_t *t, utimelength_t *v)
+{
 	timepoint_add(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
 }
 
 /* Subtract a length of uncertain time from an uncertain point in time */
-static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v) {
+static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v)
+{
 	timepoint_sub(&t->estimate, &v->estimate);
 	timelength_add(&t->interval.below, &v->interval.below);
 	timelength_add(&t->interval.above, &v->interval.above);
@@ -369,6 +424,8 @@ typedef struct qot_clock {
 #define QOTADM_SET_CLOCK_SLEEP    _IOW(QOTADM_MAGIC_CODE, 3, qot_clock_t*)
 #define QOTADM_SET_CLOCK_WAKE     _IOW(QOTADM_MAGIC_CODE, 4, qot_clock_t*)
 #define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 5, qot_clock_t*)
+#define QOTADM_SET_OS_LATENCY     _IOW(QOTADM_MAGIC_CODE, 6, utimelength_t*)
+#define QOTADM_GET_OS_LATENCY     _IOR(QOTADM_MAGIC_CODE, 7, utimelength_t*)
 
 /* QoT timeline type */
 typedef struct qot_binding {
@@ -388,6 +445,5 @@ typedef struct qot_binding {
 #define TIMELINE_CORE_TO_TIMELINE   _IOR(TIMELINE_MAGIC_CODE, 5, timepoint_t*)
 #define TIMELINE_GET_TIME_NOW      _ IOR(TIMELINE_MAGIC_CODE, 6, utimepoint_t*)
 #define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 7, utimepoint_t*)
-
 
 #endif

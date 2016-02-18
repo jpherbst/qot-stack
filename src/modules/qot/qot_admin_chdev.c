@@ -181,6 +181,7 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
     event_t *event;
     qot_event_t msge;
     qot_clock_t msgc;
+    utimelength_t msgt;
     qot_admin_chdev_con_t *con = qot_admin_chdev_con_search(f);
     if (!con)
         return -EACCES;
@@ -226,6 +227,20 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
         if (qot_clock_switch(&msgc))
+            return -EACCES;
+        break;
+    /* Switch core to a specific clock */
+    case QOTADM_SET_OS_LATENCY:
+        if (copy_from_user(&msgt, (utimelength_t*)arg, sizeof(utimelength_t)))
+            return -EACCES;
+        if (qot_admin_set_os_latency(&msgt))
+            return -EACCES;
+        break;
+    /* Switch core to a specific clock */
+    case QOTADM_GET_OS_LATENCY:
+        if (qot_admin_get_os_latency(&msgt))
+            return -EACCES;
+        if (copy_to_user((utimelength_t*)arg, &msgt, sizeof(utimelength_t)))
             return -EACCES;
         break;
     default:

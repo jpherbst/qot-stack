@@ -44,7 +44,8 @@
 
 /* Create a timeline */
 static ssize_t timeline_create_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count) {
+	struct device_attribute *attr, const char *buf, size_t count)
+{
     qot_timeline_t timeline;
     int cnt = sscanf(buf, "%s", timeline.name);
     if (cnt != 1) {
@@ -61,7 +62,8 @@ DEVICE_ATTR(timeline_create, 0600, NULL, timeline_create_store);
 
 /* Destroy a timeline */
 static ssize_t timeline_remove_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count) {
+	struct device_attribute *attr, const char *buf, size_t count)
+{
     qot_timeline_t timeline;
     int cnt = sscanf(buf, "%s", timeline.name);
     if (cnt != 1) {
@@ -78,7 +80,8 @@ DEVICE_ATTR(timeline_remove, 0600, NULL, timeline_remove_store);
 
 /* Remove all timelines */
 static ssize_t timeline_remove_all_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count) {
+	struct device_attribute *attr, const char *buf, size_t count)
+{
 	qot_timeline_remove_all();
     return count;
 }
@@ -86,20 +89,62 @@ DEVICE_ATTR(timeline_remove_all, 0600, NULL, timeline_remove_all_store);
 
 /* List all timelines */
 static ssize_t clock_core_show(struct device *dev,
-    struct device_attribute *attr, char *buf) {
+    struct device_attribute *attr, char *buf)
+{
     return 0;
 }
 static ssize_t clock_core_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count) {
+	struct device_attribute *attr, const char *buf, size_t count)
+{
     return count;
 }
 DEVICE_ATTR(clock_core, 0600, clock_core_show, clock_core_store);
+
+/* List all timelines */
+static ssize_t os_latency_usec_show(struct device *dev,
+    struct device_attribute *attr, char *buf)
+{
+    u64 est, below, above;
+    utimelength_t timelength;
+    if (qot_admin_get_os_latency(&timelength))
+        return -EINVAL;
+    est = TO_uSEC(timelength.estimate);
+    below = TO_uSEC(timelength.interval.below);
+    above = TO_uSEC(timelength.interval.above);
+    return scnprintf(buf, PAGE_SIZE, "%llu %llu %llu\n", est, below, above);
+}
+static ssize_t os_latency_usec_store(struct device *dev,
+    struct device_attribute *attr, const char *buf, size_t count)
+{
+    u64 est, below, above;
+    utimelength_t timelength;
+    int cnt = sscanf(buf, "%llu %llu %llu", est, below, above);
+    switch (cnt) {
+    case 1:
+        below = 0;
+    case 2:
+        above = below;
+    case 3:
+        INIT_uSEC(timelength.estimate,estimate);
+        INIT_uSEC(timelength.below,below);
+        INIT_uSEC(timelength.above,above);
+        if (qot_admin_set_os_latency(&timelength))
+            return -EINVAL;
+        break;
+    default:
+        pr_err("qot_admin_sysfs: could not capture the os latency\n");
+        return -EINVAL;
+    }
+    return count;
+}
+DEVICE_ATTR(os_latency_usec, 0600, os_latency_usec_show, os_latency_usec_store);
 
 static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
     &dev_attr_timeline_remove.attr,
     &dev_attr_timeline_create.attr,
     &dev_attr_clock_core.attr,
+    &dev_attr_os_latency_usec.attr,
     NULL,
 };
 

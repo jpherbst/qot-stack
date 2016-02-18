@@ -5,21 +5,60 @@ extern "C" {
     #include "../qot_types.h"
 }
 
-TEST(TimelineMath, TimeInitializers) {
-	timelength_t ta = aSEC(1);
-	EXPECT_EQ(1ULL, ta.asec);
-	timelength_t tf = fSEC(1);
-	EXPECT_EQ(1000ULL, tf.asec);
-	timelength_t tn = nSEC(1);
-	EXPECT_EQ(1000000ULL, tn.asec);
-	timelength_t tp = pSEC(1);
-	EXPECT_EQ(1000000000ULL, tp.asec);
-	timelength_t tu = uSEC(1);
-	EXPECT_EQ(1000000000000ULL, tu.asec);
-	timelength_t tm = mSEC(1);
-	EXPECT_EQ(1000000000000000ULL, tm.asec);
+TEST(TimelineMath, TimeLengthInitializers) {
+	timelength_t t;
+    TL_SEC(t,1ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,0ULL);
+    TL_mSEC(t,1001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1000000000000000ULL);
+    TL_uSEC(t,1000001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1000000000000ULL);
+    TL_pSEC(t,1000000001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1000000000ULL);
+    TL_nSEC(t,1000000000001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1000000ULL);
+    TL_fSEC(t,1000000000000001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1000ULL);
+    TL_aSEC(t,1000000000000000001ULL);
+    EXPECT_EQ(t.sec, 1ULL);
+    EXPECT_EQ(t.asec,1ULL);
 }
 
+TEST(TimelineMath, TimePointInitializers) {
+    timepoint_t t;
+    //TP_SEC(t,-1LL);
+    //EXPECT_EQ(t.sec, -1LL);
+    //EXPECT_EQ(t.asec,0LL);
+    TP_mSEC(t,-1001LL);
+    EXPECT_EQ(t.sec,  -2LL);
+    EXPECT_EQ(t.asec, aSEC_PER_SEC-mSEC_PER_SEC);
+    /*
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1000000000000000LL);
+    TP_uSEC(t,-1000001LL);
+    EXPECT_EQ(t.sec, -2LL);
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1000000000000LL);
+    TP_pSEC(t,-1000000001LL);
+    EXPECT_EQ(t.sec, -2LL);
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1000000000LL);
+    TP_nSEC(t,-1000000000001LL);
+    EXPECT_EQ(t.sec, -2LL);
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1000000LL);
+    TP_fSEC(t,-1000000000000001LL);
+    EXPECT_EQ(t.sec, -2LL);
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1000LL);
+    TP_aSEC(t,-1000000000000000001LL);
+    EXPECT_EQ(t.sec, -2LL);
+    EXPECT_EQ(t.asec,aSEC_PER_SEC-1LL);
+    */
+}
+
+/*
 TEST(TimelineMath, FrequencyInitializers) {
     frequency_t tE = EHz(1);
     EXPECT_EQ(1000000000000000000ULL, tE.hz);
@@ -192,3 +231,5 @@ TEST(TimelineMath, DifferenceBetweenTimepoints) {
 	EXPECT_EQ(1,v.sec);
 	EXPECT_EQ(1,v.asec);
 }
+
+*/

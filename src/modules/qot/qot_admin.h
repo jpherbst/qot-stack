@@ -35,6 +35,20 @@
 /* qot_admin.c */
 
 /**
+ * @brief Set the OS latency
+ * @param timelength Uncertain length of time representing latency
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_admin_set_os_latency(utimelength_t *timelength);
+
+/**
+ * @brief Get the OS latency
+ * @param timelength Uncertain length of time representing latency
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t qot_admin_get_os_latency(utimelength_t *timelength);
+
+/**
  * @brief Clean up the admin device subsystem
  * @param qot_class Device class for all QoT devices
  **/
@@ -76,5 +90,6 @@ void qot_admin_sysfs_cleanup(struct device *qot_device);
  * @return A status code indicating success (0) or failure (!0)
  **/
 qot_return_t qot_admin_sysfs_init(struct device *qot_device);
+
 
 #endif
