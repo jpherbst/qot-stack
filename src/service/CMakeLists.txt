@@ -3,33 +3,28 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 #################################################################################################
 
-# Configure cross compilation
-IF (CROSS_COMPILE)
-
-	# Required for cross-compiling
+# We need to change a few things to enable compilation
+IF (CROSS_AM335X)
 	SET(Boost_USE_STATIC_LIBS        OFF)
 	SET(Boost_USE_STATIC_RUNTIME     OFF)
 	SET(Boost_USE_MULTITHREADED      ON)
-	SET(Boost_ALL_DYN_LINK           ON)  
+	SET(Boost_ALL_DYN_LINK           ON)
 	SET(Boost_NO_SYSTEM_PATHS        ON)
-
-	# This is required for boost logging
 	SET(BOOST_ROOT       "${CROSS_COMPILE_ROOTFS}/usr")
 	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
 	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf")
-
-ENDIF (CROSS_COMPILE)
+ENDIF (CROSS_AM335X)
 
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 
 # Preprocessor directive required to link boost trivial logging
-FIND_PACKAGE(Boost 1.55 REQUIRED COMPONENTS thread system program_options log date_time)
-FIND_PACKAGE(Threads REQUIRED)
+FIND_PACKAGE(Boost 1.54 REQUIRED
+	COMPONENTS thread system program_options log date_time)
 
 # Location of header files for the entire project
 INCLUDE_DIRECTORIES(
-	"${Boost_INCLUDE_DIR}" 
+	"${Boost_INCLUDE_DIR}"
 )
 
 # Location of boost libraries
@@ -58,7 +53,7 @@ FIND_PACKAGE(OpenSplice REQUIRED)
 # Location of header files for the entire project
 INCLUDE_DIRECTORIES(
 	${CMAKE_CURRENT_BINARY_DIR}
-	${OpenSplice_INCLUDE_DIRS} 
+	${OpenSplice_INCLUDE_DIRS}
 )
 
 # IDL MESSAGE COMPILATION
@@ -114,14 +109,14 @@ TARGET_LINK_LIBRARIES(ptp m)
 ADD_LIBRARY(ntp SHARED
 	sync/ntp/ntpv4/algorithm.c
 	sync/ntp/ntpv4/ntpclient.c
-	sync/ntp/ntpv4/client.c 
-	#sync/ntp/ntpv4/server.c	
+	sync/ntp/ntpv4/client.c
+	#sync/ntp/ntpv4/server.c
 )
 TARGET_LINK_LIBRARIES(ntp m)
 
 #########################################################################################################
 
-ADD_EXECUTABLE(qotdaemon 
+ADD_EXECUTABLE(qotdaemon
 	sync/ptp/PTP.hpp
 	sync/ptp/PTP.cpp
 	sync/ntp/NTP.hpp
@@ -143,30 +138,30 @@ TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIE
 
 # Install the PTP library
 INSTALL(
-	TARGETS 
-		ptp 
-	DESTINATION 
-		lib 
-	COMPONENT 
+	TARGETS
+		ptp
+	DESTINATION
+		lib
+	COMPONENT
 		libraries
 )
 
 # Install the NTP library
 INSTALL(
-	TARGETS 
-		ntp 
-	DESTINATION 
-		lib 
-	COMPONENT 
+	TARGETS
+		ntp
+	DESTINATION
+		lib
+	COMPONENT
 		libraries
 )
 
 # Install the qot library to the given prefix
 INSTALL(
-	TARGETS 
+	TARGETS
 		qotdaemon
-	DESTINATION 
-		bin 
-	COMPONENT 
+	DESTINATION
+		bin
+	COMPONENT
 		applications
 )

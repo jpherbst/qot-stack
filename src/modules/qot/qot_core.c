@@ -45,8 +45,11 @@
 /* Class to hold all QoT devices */
 static struct class *qot_class = NULL;
 
+/* Exported functions */
+
 /* Register a clock with the QoT stack */
-qot_return_t qot_register(qot_clock_impl_t *impl) {
+qot_return_t qot_register(qot_clock_impl_t *impl)
+{
     if (qot_clock_register(impl))
         return QOT_RETURN_TYPE_ERR;
     return QOT_RETURN_TYPE_OK;
@@ -54,7 +57,8 @@ qot_return_t qot_register(qot_clock_impl_t *impl) {
 EXPORT_SYMBOL(qot_register);
 
 /* Unregister a clock with the QoT stack */
-qot_return_t qot_unregister(qot_clock_impl_t *impl) {
+qot_return_t qot_unregister(qot_clock_impl_t *impl)
+{
     if (qot_clock_unregister(impl))
         return QOT_RETURN_TYPE_ERR;
     return QOT_RETURN_TYPE_OK;
@@ -62,17 +66,19 @@ qot_return_t qot_unregister(qot_clock_impl_t *impl) {
 EXPORT_SYMBOL(qot_unregister);
 
 /* Notify the QoT stack that the clock properties have changed */
-qot_return_t qot_update(qot_clock_impl_t *impl) {
+qot_return_t qot_update(qot_clock_impl_t *impl)
+{
     if (qot_clock_update(impl))
         return QOT_RETURN_TYPE_ERR;
     return QOT_RETURN_TYPE_OK;
 }
 EXPORT_SYMBOL(qot_update);
 
-/* MODULE INITIALIZATION */
+/* Internal functions */
 
 /* Initialize the QoT core */
-static int qot_init(void) {
+static int qot_init(void)
+{
     qot_class = class_create(THIS_MODULE, CLASS_NAME);
     if (IS_ERR(qot_class)) {
         pr_err("qot_chardev_usr: cannot create device class\n");
@@ -114,7 +120,8 @@ failed_classreg:
 }
 
 /* Cleanup the QoT core */
-static void qot_cleanup(void) {
+static void qot_cleanup(void)
+{
     qot_user_cleanup(qot_class);
     qot_admin_cleanup(qot_class);
     qot_scheduler_cleanup(qot_class);

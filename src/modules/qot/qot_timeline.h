@@ -93,10 +93,10 @@ qot_return_t qot_timeline_init(struct class *qot_class);
 
 /**
  * @brief Register a new /dev/timelineX character device for the timeline
- * @param timeline The timeline to register
+ * @param timeline Information about the timeline
  * @return < 0 failure, 0+ the IDR index of the new timeline
  **/
-int qot_timeline_chdev_register(char *name);
+int qot_timeline_chdev_register(qot_timeline_t *timeline);
 
 /**
  * @brief Remove an existing /dev/timelineX character device

@@ -399,7 +399,7 @@ static int qot_am335x_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	return 0;
 }
 
-timepoint_t qot_am335x_read_time(void)
+static timepoint_t qot_am335x_read_time(void)
 {
 	u64 ns;
 	timepoint_t time_now;
@@ -409,7 +409,7 @@ timepoint_t qot_am335x_read_time(void)
 	spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
 	spin_unlock_irqrestore(&pdata->lock, flags);
-	time_now = ns_to_timepoint(ns);
+	TP_FROM_nSEC(time_now,ns);
 	return time_now;
 }
 
@@ -621,7 +621,7 @@ static long qot_am335x_program_sched_interrupt(timepoint_t expiry, long (*callba
 	struct qot_am335x_sched_interface *interface;
 	u64 ns;
 	interface = container_of(sched_timer, struct qot_am335x_sched_interface, timer);
-	ns = timepoint_to_ns(expiry) - timecounter_read(&interface->parent->tc);
+	ns = TP_TO_nSEC(expiry) - timecounter_read(&interface->parent->tc);
 	interface->callback = callback;
 	retval = clkev_program_event(&interface->qot_clockevent, ns);
 	return retval;
@@ -839,7 +839,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pr_info("qot_am335x: Creating core time counter...\n");
 	pdata->cc.read = qot_am335x_read;
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
-	pdata->cc.mult = 2796202667;
+	pdata->cc.mult = 2796202667UL;
 	pdata->cc.shift = 26;
 	spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));

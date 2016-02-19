@@ -45,6 +45,9 @@ typedef struct clk {
 /* Root of the red-black tree used to store clocks */
 static struct rb_root qot_clock_root = RB_ROOT;
 
+/* Root of the red-black tree used to store clocks */
+static clk_t *core = NULL;
+
 /* Search for a clock given by a name */
 static clk_t *qot_clock_find(char *name) {
     int result;
@@ -64,7 +67,8 @@ static clk_t *qot_clock_find(char *name) {
 }
 
 /* Insert a clock into our data structure */
-static qot_return_t qot_clock_insert(clk_t *clk) {
+static qot_return_t qot_clock_insert(clk_t *clk)
+{
     int result;
     clk_t *target = NULL;
     struct rb_node **new = &(qot_clock_root.rb_node), *parent = NULL;
@@ -86,7 +90,21 @@ static qot_return_t qot_clock_insert(clk_t *clk) {
 
 /* Public functions */
 
-qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
+/* Get the core time (with query uncertainty added) */
+qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
+{
+    if (!utp || !core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Get a measurement of core time */
+    utp->estimate = core->impl.read_time();
+    /* Add the uncertainty to the measurement */
+    utimepoint_add(utp, &core->impl.info.read_latency);
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_clock_register(qot_clock_impl_t *impl)
+{
     clk_t *clk_priv = NULL;
     if (!impl)
         return QOT_RETURN_TYPE_ERR;
@@ -101,7 +119,8 @@ qot_return_t qot_clock_register(qot_clock_impl_t *impl) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
+qot_return_t qot_clock_unregister(qot_clock_impl_t *impl)
+{
     clk_t *clk_priv = NULL;
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
@@ -113,7 +132,8 @@ qot_return_t qot_clock_unregister(qot_clock_impl_t *impl) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_update(qot_clock_impl_t *impl) {
+qot_return_t qot_clock_update(qot_clock_impl_t *impl)
+{
     clk_t *clk_priv = NULL;
     if (!clk_priv)
         return QOT_RETURN_TYPE_ERR;
@@ -123,7 +143,8 @@ qot_return_t qot_clock_update(qot_clock_impl_t *impl) {
 }
 
 /* Get the next clk in the set */
-qot_return_t qot_clock_first(qot_clock_t *clk) {
+qot_return_t qot_clock_first(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     struct rb_node *node;
     node = rb_first(&qot_clock_root);
@@ -133,7 +154,8 @@ qot_return_t qot_clock_first(qot_clock_t *clk) {
 }
 
 /* Get the next timeline in the set */
-qot_return_t qot_clock_next(qot_clock_t *clk) {
+qot_return_t qot_clock_next(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     struct rb_node *node;
     if (!clk)
@@ -149,7 +171,8 @@ qot_return_t qot_clock_next(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_get_info(qot_clock_t *clk) {
+qot_return_t qot_clock_get_info(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
@@ -160,7 +183,8 @@ qot_return_t qot_clock_get_info(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_remove(qot_clock_t *clk) {
+qot_return_t qot_clock_remove(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
@@ -174,8 +198,8 @@ qot_return_t qot_clock_remove(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Remove all timelines */
-void qot_clock_remove_all(void) {
+void qot_clock_remove_all(void)
+{
     clk_t *clk, *clk_next;
     rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
         /* TODO: Remove any inner structures */
@@ -184,7 +208,8 @@ void qot_clock_remove_all(void) {
     }
 }
 
-qot_return_t qot_clock_sleep(qot_clock_t *clk) {
+qot_return_t qot_clock_sleep(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
@@ -195,7 +220,8 @@ qot_return_t qot_clock_sleep(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_wake(qot_clock_t *clk) {
+qot_return_t qot_clock_wake(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
@@ -206,7 +232,8 @@ qot_return_t qot_clock_wake(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t qot_clock_switch(qot_clock_t *clk) {
+qot_return_t qot_clock_switch(qot_clock_t *clk)
+{
     clk_t *clk_priv = NULL;
     if (!clk)
         return QOT_RETURN_TYPE_ERR;
@@ -217,7 +244,8 @@ qot_return_t qot_clock_switch(qot_clock_t *clk) {
     return QOT_RETURN_TYPE_OK;
 }
 
-void qot_clock_cleanup(struct class *qot_class) {
+void qot_clock_cleanup(struct class *qot_class)
+{
     clk_t *clk, *clk_next;
     /* Remove all clocks */
     rbtree_postorder_for_each_entry_safe(clk, clk_next, &qot_clock_root, node) {
@@ -226,6 +254,7 @@ void qot_clock_cleanup(struct class *qot_class) {
     }
 }
 
-qot_return_t qot_clock_init(struct class *qot_class) {
+qot_return_t qot_clock_init(struct class *qot_class)
+{
     return QOT_RETURN_TYPE_OK;
 }

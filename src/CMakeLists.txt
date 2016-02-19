@@ -38,19 +38,19 @@ IF (BUILD_MODULES)
 ENDIF (BUILD_MODULES)
 
 # Build the programmer interface
-OPTION(BUILD_PROGAPI "Build programmer interface" ON)
+OPTION(BUILD_PROGAPI "Build programmer interface" OFF)
 IF (BUILD_PROGAPI)
 	ADD_SUBDIRECTORY(api)
 ENDIF (BUILD_PROGAPI)
 
 # Build the system service
-OPTION(BUILD_SERVICE "Build system service" ON)
+OPTION(BUILD_SERVICE "Build system service" OFF)
 IF (BUILD_SERVICE)
 	ADD_SUBDIRECTORY(service)
 ENDIF (BUILD_SERVICE)
 
 # Build example applications
-OPTION(BUILD_EXAMPLE "Build example applications" ON)
+OPTION(BUILD_EXAMPLE "Build example applications" OFF)
 IF (BUILD_EXAMPLE)
 	ADD_SUBDIRECTORY(examples)
 ENDIF (BUILD_EXAMPLE)

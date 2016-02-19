@@ -63,7 +63,8 @@ static int qot_major;
 static struct rb_root qot_user_chdev_con_root = RB_ROOT;
 
 /* Free memory used by a connection */
-static void qot_user_chdev_con_free(qot_user_chdev_con_t *con) {
+static void qot_user_chdev_con_free(qot_user_chdev_con_t *con)
+{
     event_t *event;
     struct list_head *item, *tmp;
     list_for_each_safe(item, tmp, &con->event_list) {
@@ -74,7 +75,8 @@ static void qot_user_chdev_con_free(qot_user_chdev_con_t *con) {
 }
 
 /* Search for the connection corresponding to a given fileobject */
-static qot_user_chdev_con_t *qot_user_chdev_con_search(struct file *f) {
+static qot_user_chdev_con_t *qot_user_chdev_con_search(struct file *f)
+{
     int result;
     qot_user_chdev_con_t *con;
     struct rb_node *node = qot_user_chdev_con_root.rb_node;
@@ -92,7 +94,8 @@ static qot_user_chdev_con_t *qot_user_chdev_con_search(struct file *f) {
 }
 
 /* Insert a new connection into the data structure (0 = OK, 1 = EXISTS) */
-static void qot_user_chdev_con_insert(qot_user_chdev_con_t *con) {
+static void qot_user_chdev_con_insert(qot_user_chdev_con_t *con)
+{
     int result;
     qot_user_chdev_con_t *tmp;
     struct rb_node **new = &(qot_user_chdev_con_root.rb_node), *parent = NULL;
@@ -115,7 +118,8 @@ static void qot_user_chdev_con_insert(qot_user_chdev_con_t *con) {
 }
 
 /* Remove a connection from the red-black tree */
-static int qot_user_chdev_con_remove(qot_user_chdev_con_t *con) {
+static int qot_user_chdev_con_remove(qot_user_chdev_con_t *con)
+{
     if (!con) {
         pr_err("qot_user_chdev: could not find ioctl connection\n");
         return 1;
@@ -125,7 +129,8 @@ static int qot_user_chdev_con_remove(qot_user_chdev_con_t *con) {
 }
 
 /* chardev ioctl open callback implementation */
-static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f) {
+static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
+{
     qot_timeline_t *timeline;
     event_t *event;
 
@@ -164,7 +169,8 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f) {
 }
 
 /* chardev ioctl close callback implementation */
-static int qot_user_chdev_ioctl_close(struct inode *i, struct file *f) {
+static int qot_user_chdev_ioctl_close(struct inode *i, struct file *f)
+{
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (!con) {
         pr_err("qot_user_chdev: could not find ioctl connection\n");
@@ -177,7 +183,8 @@ static int qot_user_chdev_ioctl_close(struct inode *i, struct file *f) {
 
 /* chardev ioctl open access implementation */
 static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
-    unsigned long arg) {
+    unsigned long arg)
+{
     event_t *event;
     qot_event_t msge;
     qot_timeline_t msgt;
@@ -222,7 +229,8 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     return 0;
 }
 
-static unsigned int qot_user_chdev_poll(struct file *f, poll_table *wait) {
+static unsigned int qot_user_chdev_poll(struct file *f, poll_table *wait)
+{
     unsigned int mask = 0;
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (con) {
@@ -241,7 +249,8 @@ static struct file_operations qot_user_chdev_fops = {
     .poll = qot_user_chdev_poll,
 };
 
-qot_return_t qot_user_chdev_init(struct class *qot_class) {
+qot_return_t qot_user_chdev_init(struct class *qot_class)
+{
     pr_info("qot_user_chdev: initializing\n");
     qot_major = register_chrdev(0,DEVICE_NAME,&qot_user_chdev_fops);
     if (qot_major < 0) {
@@ -261,7 +270,8 @@ failed_chrdevreg:
     return QOT_RETURN_TYPE_ERR;
 }
 
-void qot_user_chdev_cleanup(struct class *qot_class) {
+void qot_user_chdev_cleanup(struct class *qot_class)
+{
     qot_user_chdev_con_t *con;
     struct rb_node *node;
 

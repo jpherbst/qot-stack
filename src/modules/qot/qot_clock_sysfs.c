@@ -33,10 +33,12 @@
 
 #include "qot_clock.h"
 
-void qot_clock_sysfs_cleanup(struct device *qot_device) {
-    /* DO nothing */
+void qot_clock_sysfs_cleanup(struct device *qot_device)
+{
+    /* TODO: */
 }
 
-qot_return_t qot_clock_sysfs_init(struct device *qot_device) {
+qot_return_t qot_clock_sysfs_init(struct device *qot_device)
+{
     return QOT_RETURN_TYPE_OK;
 }

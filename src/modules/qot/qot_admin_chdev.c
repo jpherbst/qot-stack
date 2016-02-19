@@ -63,7 +63,8 @@ static int qot_major;
 static struct rb_root qot_admin_chdev_con_root = RB_ROOT;
 
 /* Free memory used by a connection */
-static void qot_admin_chdev_con_free(qot_admin_chdev_con_t *con) {
+static void qot_admin_chdev_con_free(qot_admin_chdev_con_t *con)
+{
     event_t *event;
     struct list_head *item, *tmp;
     list_for_each_safe(item, tmp, &con->event_list) {
@@ -74,7 +75,8 @@ static void qot_admin_chdev_con_free(qot_admin_chdev_con_t *con) {
 }
 
 /* Search for the connection corresponding to a given fileobject */
-static qot_admin_chdev_con_t *qot_admin_chdev_con_search(struct file *f) {
+static qot_admin_chdev_con_t *qot_admin_chdev_con_search(struct file *f)
+{
     int result;
     qot_admin_chdev_con_t *con;
     struct rb_node *node = qot_admin_chdev_con_root.rb_node;
@@ -92,7 +94,8 @@ static qot_admin_chdev_con_t *qot_admin_chdev_con_search(struct file *f) {
 }
 
 /* Insert a new connection into the data structure (0 = OK, 1 = EXISTS) */
-static void qot_admin_chdev_con_insert(qot_admin_chdev_con_t *con) {
+static void qot_admin_chdev_con_insert(qot_admin_chdev_con_t *con)
+{
     int result;
     qot_admin_chdev_con_t *tmp;
     struct rb_node **new = &(qot_admin_chdev_con_root.rb_node), *parent = NULL;
@@ -115,7 +118,8 @@ static void qot_admin_chdev_con_insert(qot_admin_chdev_con_t *con) {
 }
 
 /* Remove a connection from the red-black tree */
-static int qot_admin_chdev_con_remove(qot_admin_chdev_con_t *con) {
+static int qot_admin_chdev_con_remove(qot_admin_chdev_con_t *con)
+{
     if (!con) {
         pr_err("qot_admin_chdev: could not find ioctl connection\n");
         return 1;
@@ -125,7 +129,8 @@ static int qot_admin_chdev_con_remove(qot_admin_chdev_con_t *con) {
 }
 
 /* chardev ioctl open callback implementation */
-static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f) {
+static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
+{
     qot_clock_t *clk;
     event_t *event;
 
@@ -164,7 +169,8 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f) {
 }
 
 /* chardev ioctl close callback implementation */
-static int qot_admin_chdev_ioctl_close(struct inode *i, struct file *f) {
+static int qot_admin_chdev_ioctl_close(struct inode *i, struct file *f)
+{
     qot_admin_chdev_con_t *con = qot_admin_chdev_con_search(f);
     if (!con) {
         pr_err("qot_admin_chdev: could not find ioctl connection\n");
@@ -177,10 +183,12 @@ static int qot_admin_chdev_ioctl_close(struct inode *i, struct file *f) {
 
 /* chardev ioctl open access implementation */
 static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
-    unsigned long arg) {
+    unsigned long arg)
+{
     event_t *event;
     qot_event_t msge;
     qot_clock_t msgc;
+    utimelength_t msgt;
     qot_admin_chdev_con_t *con = qot_admin_chdev_con_search(f);
     if (!con)
         return -EACCES;
@@ -228,13 +236,28 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (qot_clock_switch(&msgc))
             return -EACCES;
         break;
+    /* Switch core to a specific clock */
+    case QOTADM_SET_OS_LATENCY:
+        if (copy_from_user(&msgt, (utimelength_t*)arg, sizeof(utimelength_t)))
+            return -EACCES;
+        if (qot_admin_set_latency(&msgt))
+            return -EACCES;
+        break;
+    /* Switch core to a specific clock */
+    case QOTADM_GET_OS_LATENCY:
+        if (qot_admin_get_latency(&msgt))
+            return -EACCES;
+        if (copy_to_user((utimelength_t*)arg, &msgt, sizeof(utimelength_t)))
+            return -EACCES;
+        break;
     default:
         return -EINVAL;
     }
     return 0;
 }
 
-static unsigned int qot_admin_chdev_poll(struct file *f, poll_table *wait) {
+static unsigned int qot_admin_chdev_poll(struct file *f, poll_table *wait)
+{
     unsigned int mask = 0;
     qot_admin_chdev_con_t *con = qot_admin_chdev_con_search(f);
     if (con) {
@@ -253,7 +276,8 @@ static struct file_operations qot_admin_chdev_fops = {
     .poll = qot_admin_chdev_poll,
 };
 
-qot_return_t qot_admin_chdev_init(struct class *qot_class) {
+qot_return_t qot_admin_chdev_init(struct class *qot_class)
+{
     pr_info("qot_admin_chdev: initializing\n");
     qot_major = register_chrdev(0,DEVICE_NAME,&qot_admin_chdev_fops);
     if (qot_major < 0) {
@@ -279,7 +303,8 @@ failed_chrdevreg:
     return QOT_RETURN_TYPE_ERR;
 }
 
-void qot_admin_chdev_cleanup(struct class *qot_class) {
+void qot_admin_chdev_cleanup(struct class *qot_class)
+{
     qot_admin_chdev_con_t *con;
     struct rb_node *node;
 
