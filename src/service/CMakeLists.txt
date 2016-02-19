@@ -3,22 +3,17 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 #################################################################################################
 
-# Configure cross compilation
-IF (CROSS_COMPILE)
-
-	# Required for cross-compiling
+# We need to change a few things to enable compilation
+IF (CROSS_AM335X)
 	SET(Boost_USE_STATIC_LIBS        OFF)
 	SET(Boost_USE_STATIC_RUNTIME     OFF)
 	SET(Boost_USE_MULTITHREADED      ON)
 	SET(Boost_ALL_DYN_LINK           ON)
 	SET(Boost_NO_SYSTEM_PATHS        ON)
-
-	# This is required for boost logging
 	SET(BOOST_ROOT       "${CROSS_COMPILE_ROOTFS}/usr")
 	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
 	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf")
-
-ENDIF (CROSS_COMPILE)
+ENDIF (CROSS_AM335X)
 
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
