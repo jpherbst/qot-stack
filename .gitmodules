@@ -3,13 +3,3 @@
 	url = https://github.com/PrismTech/opensplice.git
 	branch = OSPL_V6_4_OSS_RELEASE
 	ignore = all
-[submodule "thirdparty/linuxptp"]
-	path = thirdparty/linuxptp
-	url = http://git.code.sf.net/p/linuxptp/code
-	branch = v1.6
-	ignore = all
-[submodule "thirdparty/ntp"]
-	path = thirdparty/ntp
-	url = https://github.com/ntp-project/ntp.git
-	branch = stable
-	ignore = all
