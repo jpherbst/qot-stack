@@ -33,6 +33,13 @@
 #include "qot_core.h"
 
 /**
+ * @brief Get the current uncertain core time
+ * @param utp A pointer to an data structure to fill
+ * @return A status code indicating success (0) or other (no more clocks)
+ **/
+qot_return_t qot_clock_get_core_time(utimepoint_t *utp);
+
+/**
  * @brief Register a clock with the QoT stack
  * @param impl A struct containing the clock implementation
  * @return A status code indicating success (0) or other (no more clocks)

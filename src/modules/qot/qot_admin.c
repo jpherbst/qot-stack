@@ -31,13 +31,45 @@
 
 #include "qot_admin.h"
 
+/* Default OS latency */
+static utimelength_t os_latency;
+
+/* Set the OS latency */
+qot_return_t qot_admin_set_latency(utimelength_t *timelength)
+{
+    if (!timelength)
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(&os_latency,timelength,sizeof(utimelength_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Set the OS latency */
+qot_return_t qot_admin_get_latency(utimelength_t *timelength)
+{
+    if (!timelength)
+        return QOT_RETURN_TYPE_ERR;
+    memcpy(timelength,&os_latency,sizeof(utimelength_t));
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Add the OS latency to an uncertain time length */
+qot_return_t qot_admin_add_latency(utimepoint_t *utp)
+{
+    if (!utp)
+        return QOT_RETURN_TYPE_ERR;
+    utimepoint_add(utp, &os_latency);
+    return QOT_RETURN_TYPE_OK;
+}
+
 /* Cleanup the timeline subsystem */
-void qot_admin_cleanup(struct class *qot_class) {
+void qot_admin_cleanup(struct class *qot_class)
+{
 	qot_admin_chdev_cleanup(qot_class);
 }
 
 /* Initialize the timeline subsystem */
-qot_return_t qot_admin_init(struct class *qot_class) {
+qot_return_t qot_admin_init(struct class *qot_class)
+{
     if (qot_admin_chdev_init(qot_class)) {
         pr_err("qot_admin: problem calling qot_admin_chdev_init\n");
         goto fail_chdev_init;

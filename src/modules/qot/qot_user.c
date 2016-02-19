@@ -32,12 +32,14 @@
 #include "qot_user.h"
 
 /* Cleanup the timeline subsystem */
-void qot_user_cleanup(struct class *qot_class) {
+void qot_user_cleanup(struct class *qot_class)
+{
 	qot_user_chdev_cleanup(qot_class);
 }
 
 /* Initialize the timeline subsystem */
-qot_return_t qot_user_init(struct class *qot_class) {
+qot_return_t qot_user_init(struct class *qot_class)
+{
     if (qot_user_chdev_init(qot_class)) {
         pr_err("qot_user: problem calling qot_user_chdev_init\n");
         goto fail_chdev_init;
