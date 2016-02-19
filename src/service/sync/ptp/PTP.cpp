@@ -1,13 +1,13 @@
 /**
- * @file Syncrhonization.hpp
- * @brief Library to manage Quality of Time POSIX clocks
- * @author Andrew Symington
+ * @file PTP.cpp
+ * @brief Provides ptp instance to the sync interface
+ * @author Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice, 
+ *      1. Redistributions of source code must retain the above copyright notice, 
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice, 
  *     this list of conditions and the following disclaimer in the documentation
@@ -28,13 +28,27 @@
  *
  */
 
-// This file's include
-#include "Synchronization.hpp"
+#include "PTP.hpp"
 
 using namespace qot;
 
-Synchronization::Synchronization(boost::asio::io_service *io, const std::string &iface)
-	: asio(io), baseiface(iface)
+#define DEBUG true
+#define TEST  true
+
+PTP::PTP(boost::asio::io_service *io,	// ASIO handle
+		const std::string &iface,		// interface
+		int ptp_index)					// index of the ptp char device						
+	: Sync(), asio(io), baseiface(iface), ptpindex(ptp_index)
+{	
+	this->Reset();	
+}
+
+PTP::~PTP()
+{
+	this->Stop();
+}
+
+void PTP::Reset() 
 {
 	// Default settings...
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
@@ -109,37 +123,34 @@ Synchronization::Synchronization(boost::asio::io_service *io, const std::string 
 	cfg_settings.cfg_ignore = 0;
 }
 
-Synchronization::~Synchronization()
+void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size)
 {
-	this->Stop();
-}
-
-void Synchronization::Start(int phc_index, int qotfd, short domain, bool master, uint64_t accuracy)
-{	
 	// First stop any sync that is currently underway
 	this->Stop();
 
 	// Restart sync
-	BOOST_LOG_TRIVIAL(info) << "Starting synchronization as " << (master ? "master" : "slave") 
-		<< " on domain " << domain << " with PHC index " << phc_index << " and accuracy " << accuracy;
-	cfg_settings.dds.dds.domainNumber = domain;	
-	cfg_settings.pod.logSyncInterval = (int) floor(log2(accuracy/20.0));
+	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
+		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
+	cfg_settings.dds.dds.domainNumber = sync_session;	
+	cfg_settings.pod.logSyncInterval = log_sync_interval;
 	if (master)
 		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
 	else
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
-	thread = boost::thread(boost::bind(&Synchronization::SyncThread, this, phc_index, qotfd));
+
+	thread = boost::thread(boost::bind(&PTP::SyncThread, this, ptpindex, timelines, timelines_size));
 }
 
-void Synchronization::Stop()
+void PTP::Stop()
 {
-	BOOST_LOG_TRIVIAL(info) << "Stopping synchronization ";
+	BOOST_LOG_TRIVIAL(info) << "Stopping PTP synchronization ";
 	kill = true;
 	thread.join();
 }
 
-int Synchronization::SyncThread(int phc_index, int qotfd)
+
+int PTP::SyncThread(int ptp_index, clockid_t *timelines, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL;
@@ -251,8 +262,8 @@ int Synchronization::SyncThread(int phc_index, int qotfd)
 	}
 
 	// Create the clock
-	clock = clock_create(phc_index, qotfd, (struct interfaces_head*)&cfg_settings.interfaces, 
-		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo);
+	clock = clock_create(ptp_index, (struct interfaces_head*)&cfg_settings.interfaces, 
+		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelines, timelines_size);
 	if (!clock)
 	{
 		fprintf(stderr, "failed to create a clock\n");

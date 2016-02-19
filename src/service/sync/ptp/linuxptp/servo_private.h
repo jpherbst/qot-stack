@@ -20,8 +20,13 @@
 #define HAVE_SERVO_PRIVATE_H
 
 #include "contain.h"
+#include <sys/types.h>
+#include <sys/queue.h>
 
 struct servo {
+	LIST_ENTRY(servo) list; /* QOT */
+	clockid_t tml_id; /* timeline id */
+	
 	double max_frequency;
 	double step_threshold;
 	double first_step_threshold;

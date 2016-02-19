@@ -84,7 +84,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						timeline.master() = s->data().name();
 
 						// (Re)start the synchronization service as master
-						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
+						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
+						clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+						int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+						sync->Start(false, sync_interval, timeline.domain(), &clkid, 1);
 					}
 				}
 
@@ -99,7 +102,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					timeline.master() = timeline.name();
 
 					// (Re)start the synchronization service as master
-					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+					clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+					int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+					sync->Start(true, sync_interval, timeline.domain(), &clkid, 1);
 				}
 
 				// If I am a slave and this node thinks that it is the master
@@ -118,7 +124,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						timeline.domain() = s->data().domain();
 
 						// (Re)start the synchronization service
-						sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
+						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
+						clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+						int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+						sync->Start(false, sync_interval, timeline.domain(), &clkid, 1);
 					}
 
 					// Make sure that we are on the right domain
@@ -144,7 +153,11 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					BOOST_LOG_TRIVIAL(info) << "Switching to " << timeline.domain();
 
 					// (Re)start the synchronization service as master
-					sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+					// Convert the file descriptor to a clock handle
+					clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+					int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+					sync->Start(true, sync_interval, timeline.domain(), &clkid, 1);
 				}
 			}
 		}
@@ -157,11 +170,12 @@ void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::Timeline
 	// Not sure what to do with this...
 }
 
-Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface)
+Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr)
 	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic), 
-		timer(*io), sync(io, iface)
+		timer(*io)/*, sync(io, iface) */
 {
 	timeline.name() = (std::string) name;	// Our name
+	sync = Sync::Factory(io, addr, iface);	// handle to sync algorithm
 }
 
 Coordinator::~Coordinator() {}
@@ -194,7 +208,7 @@ void Coordinator::Stop()
 	timer.cancel();
 
 	// Stop syncrhonizing
-	sync.Stop();
+	sync->Stop();
 
 	// Create the listener
 	dr.listener(nullptr, dds::core::status::StatusMask::none());
@@ -208,8 +222,12 @@ void Coordinator::Update(double acc, double res)
 	timeline.resolution() = res;
 
 	// If I am a slave then my accuracy may change the sync rate
-	if (timeline.master().compare(timeline.name()))
-		sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+	if (timeline.master().compare(timeline.name())){
+		//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+		clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+		int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+		sync->Start(true, sync_interval, timeline.domain(), &clkid, 1);
+	}
 }
 
 void Coordinator::Heartbeat(const boost::system::error_code& err)
@@ -249,7 +267,10 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	}
 	
 	// (Re)start the synchronization service as master
-	sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+	//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
+	clockid_t clkid = ((~(clockid_t) phc << 3) | 3);
+	int sync_interval = (int) floor(log2(timeline.accuracy()/20.0));
+	sync->Start(true, sync_interval, timeline.domain(), &clkid, 1);
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));
