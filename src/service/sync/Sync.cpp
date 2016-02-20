@@ -33,10 +33,11 @@
 #include "ptp/PTP.hpp"
 #include "ntp/NTP.hpp"
 
-#define QOT_IOCTL_BASE		"/dev"
-#define QOT_IOCTL_PTP		"ptp"
-#define QOT_IOCTL_FORMAT	"%3s%d"
-#define QOT_MAX_NAMELEN 	(32)
+/* So that we might expose a meaningful name through PTP interface */
+#define QOT_IOCTL_BASE          "/dev"
+#define QOT_IOCTL_PTP           "ptp"
+#define QOT_IOCTL_PTP_FORMAT    "%3s%D"
+#define QOT_MAX_PTP_NAMELEN     32
 
 using namespace qot;
 
@@ -59,23 +60,23 @@ boost::shared_ptr<Sync> Sync::Factory(
 			while ((entry = readdir(dir)) != NULL) {
 				BOOST_LOG_TRIVIAL(info) << "entry in directory found" << QOT_IOCTL_BASE;
 				// Check if we have a ptp device
-				char str[QOT_MAX_NAMELEN]; 
+				char str[QOT_MAX_PTP_NAMELEN]; 
 				int ret, val;	
-				ret = sscanf(entry->d_name, QOT_IOCTL_FORMAT, str, &val);
-				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_NAMELEN)==0)){
+				ret = sscanf(entry->d_name, QOT_IOCTL_PTP_FORMAT, str, &val);
+				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_PTP_NAMELEN)==0)){
 					BOOST_LOG_TRIVIAL(info) << "found in directory ptp" << val;
 					closedir(dir);
-    				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val)); 	// Instantiate a ptp sync algorithm
+    				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val));  // Instantiate a ptp sync algorithm
     			}
     		}
-    		//BOOST_LOG_TRIVIAL(error) << "No entry in the directory " << QOT_IOCTL_BASE;
     	}else{
     		BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
     	}
     }
-    return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 				// Instantiate ntp sync algorithm
+    return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 				        // Instantiate ntp sync algorithm
 }
 
+// Convert string into 32 bit IP address
 uint32_t Sync::IPtoUint(const std::string ip) {
     int a, b, c, d;
     uint32_t addr = 0;
@@ -90,6 +91,7 @@ uint32_t Sync::IPtoUint(const std::string ip) {
     return addr;
 }
 
+// CHeck if the IP address is in private / public subnet
 bool Sync::IsIPprivate(const std::string ip) {
     uint32_t ip_addr = IPtoUint(ip);
 

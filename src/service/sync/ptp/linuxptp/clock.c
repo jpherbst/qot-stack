@@ -46,7 +46,7 @@
 
 struct servo {
         LIST_ENTRY(servo) list; /* QOT */
-        clockid_t tml_id; /* timeline id */
+        int tml_fd; /* timeline fd */
         
         double max_frequency;
         double step_threshold;
@@ -141,7 +141,7 @@ struct clock {
 	struct interface uds_interface;
 	LIST_HEAD(clock_subscribers_head, clock_subscriber) subscribers;
 	LIST_HEAD(tmls_servo_head, servo) tmls_servos; /* QOT */
-	clockid_t *timelines; /* QOT */
+	int *timelinesfd; /* QOT */
 	int timelines_size; /* QOT */
 };
 
@@ -179,10 +179,10 @@ static int create_timelines_servos(struct clock *c, int fadj, int max_adj, int s
                 s = servo_create(servo, -fadj, max_adj, sw_ts);
                  
                 if (!s) {
-                        pr_err("Failed to create timeline%d servo", c->timelines[i]);
+                        pr_err("Failed to create timeline%d servo", c->timelinesfd[i]);
                         return -1;
                 }
-                s->tml_id = c->timelines[i];
+                s->tml_fd = c->timelinesfd[i];
 
                 LIST_FOREACH(piter, &c->tmls_servos, list)
                 lasts = piter;
@@ -860,7 +860,7 @@ static void clock_remove_port(struct clock *c, struct port *p)
 
 struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
-			   enum servo_type servo, clockid_t *timelines, int timelines_size) /* QOT */
+			   enum servo_type servo, int *timelinesfd, int timelines_size) /* QOT */
 {
 	int fadj = 0, max_adj = 0, sw_ts = timestamping == TS_SOFTWARE ? 1 : 0;
 	struct clock *c = &the_clock;
@@ -926,7 +926,7 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	}
 
 	/* QOT, Creating individual servos for all the timelines */
-	c->timelines = timelines; 
+	c->timelinesfd = timelinesfd; 
 	c->timelines_size = timelines_size;
 
 	LIST_INIT(&c->tmls_servos);
@@ -1491,14 +1491,18 @@ enum servo_state clock_synchronize(struct clock *c,
 	tmv_t ingress, origin;
 	enum servo_state state;
 	struct servo *s;
+	clockid_t tml_id;
+	struct timespec ingress_tml;
 
 	/* QOT, synchronize all the timelines */
 	LIST_FOREACH(s, &c->tmls_servos, list) {
 		state = SERVO_UNLOCKED;
+		tml_id = FD_TO_CLOCKID(s->tml_fd);
 
 	/* TODO: QOT, Project received timestamp to timeline reference */
-	// qot_project_timeline(s->tml_id, timespec_to_tmv(ingress_ts), &ingress)
-	ingress = timespec_to_tmv(ingress_ts);
+	clock_project_timeline(s->tml_fd, ingress_ts, &ingress_tml);
+	//ingress = timespec_to_tmv(ingress_ts);
+	ingress = timespec_to_tmv(ingress_tml);
 	origin  = timestamp_to_tmv(origin_ts);
 
 	c->t1 = origin;
@@ -1537,9 +1541,9 @@ enum servo_state clock_synchronize(struct clock *c,
 				   tmv_to_nanoseconds(c->master_offset), adj);
 	} else {
 		*/
-		pr_info("timeline id: %i master offset %10" PRId64 " s%d freq %+7.0f "
+		pr_info("timeline clock id: %i master offset %10" PRId64 " s%d freq %+7.0f "
 			"path delay %9" PRId64,
-			s->tml_id,
+			tml_id, //TODO: FIX IT TO CLOCKID
 			tmv_to_nanoseconds(c->master_offset), state, adj,
 			tmv_to_nanoseconds(c->path_delay));
 	//}
@@ -1551,8 +1555,8 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_set_freq(c->clkid, -adj); /* QOT */
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
-		clockadj_set_freq(s->tml_id, -adj); /* QOT */
-		clockadj_step(s->tml_id, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
+		clockadj_set_freq(tml_id, -adj); /* QOT */
+		clockadj_step(tml_id, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1568,7 +1572,7 @@ enum servo_state clock_synchronize(struct clock *c,
 			sysclk_set_sync();
 		*/
 		// Adjust the timeline
-		clockadj_set_freq(s->tml_id, -adj); /* QOT */
+		clockadj_set_freq(tml_id, -adj); /* QOT */
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
 		break;
@@ -1707,3 +1711,18 @@ double clock_rate_ratio(struct clock *c)
 {
 	return servo_rate_ratio(c->servo);
 }
+
+/* QOT */
+int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts)
+{
+	timepoint_t tp;
+	timepoint_from_timespec(&tp, &ts); 
+
+	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
+		tml_ts->tv_sec = tp.sec;
+		tml_ts->tv_nsec= tp.asec / NS_PER_SEC;
+		return 0;
+	}
+	return -1;
+}
+

@@ -29,6 +29,9 @@
 #include "tmv.h"
 #include "transport.h"
 
+// QoT base types
+#include "../../../../qot_types.h"
+
 struct ptp_message; /*forward declaration*/
 
 /** Opaque type. */
@@ -71,7 +74,7 @@ UInteger8 clock_class(struct clock *c);
  */
 struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
-			   enum servo_type servo, clockid_t *timelines, int timelines_size); /* QOT */
+			   enum servo_type servo, int *timelinesfd, int timelines_size); /* QOT */
 
 /**
  * Obtains a clock's default data set.
@@ -276,5 +279,12 @@ void clock_check_ts(struct clock *c, struct timespec ts);
  * @return   The rate ratio, 1.0 is returned when not known.
  */
 double clock_rate_ratio(struct clock *c);
+
+/** QOT
+ * Project timestamp from ptp clock to timeline reference
+ * @param fd  timeline char device file descriptor
+ * @return  pointer to projected timestamp, 0 = success
+ */
+int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts);
 
 #endif

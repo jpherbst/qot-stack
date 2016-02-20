@@ -25,7 +25,7 @@
 
 struct servo {
 	LIST_ENTRY(servo) list; /* QOT */
-	clockid_t tml_id; /* timeline id */
+	int tml_fd; /* timeline fd */
 	
 	double max_frequency;
 	double step_threshold;
