@@ -41,7 +41,7 @@ extern "C"
 	#include <sys/inotify.h>
 
 	// So that we know the character device for the timelin
-	#include "../../module/qot.h"
+	#include "../qot_types.h"
 }
 
 /* Convenience declarations */
@@ -49,6 +49,12 @@ extern "C"
 #define EVENT_BUF_LEN   (1024*(EVENT_SIZE + 16))
 #define EVENT_MAXLEN 	(512)
 #define	EVENT_TIMEOUT	(1000)
+
+/* So that we might expose a meaningful name through PTP interface */
+#define QOT_IOCTL_BASE          "/dev"
+#define QOT_IOCTL_TIMELINE      "timeline"
+#define QOT_IOCTL_FORMAT        "%8s%d"
+#define QOT_MAX_NAMELEN         64
 
 using namespace qot;
 

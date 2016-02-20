@@ -31,7 +31,13 @@
 #define QOT_STACK_SRC_QOT_TYPES_H
 
 /* So that we might expose a meaningful name through PTP interface */
+#define QOT_IOCTL_BASE		"/dev"
+#define QOT_IOCTL_TIMELINE	"timeline"
+#define QOT_IOCTL_PTP		"ptp"
+#define QOT_IOCTL_FORMAT	"%8s%d"
+#define QOT_IOCTL_PTP_FORMAT	"%3s%D"
 #define QOT_MAX_NAMELEN 	64
+#define QOT_MAX_PTP_NAMELEN 	32
 #define QOT_MAX_NUMCLKS 	8
 
 /* For ease of conversion */

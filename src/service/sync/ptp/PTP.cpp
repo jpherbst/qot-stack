@@ -123,7 +123,7 @@ void PTP::Reset()
 	cfg_settings.cfg_ignore = 0;
 }
 
-void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size)
+void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size)
 {
 	// First stop any sync that is currently underway
 	this->Stop();
@@ -139,7 +139,7 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clock
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
 
-	thread = boost::thread(boost::bind(&PTP::SyncThread, this, ptpindex, timelines, timelines_size));
+	thread = boost::thread(boost::bind(&PTP::SyncThread, this, ptpindex, timelinesfd, timelines_size));
 }
 
 void PTP::Stop()
@@ -150,7 +150,7 @@ void PTP::Stop()
 }
 
 
-int PTP::SyncThread(int ptp_index, clockid_t *timelines, uint16_t timelines_size)
+int PTP::SyncThread(int ptp_index, int *timelinesfd, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL;
@@ -263,7 +263,7 @@ int PTP::SyncThread(int ptp_index, clockid_t *timelines, uint16_t timelines_size
 
 	// Create the clock
 	clock = clock_create(ptp_index, (struct interfaces_head*)&cfg_settings.interfaces, 
-		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelines, timelines_size);
+		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelinesfd, timelines_size);
 	if (!clock)
 	{
 		fprintf(stderr, "failed to create a clock\n");

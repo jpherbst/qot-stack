@@ -30,6 +30,12 @@
 
 #include <sstream>
 
+/* So that we might expose a meaningful name through PTP interface */
+#define QOT_IOCTL_BASE          "/dev"
+#define QOT_IOCTL_TIMELINE      "timeline"
+#define QOT_IOCTL_FORMAT        "%8s%d"
+#define QOT_MAX_NAMELEN         64
+
 using namespace qot;
 
 Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr, int id)
@@ -37,26 +43,26 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const s
 {
 	// First, save the id to the message data structure. Having this present
 	// in the data structure will cause us to bind without affecting metrics
-	this->msg.tid = id;
+	this->msg.id = id;
 
 	// Second, bind to the timeline to get the base requirements
 	std::ostringstream oss("");
-	oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_QOT;
+	oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
 	this->fd = open(oss.str().c_str(), O_RDWR);
 	if (fd < 0)
 	{
 		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
 		return;
 	}
-	if (ioctl(fd, QOT_BIND_TIMELINE, &msg))
+	if (ioctl(fd, TIMELINE_BIND_JOIN, &msg))
 	{
-		BOOST_LOG_TRIVIAL(warning) << "Timeline " << this->msg.tid << " was not added by the QoT stack. Ignoring.";
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << this->msg.id << " was not added by the QoT stack. Ignoring.";
 		return;
 	}
 	BOOST_LOG_TRIVIAL(info) << "Timeline opened successfully";
 
 	// Initialize the coordinator with the given PHC id, UUID, accuracy and resolution
-	coordinator.Start(id, this->fd, msg.uuid, msg.request.acc, msg.request.res);
+	coordinator.Start(id, this->fd, msg.name, msg.demand.accuracy, msg.demand.resolution);
 
 	// We can now start polling, because the timeline is setup
 	thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
@@ -90,24 +96,29 @@ void Timeline::MonitorThread()
 		pfd[0].fd = this->fd;
 		pfd[0].events = POLLIN;
 
+		//TODO: change according to new core
 		// Wait until an asynchronous data push from the kernel module
-		if (poll(pfd,1, QOT_POLL_TIMEOUT_MS) && !kill)
+		/*if (poll(pfd,1, QOT_POLL_TIMEOUT_MS) && !kill)
 		{
 			// Some event just occured on the timeline
 			if (pfd[0].revents & POLLIN)
 			{
 				BOOST_LOG_TRIVIAL(info) << "Timeline Event...";
+				
 				while (ioctl(this->fd, QOT_GET_EVENT, &msg) == 0)
 				{
 					// Special callback for capture events to
+					//TODO: change according to new core
 					if (msg.event.type == EVENT_UPDATE)
 					{
 						BOOST_LOG_TRIVIAL(info) << "Timeline metrics updated...";
+						//TODO: change according to new core
 						if (ioctl(this->fd, QOT_GET_TARGET, &msg) == 0)
 							coordinator.Update(msg.request.acc, msg.request.res);
 					}
 				}
 			}
 		}
+		*/
 	}
 }

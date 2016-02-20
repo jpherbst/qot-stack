@@ -65,7 +65,9 @@ namespace qot
 
 	// Communication with local timeline
 	private: int fd;							// IOCTL link
-	private: struct qot_message msg;			// Information about the timeline
+
+	private: qot_binding_t msg;			// Information about the timeline
+
 	private: bool kill;							// Kill flag
 	private: std::string basename;				// Name of service
 
