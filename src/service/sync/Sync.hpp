@@ -46,6 +46,8 @@ extern "C"
     #include <stdio.h>
     #include <stdlib.h>
     #include <dirent.h>
+
+    #include "../../qot_types.h"
 }
 
 namespace qot
@@ -79,7 +81,7 @@ namespace qot
         public: virtual void Start(bool master,
                                 int log_sync_interval,
                                 uint32_t sync_session,
-                                clockid_t *timelines,
+                                int *timelinesfd,
                                 uint16_t timelines_size) = 0;   // Start syncronization
         public: virtual void Stop() = 0;                        // Stop synchronization
 
@@ -90,7 +92,7 @@ namespace qot
 			const std::string &iface		// interface for synchronization
 		);
 
-		// Helper functions to check if the IP address is private
+		// Helper functions to check if the IP address is in private / public subnet
 		private: static bool IsIPprivate(const std::string ip);
 		private: static uint32_t IPtoUint(const std::string ip);
     };

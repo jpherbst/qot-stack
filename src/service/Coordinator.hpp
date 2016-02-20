@@ -40,6 +40,12 @@
 //#include "Synchronization.hpp"
 #include "sync/Sync.hpp"
 
+ // Include the QOT api
+extern "C"
+{
+	#include "../qot_types.h"
+}
+
 std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts);
 
 namespace qot
@@ -57,10 +63,10 @@ namespace qot
 			const dds::core::status::LivelinessChangedStatus& status);
 	
 		// Initialize this coordinator with a name
-		public: void Start(int id, int fd, const char* uuid, double acc, double res);
+		public: void Start(int id, int fd, const char* uuid, timeinterval_t acc, timelength_t res);
 
 		// Update the target metrics
-		public: void Update(double acc, double res);
+		public: void Update(timeinterval_t acc, timelength_t res);
 
 		// Stop this coordinator
 		public: void Stop();
@@ -75,7 +81,7 @@ namespace qot
 
 		// Coordinator state
 		private: int phc;
-		private: int qotfd;
+		private: int timelinefd;
 		//private: Synchronization sync;
 
 		// Join the DDS domain to exchange information about timelines
