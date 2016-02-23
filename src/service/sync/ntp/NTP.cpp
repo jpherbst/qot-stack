@@ -50,7 +50,7 @@ NTP::~NTP()
 void NTP::Reset() 
 {}
 
-void NTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clockid_t *timelines, uint16_t timelines_size)
+void NTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size)
 {
 	// First stop any sync that is currently underway
 	this->Stop();
@@ -62,7 +62,7 @@ void NTP::Start(bool master, int log_sync_interval, uint32_t sync_session, clock
 	// TODO: How to see if /dev/ptp0 is always the ethernet controller clock?
 	int phc_index = 0;
 
-	thread = boost::thread(boost::bind(&NTP::SyncThread, this, phc_index, timelines, timelines_size));
+	thread = boost::thread(boost::bind(&NTP::SyncThread, this, phc_index, timelinesfd, timelines_size));
 }
 
 void NTP::Stop()
@@ -73,7 +73,7 @@ void NTP::Stop()
 }
 
 
-int NTP::SyncThread(int phc_index, clockid_t *timelines, uint16_t timelines_size)
+int NTP::SyncThread(int phc_index, int *timelinesfd, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 }

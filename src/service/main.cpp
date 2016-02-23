@@ -78,7 +78,7 @@ int main(int argc, char **argv)
 		("verbose,v",  	"print verbose debug messages")
 		("iface,i",  	boost::program_options::value<std::string>()->default_value("eth0"), "PTP-compliant interface") 
 		("name,n", 		boost::program_options::value<std::string>()->default_value(RandomString(32)), "name of this node")
-		("addr,a", 		boost::program_options::value<std::string>()->default_value("192.0.2.33"), "ip address for this node")
+		("addr,a", 		boost::program_options::value<std::string>()->default_value("192.168.2.33"), "ip address for this node")
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(
