@@ -109,7 +109,7 @@ TARGET_LINK_LIBRARIES(ptp m)
 ADD_LIBRARY(ntp SHARED
 	sync/ntp/ntpv4/algorithm.c
 	sync/ntp/ntpv4/ntpclient.c
-	sync/ntp/ntpv4/client.c
+	#sync/ntp/ntpv4/client.c
 	#sync/ntp/ntpv4/server.c
 )
 TARGET_LINK_LIBRARIES(ntp m)

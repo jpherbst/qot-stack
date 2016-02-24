@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Modified Code for Quality of Time (QoT) Stack
+ *
  */
 #include <errno.h>
 #include <poll.h>
@@ -1499,8 +1502,11 @@ enum servo_state clock_synchronize(struct clock *c,
 		state = SERVO_UNLOCKED;
 		tml_id = FD_TO_CLOCKID(s->tml_fd);
 
-	/* TODO: QOT, Project received timestamp to timeline reference */
-	clock_project_timeline(s->tml_fd, ingress_ts, &ingress_tml);
+	/* QOT, Project received timestamp to timeline reference */
+	if(clock_project_timeline(s->tml_fd, ingress_ts, &ingress_tml)){
+		pr_warning("timeline projection failed");
+		return SERVO_UNLOCKED;
+	}
 	//ingress = timespec_to_tmv(ingress_ts);
 	ingress = timespec_to_tmv(ingress_tml);
 	origin  = timestamp_to_tmv(origin_ts);
@@ -1543,7 +1549,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		*/
 		pr_info("timeline clock id: %i master offset %10" PRId64 " s%d freq %+7.0f "
 			"path delay %9" PRId64,
-			tml_id, //TODO: FIX IT TO CLOCKID
+			tml_id,
 			tmv_to_nanoseconds(c->master_offset), state, adj,
 			tmv_to_nanoseconds(c->path_delay));
 	//}

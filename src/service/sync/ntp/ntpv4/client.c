@@ -37,6 +37,7 @@ int main(int argc, char **argv){
   local_clock.ratio = 1;
   local_clock.period = DEF_PSEC;
 
+  // Todo: How to read core time?
   gettimeofday(&tv_real, NULL); // real time clock
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
   
@@ -69,7 +70,7 @@ int main(int argc, char **argv){
   
   // =================== NTP =================
   int i = 0, j = 0;
-  sock = ntp_conn_server(NtpCfg.servaddr[0], NtpCfg.port); // connect to npt server
+  sock = ntp_conn_server(NtpCfg.servaddr[0], NtpCfg.port); // connect to ntp server
 
 #ifdef DEBUG
   printf("\n");
@@ -82,28 +83,28 @@ int main(int argc, char **argv){
     for(j = 0; j < NTP_SAMPLE; j++){ // poll all servers
       send_packet(sock); // send ntp package
       if(get_server_time(sock, &resp) == false){
-	total --;
-	if(total < MIN_NTP_SAMPLE) {
-	  clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
-	  t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
-	  local_clock.base_y = local_clock.ratio*(t_raw - local_clock.base_x) + local_clock.base_y;
-	  local_clock.base_x = t_raw;
-	  local_clock.ratio = 1;
-	  printf("Quit this NTP sync\n");
-	  break; // quit this sync
-	}
-      } else {
-	//fprintf(fp_result, "%d %lld %lld %lld %lld\n", j, resp.t1, resp.t2, resp.t3, resp.t4);
-	// process here:
-	resp_list[cursor++] = resp;
+	       total --;
+	       if(total < MIN_NTP_SAMPLE) {
+	         clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
+	         t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
+	         local_clock.base_y = local_clock.ratio*(t_raw - local_clock.base_x) + local_clock.base_y;
+	         local_clock.base_x = t_raw;
+	         local_clock.ratio = 1;
+	         printf("Quit this NTP sync\n");
+	         break; // quit this sync
+	       }
+      }else {
+	       //fprintf(fp_result, "%d %lld %lld %lld %lld\n", j, resp.t1, resp.t2, resp.t3, resp.t4);
+	       // process here:
+	       resp_list[cursor++] = resp;
       }
-#ifdef DEBUG
-      printf("cursor: %d, total: %d\n\n", cursor, total);
-#endif
-      if(cursor == total) {
-	cursor = 0;
-	ntp_process(); // process responses
-      }
+      #ifdef DEBUG
+        printf("cursor: %d, total: %d\n\n", cursor, total);
+      #endif
+        if(cursor == total) {
+	         cursor = 0;
+	         ntp_process(); // process responses
+        }
     }
     sleep(NtpCfg.psec); // ntp check interval
   }

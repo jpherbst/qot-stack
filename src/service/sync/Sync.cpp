@@ -36,7 +36,7 @@
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_IOCTL_BASE          "/dev"
 #define QOT_IOCTL_PTP           "ptp"
-#define QOT_IOCTL_PTP_FORMAT    "%3s%D"
+#define QOT_IOCTL_PTP_FORMAT    "%3s%d"
 #define QOT_MAX_PTP_NAMELEN     32
 
 using namespace qot;
@@ -52,7 +52,7 @@ boost::shared_ptr<Sync> Sync::Factory(
 	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0){
 
 		// Open dev directory
-		DIR *dir = opendir(QOT_IOCTL_BASE);
+		/*DIR *dir = opendir(QOT_IOCTL_BASE);
 		if(dir){
 			BOOST_LOG_TRIVIAL(info) << "directory open" << QOT_IOCTL_BASE;
 			// Read the entries from dev directory
@@ -66,14 +66,17 @@ boost::shared_ptr<Sync> Sync::Factory(
 				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_PTP_NAMELEN)==0)){
 					BOOST_LOG_TRIVIAL(info) << "found in directory ptp" << val;
 					closedir(dir);
-    				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val));  // Instantiate a ptp sync algorithm
+    				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val));  // Instantiate a ptp sync algorithm with h/w timestamping
     			}
     		}
     	}else{
     		BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
     	}
+        return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,-1));  // Instantiate a ptp sync algorithm with s/w timestamping
+        */
+        return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));  // Instantiate a ptp sync algorithm
     }
-    return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 				        // Instantiate ntp sync algorithm
+    return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 		   // Instantiate ntp sync algorithm
 }
 
 // Convert string into 32 bit IP address

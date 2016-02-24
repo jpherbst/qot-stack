@@ -1,7 +1,7 @@
 /**
  * @file NTP.cpp
  * @brief Provides ptp instance to the sync interface
- * @author Fatima Anwar
+ * @author Fatima Anwar, Zhou Fang
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -13,7 +13,7 @@
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
  * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND f
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
  * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
@@ -24,16 +24,15 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * The code in this file is an adaptation of ptp4l  
+ * Reference: 
+ * 1. NTPv4: https://www.eecis.udel.edu/~mills/database/reports/ntp4/ntp4.pdf
+ * 2. Use some source code from: http://blog.csdn.net/rich_baba/article/details/6052863
  *
  */
 
 #include "NTP.hpp"
 
 using namespace qot;
-
-#define DEBUG true
-#define TEST  true
 
 NTP::NTP(boost::asio::io_service *io,		// ASIO handle
 		const std::string &iface)			// interface			
@@ -48,7 +47,10 @@ NTP::~NTP()
 }
 
 void NTP::Reset() 
-{}
+{
+	load_default_cfg(&NtpCfg); // load configuration file
+	reset_clock();
+}
 
 void NTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size)
 {
@@ -59,10 +61,8 @@ void NTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *
 	BOOST_LOG_TRIVIAL(info) << "Starting NTP synchronization";
 	kill = false;
 
-	// TODO: How to see if /dev/ptp0 is always the ethernet controller clock?
-	int phc_index = 0;
 
-	thread = boost::thread(boost::bind(&NTP::SyncThread, this, phc_index, timelinesfd, timelines_size));
+	thread = boost::thread(boost::bind(&NTP::SyncThread, this, timelinesfd, timelines_size));
 }
 
 void NTP::Stop()
@@ -73,7 +73,56 @@ void NTP::Stop()
 }
 
 
-int NTP::SyncThread(int phc_index, int *timelinesfd, uint16_t timelines_size)
+int NTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
+
+	int sock[NR_REMOTE];
+  	int ret;
+  	Response resp;
+  	int addr_len;
+
+	// connect to ntp server
+  	int i = 0, j = 0;
+
+  	for(j = 0; j < NR_REMOTE; j++){
+    	sock[j] = ntp_conn_server(NtpCfg.servaddr[j], NtpCfg.port); // connect to ntp server
+  	}
+
+  	#ifdef DEBUG
+  		printf("\n");
+	#endif  
+	
+  	while(true){
+    	i++;
+    	total = NR_REMOTE;
+    	for(j = 0; j < NR_REMOTE; j++){ // poll all servers
+      		send_packet(sock[j], timelinesfd[0]); // send ntp package
+      		if(get_server_time(sock[j], &resp, timelinesfd[0]) == false){
+	       		total --;
+	       		if(total < MIN_NTP_SAMPLE) {
+	         		printf("Quit this NTP sync\n");
+	         		break; // quit this sync
+	       		}
+      		}else {
+	       		// process here:
+	       		resp_list[cursor++] = resp;
+      		}
+
+      		#ifdef DEBUG
+        		printf("cursor: %d, total: %d\n\n", cursor, total);
+      		#endif
+        
+        	if(cursor == total) {
+	         	cursor = 0;
+	         	ntp_process(timelinesfd[0], resp_list, total); // process responses
+        	}
+    	}
+
+    	sleep(NtpCfg.psec); // ntp check interval
+  	}
+
+  	for(j = 0; j < NR_REMOTE; j++){
+    	close(sock[j]);
+  	}
 }

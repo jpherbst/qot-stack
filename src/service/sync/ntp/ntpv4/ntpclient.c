@@ -1,10 +1,23 @@
+/*
+ * Local NTP (LNTP)
+ * Author: Fatima Anwar, Zhou Fang
+ * Reference: 
+ * 1. NTPv4: https://www.eecis.udel.edu/~mills/database/reports/ntp4/ntp4.pdf
+ * 2. Use some source code from: http://blog.csdn.net/rich_baba/article/details/6052863
+ */
+
 #include "ntpclient.h"
 
-Clock local_clock;
+//Clock local_clock;
 
 // default configuration
-void load_default_cfg(NtpConfig *NtpCfg){
+void load_default_cfg(NtpConfig *NtpCfg)
+{
   strcpy(NtpCfg->servaddr[0], DEF_NTP_SERVER0);
+  strcpy(NtpCfg->servaddr[1], DEF_NTP_SERVER1);
+  strcpy(NtpCfg->servaddr[2], DEF_NTP_SERVER2);
+  strcpy(NtpCfg->servaddr[3], DEF_NTP_SERVER3);
+  strcpy(NtpCfg->servaddr[4], DEF_NTP_SERVER4);
   
   NtpCfg->port = DEF_NTP_PORT;
   NtpCfg->psec = DEF_PSEC;
@@ -63,7 +76,8 @@ int ntp_conn_server(const char *servname, int port)
 }
 
 // construct and send ntp package
-void send_packet(int fd){
+void send_packet(int fd, int timelinefd)
+{
   unsigned int data[12];
   int ret;
   long long t_now;
@@ -83,8 +97,15 @@ void send_packet(int fd){
   gettimeofday(&now, NULL); // get timestamp =====> change to TSC!
   data[10] = htonl(now.tv_sec + JAN_1970);
   data[11] = htonl(NTPFRAC(now.tv_usec));
-#else                 // raw clock
-  t_now = gettime();
+#else    
+  //todo: fix finding core time 
+  struct timespec ts_now;
+  if(gettime(timelinefd, &ts_now)){
+    printf( "timestamping error" );
+    exit(1);
+  }
+  t_now = TTLUSEC(ts_now.tv_sec, ts_now.tv_nsec/1000);
+
   //printf("new: %lld, %lld\n", t_now / MILLION, t_now % MILLION);
   //printf("old: %lld, %lld\n", (long long) now.tv_sec, (long long) now.tv_usec);
   data[10] = htonl(t_now / MILLION + JAN_1970);
@@ -99,7 +120,7 @@ void send_packet(int fd){
 }
 
 //Acquire and Analyze NTP packet
-bool get_server_time(int sock, Response *resp)
+bool get_server_time(int sock, Response *resp, int timelinefd)
 {
   int ret;
   unsigned int data[12];    
@@ -115,7 +136,14 @@ bool get_server_time(int sock, Response *resp)
   struct timeval now;
   gettimeofday(&now, NULL);
 #else
-  t_now = gettime();
+  //todo: fix finding core time 
+  struct timespec ts_now;
+  if(gettime(timelinefd, &ts_now)){
+    printf( "timestamping error" );
+    exit(1);
+  }
+  t_now = TTLUSEC(ts_now.tv_sec, ts_now.tv_nsec/1000);
+
   //printf("new: %lld, %lld\n", t_now / MILLION + JAN_1970, t_now % MILLION);
   //printf("old: %lld, %lld\n", (long long) now.tv_sec + JAN_1970, (long long) now.tv_usec);
 #endif
@@ -146,12 +174,9 @@ bool get_server_time(int sock, Response *resp)
   tratime.fraction = DATA(11);
 
   resp->stratum   = (DATA(0) & 0x00FF0000) >> 16;
-  resp->precision = INT8( (int) (DATA(0) & 0x000000FF) );
-  
-  //resp->rootDelay = 1000000 * (DATA(1) / (double) 0x10000);
-  //resp->rootDisp  = 1000000 * (DATA(2) / (double) 0x10000);
-  resp->rootDelay = 0;
-  resp->rootDisp  = 0;  
+  resp->precision = INT8( (int) (DATA(0) & 0x000000FF) ); 
+  resp->rootDelay = 1000000 * (DATA(1) / (double) 0x10000);
+  resp->rootDisp  = 1000000 * (DATA(2) / (double) 0x10000); 
 
   //Originate Timestamp     T1    client transmit timestamp
   //Receive Timestamp       T2    server recevie timestamp
@@ -186,10 +211,29 @@ bool get_server_time(int sock, Response *resp)
   return true;
 }
 
-long long gettime(){
-  struct timespec ts_raw;
+int gettime(int fd, struct timespec *tml_ts)
+{
+  struct timespec ts;
+
+  // todo: how to read core time?
+  //if(read_core_time(corefd, &ts))
+      return -1;
+
+  // Project core timestamp to timeline reference
+  timepoint_t tp;
+  timepoint_from_timespec(&tp, &ts); 
+
+  if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
+    tml_ts->tv_sec = tp.sec;
+    tml_ts->tv_nsec= tp.asec / nSEC_PER_SEC;
+    return 0;
+  }
+  return -1;
+
+  /*struct timespec ts_raw;
   long long t_raw;
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
   t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
   return (long long) (local_clock.ratio*(t_raw - local_clock.base_x)) + local_clock.base_y;
+  */
 }
