@@ -128,7 +128,7 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
 	  phi += (s_i - s_j)*(s_i - s_j);
 	}
       }
-      if(i == 0){
+      if(i == 0){             
 	maxJitter = phi; minJitter = phi;
       } else {
 	if(phi > maxJitter) {
@@ -222,13 +222,13 @@ void filter(Response resp_list[], Interval *interv_list, const int total)
   long long min_d;
   Response resp_tem;
   for(i = 0; i < total; i++){
-    for(j = i; j < total; j++){ // find min
+    for(j = i; j < total; j++){ // find min delay
       if(j == i) { // init
-	min_d = resp_list[j].delay;
-	i_min = j;
+	       min_d = resp_list[j].delay;
+	       i_min = j;
       } else if(min_d > resp_list[j].delay) {
-	min_d = resp_list[j].delay;
-	i_min = j;
+	       min_d = resp_list[j].delay;
+	       i_min = j;
       }
     }
     // === exchange i_min and i ===
@@ -317,28 +317,32 @@ int select_clock(const Interval *interv_list, const int total)
     for(i = 0; i < total_point; i++){
       p = &point_list[i];
       switch(p->type){
-      case 0: c++; break;
-      case 1: d++; break;
-      case 2: c--; break;
-      default: printf("error: invalid point\n"); exit(1);
+        case 0: c++; break;
+        case 1: d++; break;
+        case 2: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
       }
+
       if(c >= m - f){
-	l = p->offset; break;
+	       l = p->offset; break;
       }
     }
+    
     c = 0;
     for(i = total_point - 1; i >= 0; i--){
       p = &point_list[i];
       switch(p->type){
-      case 2: c++; break;
-      case 1: d++; break;
-      case 0: c--; break;
-      default: printf("error: invalid point\n"); exit(1);
+        case 2: c++; break;
+        case 1: d++; break;
+        case 0: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
       }
+      
       if(c >= m - f){
-	u = p->offset; break;
+	       u = p->offset; break;
       }
     }
+    
     if(d <= f && l < u) break;
     else {
       f++;

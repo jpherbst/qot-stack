@@ -288,6 +288,6 @@ double clock_rate_ratio(struct clock *c);
  * @param fd  timeline char device file descriptor
  * @return  pointer to projected timestamp, 0 = success
  */
-int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts);
+int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts);
 
 #endif

@@ -43,14 +43,65 @@
 #include "tlv.h"
 #include "uds.h"
 #include "util.h"
+#include <math.h>
 
 #define N_CLOCK_PFD (N_POLLFD + 1) /* one extra per port, for the fault timer */
 #define POW2_41 ((double)(1ULL << 41))
 
+#define MAX_SAMPLES 4 /* QOT, number of points needed for uncertainty calculation */
+#define SQUARE(x) (x*x)
+
+struct port {
+	LIST_ENTRY(port) list;
+};
+
+struct freq_estimator {
+	tmv_t origin1;
+	tmv_t ingress1;
+	unsigned int max_count;
+	unsigned int count;
+};
+
+struct clock_stats {
+	struct stats *offset;
+	struct stats *freq;
+	struct stats *delay;
+	unsigned int max_count;
+};
+
+/* QoT_start, uncertainty calculation data structures */
+struct uncertainty_stats{
+	uint64_t disp;		// error in measurement used to calculate peer-dispersion
+	int64_t offset;		// offsets stored to calculate jitter
+	uint64_t delay;		// one-way propagation delay, lesser the delay more accurate the offset value is
+};
+
+struct clock_uncertainty_stats {
+	struct uncertainty_stats u_stats[MAX_SAMPLES];	// uncertainty stats
+	unsigned int num_points;						// number of stored points
+	unsigned int last_point;						// index of newest point
+};
+
+struct Interval{ // Interval for Marzullo's algorithm
+  long long offset, low, up, dist; 
+};
+
+struct Point{
+  int type;
+  long long offset;
+};
+
+struct Bound{
+  long long up, low;
+};
+
 struct servo {
-        LIST_ENTRY(servo) list; /* QOT */
-        int tml_fd; /* timeline fd */
-        
+        LIST_ENTRY(servo) list; 				/* QOT */
+        int tml_clkid; 							/* timeline clock id */       
+        struct clock_uncertainty_stats cu_stats; /* QOT, stats to calculate uncertainty in time */
+		uint64_t local_ts; 						/* QOT, store the last ingress timestamp */
+		double ppb;								/* QOT, store the last freq correction */
+
         double max_frequency;
         double step_threshold;
         double first_step_threshold;
@@ -71,23 +122,7 @@ struct servo {
         void (*leap)(struct servo *servo, int leap);
 };
 
-struct port {
-	LIST_ENTRY(port) list;
-};
-
-struct freq_estimator {
-	tmv_t origin1;
-	tmv_t ingress1;
-	unsigned int max_count;
-	unsigned int count;
-};
-
-struct clock_stats {
-	struct stats *offset;
-	struct stats *freq;
-	struct stats *delay;
-	unsigned int max_count;
-};
+/* QoT_end */
 
 struct clock_subscriber {
 	LIST_ENTRY(clock_subscriber) list;
@@ -166,43 +201,233 @@ static int cid_eq(struct ClockIdentity *a, struct ClockIdentity *b)
 	    (var) = (tvar))
 #endif
 
-/* QOT */
+/* QoT_start */
+
+static void add_clock_uncertainty_sample(struct clock_uncertainty_stats *u, uint64_t disp, int64_t offset, uint64_t delay){
+	u->last_point = (u->last_point + 1) % MAX_SAMPLES;
+	
+	u->u_stats[u->last_point].disp = disp;
+	u->u_stats[u->last_point].offset = offset;
+	u->u_stats[u->last_point].delay = delay;
+
+	if(u->num_points < MAX_SAMPLES)
+		u->num_points++;
+}
+
 static void destroy_timelines_servos(struct clock *c){
         struct servo *s, *tmp;
         LIST_FOREACH_SAFE(s, &c->tmls_servos, list, tmp) {
-                LIST_REMOVE(s, list);
-                servo_destroy(s);
+            LIST_REMOVE(s, list);
+            servo_destroy(s);
         }
 }
-static int create_timelines_servos(struct clock *c, int fadj, int max_adj, int sw_ts, enum servo_type servo){
-        int i;
-        for (i = 0; i < c->timelines_size; i++) {
-                
-                struct servo *s, *piter, *lasts = NULL;
-                s = servo_create(servo, -fadj, max_adj, sw_ts);
-                 
-                if (!s) {
-                        pr_err("Failed to create timeline%d servo", c->timelinesfd[i]);
-                        return -1;
-                }
-                s->tml_fd = c->timelinesfd[i];
 
-                LIST_FOREACH(piter, &c->tmls_servos, list)
+static int create_timelines_servos(struct clock *c, int sw_ts, enum servo_type servo){
+        int i, tml_id, fadj = 0 , max_adj = 0;
+
+        for (i = 0; i < c->timelines_size; i++) {
+        	tml_id = FD_TO_CLOCKID(c->timelinesfd[i]);
+
+            if (tml_id != CLOCK_INVALID) {
+				fadj = (int) clockadj_get_freq(tml_id);
+				/* Due to a bug in older kernels, the reading may silently fail
+		   		and return 0. Set the frequency back to make sure fadj is
+		   		the actual frequency of the clock. */
+				clockadj_set_freq(tml_id, fadj);
+			}
+            //TODO: Get max_adj value through core
+            max_adj = phc_max_adj(tml_id);
+			if (!max_adj) {
+				pr_err("clock is not adjustable");
+				return -1;
+			}
+
+            struct servo *s, *piter, *lasts = NULL;
+            s = servo_create(servo, -fadj, max_adj, sw_ts);
+                 
+            if (!s) {
+                pr_err("Failed to create timeline%d servo", i);
+                return -1;
+            }
+            s->tml_clkid = tml_id;
+            s->cu_stats.num_points = 0;
+            //s->cu_stats.u_stats = calloc(1, sizeof *uncertainty_stats);
+
+            LIST_FOREACH(piter, &c->tmls_servos, list)
                 lasts = piter;
-                if (lasts)
-                        LIST_INSERT_AFTER(lasts, s, list);
-                else
-                        LIST_INSERT_HEAD(&c->tmls_servos, s, list);
+            if (lasts)
+                LIST_INSERT_AFTER(lasts, s, list);
+            else
+                LIST_INSERT_HEAD(&c->tmls_servos, s, list);
         } 
         return 0;
 }
+
 static void timelines_servos_sync_interval(struct clock *c, double interval){
         struct servo *s;
         LIST_FOREACH(s, &c->tmls_servos, list){
-                servo_sync_interval(s, interval);
+            servo_sync_interval(s, interval);
         }       
 }
-/* QOT */
+
+
+static void filter(struct clock_uncertainty_stats *u, struct Interval *interv_list, int total) 
+{  
+  // ========== sort response according to delay from min to max =========
+  int i, j, i_min;
+  long long min_d;
+  struct uncertainty_stats u_tem;
+  for(i = 0; i < total; i++){
+    for(j = i; j < total; j++){ // find min delay
+      if(j == i) { // init
+	       min_d = u->u_stats[j].delay;
+	       i_min = j;
+      } else if(min_d > u->u_stats[j].delay) {
+	       min_d = u->u_stats[j].delay;
+	       i_min = j;
+      }
+    }
+    // === exchange i_min and i ===
+    u_tem = u->u_stats[i];
+    u->u_stats[i] = u->u_stats[i_min];
+    u->u_stats[i_min] = u_tem;
+  }
+  
+  // ======== filtering ========
+  long long peer_disp = 0;
+  long long sum = 0;
+  long long diff;
+  for(i = 0; i < total; i++) {
+    // calculate peer dispersion
+    peer_disp += (u->u_stats[i].disp >> (i+1));
+    // calculate offset jitter
+    diff = u->u_stats[i].offset - u->u_stats[0].offset;
+    sum += SQUARE(diff);
+  }
+  long long jitter = (long long) sqrt(sum/total);
+  
+#ifdef DEBUG
+  printf("peer_disp: %lld\n", peer_disp);
+  printf("jitter: %lld\n", jitter);
+#endif
+
+  // calculate root distance
+  long long root_dist;
+  struct Interval interval;
+  for(i = 0; i < total; i++) {
+    root_dist = u->u_stats[i].delay + peer_disp + jitter;
+    interval.offset = u->u_stats[i].offset;
+    interval.dist = root_dist;
+    interval.up = u->u_stats[i].offset + root_dist;
+    interval.low = u->u_stats[i].offset - root_dist;
+    *(interv_list + i) = interval;
+  }
+}
+
+static int select_clock(struct Interval *interv_list, int total, struct Bound *bound)
+{
+  const int total_point = total*3;
+  struct Point point_list[total_point];
+  int i, j;
+  for(i = 0; i < total; i++){
+    j = i*3;
+    point_list[j].type = 0; // low
+    point_list[j].offset = (*(interv_list + i)).low;
+    point_list[j+1].type = 1; // mean
+    point_list[j+1].offset = (*(interv_list + i)).offset;
+    point_list[j+2].type = 2; // high
+    point_list[j+2].offset = (*(interv_list + i)).up;
+  }
+  // ==== sort point according to offset ====
+  struct Point point_tem;
+  long long min_d;
+  int i_min;
+  for(i = 0; i < total_point; i++){
+    for(j = i; j < total_point; j++){ // find min
+      if(j == i) { // init
+	min_d = point_list[j].offset;
+	i_min = j;
+      } else if(min_d > point_list[j].offset) {
+	min_d = point_list[j].offset;
+	i_min = j;
+      }
+    }
+    point_tem = point_list[i];
+    point_list[i] = point_list[i_min];
+    point_list[i_min] = point_tem;
+  }
+  
+#ifdef DEBUG
+  printf("\n");
+  for(i = 0; i < 3*total; i++){
+    printf("point: %d, %lld\n", point_list[i].type, point_list[i].offset);
+  }
+#endif
+  
+  int m = total, f = 0, d = 0, c = 0; 
+  long long l = 0, u = 0;
+  struct Point *p;
+  while(1){
+    d = 0; c = 0;
+    for(i = 0; i < total_point; i++){
+      p = &point_list[i];
+      switch(p->type){
+        case 0: c++; break;
+        case 1: d++; break;
+        case 2: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
+      }
+
+      if(c >= m - f){
+	       l = p->offset; break;
+      }
+    }
+    
+    c = 0;
+    for(i = total_point - 1; i >= 0; i--){
+      p = &point_list[i];
+      switch(p->type){
+        case 2: c++; break;
+        case 1: d++; break;
+        case 0: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
+      }
+      
+      if(c >= m - f){
+	       u = p->offset; break;
+      }
+    }
+    
+    if(d <= f && l < u) break;
+    else {
+      f++;
+      if(f >= m/2) return -1; // selection failure
+    }
+  }
+
+  bound->low = l;
+  bound->up = u;
+    
+  return 0;
+}
+
+static int update_clock_uncertainty(struct clock_uncertainty_stats *u, struct Bound *bound){
+	if(u->num_points < MAX_SAMPLES)
+		return -1;
+
+	struct Interval interv_list[u->num_points];
+
+	// convert stats to intervals
+	filter(u, &interv_list[u->num_points], u->num_points);
+
+	// apply Marzullo's algorithm to select the tightest interval
+	if(select_clock(interv_list, u->num_points, bound)){
+    	printf("no valid bound\n");
+    	return -1;
+  	}
+  	return 0;
+}
+/* QOT_end */
 
 static void remove_subscriber(struct clock_subscriber *s)
 {
@@ -933,7 +1158,7 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	c->timelines_size = timelines_size;
 
 	LIST_INIT(&c->tmls_servos);
-	if(create_timelines_servos(c, fadj, max_adj, sw_ts, servo)){
+	if(create_timelines_servos(c, sw_ts, servo)){
 		return NULL;
 	}
 	/* QOT */
@@ -1462,7 +1687,7 @@ int clock_switch_phc(struct clock *c, int phc_index)
 	/* QOT, destroying servos for all timelines */
 	destroy_timelines_servos(c);
 
-	if(create_timelines_servos(c, fadj, max_adj, 0, c->servo_type)){
+	if(create_timelines_servos(c, 0, c->servo_type)){
 		pr_err("Switching PHC, failed to create timeline servo");
 		phc_close(clkid);
 		return -1;
@@ -1494,21 +1719,19 @@ enum servo_state clock_synchronize(struct clock *c,
 	tmv_t ingress, origin;
 	enum servo_state state;
 	struct servo *s;
-	clockid_t tml_id;
 	struct timespec ingress_tml;
 
 	/* QOT, synchronize all the timelines */
 	LIST_FOREACH(s, &c->tmls_servos, list) {
 		state = SERVO_UNLOCKED;
-		tml_id = FD_TO_CLOCKID(s->tml_fd);
 
 	/* QOT, Project received timestamp to timeline reference */
-	if(clock_project_timeline(s->tml_fd, ingress_ts, &ingress_tml)){
+	if(clock_project_timeline(s->tml_clkid, ingress_ts, &ingress_tml)){
 		pr_warning("timeline projection failed");
 		return SERVO_UNLOCKED;
 	}
-	//ingress = timespec_to_tmv(ingress_ts);
-	ingress = timespec_to_tmv(ingress_tml);
+	//ingress = timespec_to_tmv(ingress_ts); 	/* QOT */
+	ingress = timespec_to_tmv(ingress_tml);		/* QOT */
 	origin  = timestamp_to_tmv(origin_ts);
 
 	c->t1 = origin;
@@ -1538,7 +1761,6 @@ enum servo_state clock_synchronize(struct clock *c,
 			   tmv_to_nanoseconds(ingress), &state);*/
 	adj = servo_sample(s, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state); /* QOT */
-
 	c->servo_state = state;
 
 	/* QOT, Stats maintained in QOT core */
@@ -1549,7 +1771,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		*/
 		pr_info("timeline clock id: %i master offset %10" PRId64 " s%d freq %+7.0f "
 			"path delay %9" PRId64,
-			tml_id,
+			s->tml_clkid,
 			tmv_to_nanoseconds(c->master_offset), state, adj,
 			tmv_to_nanoseconds(c->path_delay));
 	//}
@@ -1561,8 +1783,8 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_set_freq(c->clkid, -adj); /* QOT */
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
-		clockadj_set_freq(tml_id, -adj); /* QOT */
-		clockadj_step(tml_id, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
+		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1578,11 +1800,21 @@ enum servo_state clock_synchronize(struct clock *c,
 			sysclk_set_sync();
 		*/
 		// Adjust the timeline
-		clockadj_set_freq(tml_id, -adj); /* QOT */
+		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
+
+		if(s->local_ts && s->ppb){ /* QOT, calculate uncertainty values, provided it is not the first sample */
+			uint64_t disp = ((tmv_to_nanoseconds(ingress) - s->local_ts)/NS_PER_SEC) * s->ppb;
+			add_clock_uncertainty_sample(&s->cu_stats, disp, 
+				tmv_to_nanoseconds(c->master_offset), tmv_to_nanoseconds(c->path_delay));	
+			struct Bound bound; 
+			update_clock_uncertainty(&s->cu_stats, &bound); // Todo: send uncertainty to core
+		}
 		break;
 	}
+		s->local_ts = tmv_to_nanoseconds(ingress);	/* QOT */
+		s->ppb = adj; /* QOT */
 	}
 	return state;
 }
@@ -1718,11 +1950,13 @@ double clock_rate_ratio(struct clock *c)
 	return servo_rate_ratio(c->servo);
 }
 
-/* QOT */
-int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts)
+/* QoT_start */
+int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts)
 {
 	timepoint_t tp;
 	timepoint_from_timespec(&tp, &ts); 
+
+	int fd = CLOCKID_TO_FD(clkid);
 
 	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
 		tml_ts->tv_sec = tp.sec;
@@ -1731,4 +1965,4 @@ int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts)
 	}
 	return -1;
 }
-
+/* QoT_end */ 
