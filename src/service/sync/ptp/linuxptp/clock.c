@@ -405,7 +405,7 @@ static int select_clock(struct Interval *interv_list, int total, struct Bound *b
     }
   }
 
-  bound->low = l;
+  bound->low = l; 
   bound->up = u;
     
   return 0;

@@ -17,6 +17,7 @@ ENDIF (CROSS_AM335X)
 
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
+ADD_DEFINITIONS(-std=gnu++14)
 
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.54 REQUIRED
@@ -36,13 +37,13 @@ LINK_DIRECTORIES(
 #################################################################################################
 
 # Hint for finding opensplice
-SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
-SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
+SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux")
+SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux")
 
 # Configure cross compilation
-IF (CROSS_COMPILE)
+IF (CROSS_AM335X)
 	SET(ENV{OSPL_HOME} "${CROSS_COMPILE_ROOTFS}/opt/opensplice")
-ENDIF (CROSS_COMPILE)
+ENDIF (CROSS_AM335X)
 
 # Include the OpenSplice macros (IDL message compilation)
 INCLUDE(MacroOpenSplice)
@@ -138,7 +139,7 @@ ADD_EXECUTABLE(qotdaemon
 	Notifier.hpp
 	main.cpp
 )
-TARGET_LINK_LIBRARIES(qotdaemon ptp ntp dds ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon ptp ntp dds ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} -lboost_log -lpthread)
 
 # Install the PTP library
 INSTALL(

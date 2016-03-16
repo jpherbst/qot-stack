@@ -103,6 +103,31 @@ qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
     return QOT_RETURN_TYPE_OK;
 }
 
+/* Program an interrupt on core time */
+qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, long (*callback)(void))
+{
+    if (!core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Program an interrupt on core time */
+    if(core->impl.program_interrupt(expiry, callback))
+        return QOT_RETURN_TYPE_ERR;
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Add Interrupt Latency uncertainity to a measurement */
+qot_return_t qot_clock_add_core_interrupt_latency(utimepoint_t *utp)
+{
+    if (!utp || !core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Add the uncertainty to the measurement */
+    utimepoint_add(utp, &core->impl.info.interrupt_latency);
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
+}
+
+
+
 qot_return_t qot_clock_register(qot_clock_impl_t *impl)
 {
     clk_t *clk_priv = NULL;
@@ -116,6 +141,9 @@ qot_return_t qot_clock_register(qot_clock_impl_t *impl)
         kfree(clk_priv);
         return QOT_RETURN_TYPE_ERR;
     }
+    /* If no other clock is acting as the core select this clock as the core */
+    if(!core)
+        core = clk_priv;   
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -255,6 +283,6 @@ void qot_clock_cleanup(struct class *qot_class)
 }
 
 qot_return_t qot_clock_init(struct class *qot_class)
-{
+{ 
     return QOT_RETURN_TYPE_OK;
 }
