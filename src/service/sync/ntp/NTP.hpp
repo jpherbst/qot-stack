@@ -49,7 +49,7 @@ extern "C"
 	#include <linux/net_tstamp.h>
 
 	// ntpv4 includes
-	//#include "ntpv4/clock.h"
+	#include "ntpv4/ntpclient.h"
 }
 
 namespace qot
@@ -67,7 +67,7 @@ namespace qot
 		public: void Stop();						// Stop
 
 		// This thread performs rhe actual syncrhonization
-		private: int SyncThread(int phc_index, int *timelinesfd, uint16_t timelines_size);
+		private: int SyncThread(int *timelinesfd, uint16_t timelines_size);
 
 		// Boost ASIO
 		private: boost::asio::io_service *asio;
@@ -76,7 +76,10 @@ namespace qot
 		private: bool kill;
 
 		// NTP settings
-		//private: struct config cfg_settings;
+		private: NtpConfig NtpCfg; // configuration variable
+		private: Response resp_list[NSTAGE];
+		private: int total;
+		private: int cursor = 0;
 
 	};
 }

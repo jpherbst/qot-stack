@@ -23,10 +23,27 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
+#define MAX_SAMPLES 4 /* QOT, number of points needed for uncertainty calculation */
+
+struct uncertainty_stats{
+	uint64_t disp;		// error in measurement used to calculate peer-dispersion
+	int64_t offset;		// offsets stored to calculate jitter
+	uint64_t delay;		// one-way propagation delay, lesser the delay more accurate the offset value is
+};
+
+struct clock_uncertainty_stats {
+	struct uncertainty_stats u_stats[MAX_SAMPLES];	// uncertainty stats
+	unsigned int num_points;						// number of stored points
+	unsigned int last_point;						// index of newest point
+};
+
 struct servo {
-	LIST_ENTRY(servo) list; /* QOT */
-	int tml_fd; /* timeline fd */
-	
+    LIST_ENTRY(servo) list; 				/* QOT */
+    int tml_clkid; 							/* timeline clock id */       
+    struct clock_uncertainty_stats u_stats; /* QOT, stats to calculate uncertainty in time */
+	uint64_t local_ts; 						/* QOT, store the last ingress timestamp */
+	double ppb;								/* QOT, store the last freq correction */
+
 	double max_frequency;
 	double step_threshold;
 	double first_step_threshold;

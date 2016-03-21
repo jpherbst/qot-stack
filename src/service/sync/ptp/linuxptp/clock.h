@@ -16,6 +16,9 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Modified Code for Quality of Time (QoT) Stack
+ *
  */
 #ifndef HAVE_CLOCK_H
 #define HAVE_CLOCK_H
@@ -285,6 +288,6 @@ double clock_rate_ratio(struct clock *c);
  * @param fd  timeline char device file descriptor
  * @return  pointer to projected timestamp, 0 = success
  */
-int clock_project_timeline(int fd, struct timespec ts, struct timespec *tml_ts);
+int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts);
 
 #endif

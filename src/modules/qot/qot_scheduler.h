@@ -32,6 +32,12 @@
 
 #include "qot_timeline.h"
 
+/* Puts task into a blocking sleep */
+int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline);
+
+/* Update tasks that are blocking when the notion of time changes */
+void qot_scheduler_update(void);
+
 /* Cleanup the timeline subsystem */
 void qot_scheduler_cleanup(struct class *qot_class);
 

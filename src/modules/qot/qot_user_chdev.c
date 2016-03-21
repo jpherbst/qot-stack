@@ -165,6 +165,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
     }
+    pr_info("qot_user_chdev_ioctl_open: /dev/qotusr file opened\n");
     return 0;
 }
 
@@ -185,6 +186,7 @@ static int qot_user_chdev_ioctl_close(struct inode *i, struct file *f)
 static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     unsigned long arg)
 {
+    int retval;
     event_t *event;
     qot_event_t msge;
     qot_timeline_t msgt;
@@ -214,11 +216,15 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
-    /* Bind to a timeline */
+    /* Create a timeline */
     case QOTUSR_CREATE_TIMELINE:
         if (copy_from_user(&msgt, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
             return -EACCES;
-        if (qot_timeline_create(&msgt))
+        retval = qot_timeline_create(&msgt);
+        // Check if the timeline already exists or some other problem in creating it */
+        if (retval== -QOT_RETURN_TYPE_ERR)
+            return QOT_RETURN_TYPE_ERR;     // Timeline Exists 
+        else if (retval)
             return -EACCES;
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;

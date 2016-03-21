@@ -1,6 +1,6 @@
 /*
  * Local NTP (LNTP)
- * Author: Zhou Fang (zhoufang@ucsd.edu)
+ * Author: Fatima Anwar, Zhou Fang
  * Reference: 
  * 1. NTPv4: https://www.eecis.udel.edu/~mills/database/reports/ntp4/ntp4.pdf
  * 2. Use some source code from: http://blog.csdn.net/rich_baba/article/details/6052863
@@ -8,13 +8,24 @@
 
 #include "ntpclient.h"
 
+#define DEBUG true
+
+Clock local_clock;
+
 void filter(Response[], Interval*, const int);
 int select_clock(const Interval*, const int);
 
-int i_sample = 0;
+//int i_sample = 0;
 
+void reset_clock()
+{
+    local_clock.index = 0;
+    local_clock.ratio = 1;
+    local_clock.period = DEF_PSEC;
+}
 // apply NTPv4 algorithms
-void ntp_process(){
+void ntp_process(int timelinefd, Response resp_list[], const int total)
+{
   struct timespec ts_raw;
   long long t_raw;
   
@@ -72,7 +83,7 @@ void ntp_process(){
   }
   
   if(n_survivor < N_MIN_SURVIVOR){
-    printf("Sync fails, no enough survivor\n");
+    printf("Sync fails, not enough survivor\n");
     reset_ratio();
     return;  // quit NTP
   }
@@ -117,7 +128,7 @@ void ntp_process(){
 	  phi += (s_i - s_j)*(s_i - s_j);
 	}
       }
-      if(i == 0){
+      if(i == 0){             
 	maxJitter = phi; minJitter = phi;
       } else {
 	if(phi > maxJitter) {
@@ -139,11 +150,12 @@ void ntp_process(){
   for(i = 0; i < n_survivor; i++){
     printf("%d %lld %lld %lld\n", surv_list[i].stratum, surv_list[i].offset, surv_list[i].weight, surv_list[i].rootDist);
   }
-  struct timeval tv_real;
+  /*struct timeval tv_real;
   gettimeofday(&tv_real, NULL); // real time clock
   long long t_real = TTLUSEC(tv_real.tv_sec, tv_real.tv_usec);
   long long t_sync = gettime();
   printf("Compare clock: real %lld, sync %lld, diff %lld\n\n", t_real, t_sync, t_real-t_sync);
+  */
 #endif
 
   // =============== combination ==============
@@ -160,14 +172,20 @@ void ntp_process(){
   local_clock.offset = (long long) (z/y);
   local_clock.jitter = (long long) sqrt(w/y);
   local_clock.index ++; 
-  
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
+
+  // QOT, adjusting timelines
+  adjust_clock(timelinefd);
+
+/*
+clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
   t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
   local_clock.base_y = local_clock.ratio*(t_raw - local_clock.base_x) + local_clock.base_y;
   local_clock.base_x = t_raw;
+*/
   local_clock.ratio = 1 + (double) local_clock.offset / (double) (DEF_PSEC * MILLION) * RATIO_SCALE;  
 
   // write result via mmap
+/*
   mapped[1] = local_clock.offset;
   mapped[2] = local_clock.base_x;
   mapped[3] = local_clock.base_y;
@@ -175,39 +193,42 @@ void ntp_process(){
   mapped[5] = local_clock.up;
   mapped[6] = local_clock.period;
   mapped[7] = local_clock.jitter;
+
   // "index" is the last one to change
   // if client detects that index is changed, all values have been updated
   // otherwise old values are used by client
   mapped[0] = local_clock.index;
-
+*/
   printf("Rseult: ratio = %lf, offset = %lld, low = %lld, up = %lld, jitter = %lld\n\n", \
 	 local_clock.ratio, local_clock.offset, local_clock.low, local_clock.up, local_clock.jitter);
 
+/*
 #ifdef RECORD
   if(i_sample == NUM_SAMPLE) {
     printf("\nData Colection finished\n\n");
     exit(0);
   }
   i_sample ++;
-  fprintf(fp_result, "%lf %lld %lld %lld\n", local_clock.ratio, local_clock.offset, local_clock.low, local_clock.up);  
+  //fprintf(fp_result, "%lf %lld %lld %lld\n", local_clock.ratio, local_clock.offset, local_clock.low, local_clock.up);  
 #endif
-
+*/
   return;
 }
 
-void filter(Response resp_list[], Interval *interv_list, const int total) {  
+void filter(Response resp_list[], Interval *interv_list, const int total) 
+{  
   // ========== sort response according to delay from min to max =========
   int i, j, i_min;
   long long min_d;
   Response resp_tem;
   for(i = 0; i < total; i++){
-    for(j = i; j < total; j++){ // find min
+    for(j = i; j < total; j++){ // find min delay
       if(j == i) { // init
-	min_d = resp_list[j].delay;
-	i_min = j;
+	       min_d = resp_list[j].delay;
+	       i_min = j;
       } else if(min_d > resp_list[j].delay) {
-	min_d = resp_list[j].delay;
-	i_min = j;
+	       min_d = resp_list[j].delay;
+	       i_min = j;
       }
     }
     // === exchange i_min and i ===
@@ -249,7 +270,8 @@ void filter(Response resp_list[], Interval *interv_list, const int total) {
   }
 }
 
-int select_clock(const Interval *interv_list, const int total){
+int select_clock(const Interval *interv_list, const int total)
+{
   const int total_point = total*3;
   Point point_list[total_point];
   int i, j;
@@ -295,28 +317,32 @@ int select_clock(const Interval *interv_list, const int total){
     for(i = 0; i < total_point; i++){
       p = &point_list[i];
       switch(p->type){
-      case 0: c++; break;
-      case 1: d++; break;
-      case 2: c--; break;
-      default: printf("error: invalid point\n"); exit(1);
+        case 0: c++; break;
+        case 1: d++; break;
+        case 2: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
       }
+
       if(c >= m - f){
-	l = p->offset; break;
+	       l = p->offset; break;
       }
     }
+    
     c = 0;
     for(i = total_point - 1; i >= 0; i--){
       p = &point_list[i];
       switch(p->type){
-      case 2: c++; break;
-      case 1: d++; break;
-      case 0: c--; break;
-      default: printf("error: invalid point\n"); exit(1);
+        case 2: c++; break;
+        case 1: d++; break;
+        case 0: c--; break;
+        default: printf("error: invalid point\n"); exit(1);
       }
+      
       if(c >= m - f){
-	u = p->offset; break;
+	       u = p->offset; break;
       }
     }
+    
     if(d <= f && l < u) break;
     else {
       f++;
@@ -330,13 +356,65 @@ int select_clock(const Interval *interv_list, const int total){
   return 1;
 }
 
-void reset_ratio(){
-  struct timespec ts_raw;
-  long long t_raw;
+void reset_ratio()
+{
+  //struct timespec ts_raw;
+  //long long t_raw;
   // reset clock model
-  clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
-  t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
-  local_clock.base_y = local_clock.ratio*(t_raw - local_clock.base_x) + local_clock.base_y;
-  local_clock.base_x = t_raw;
+  //clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
+  //t_raw = TTLUSEC(ts_raw.tv_sec, ts_raw.tv_nsec/1000);
+  //local_clock.base_y = local_clock.ratio*(t_raw - local_clock.base_x) + local_clock.base_y;
+  //local_clock.base_x = t_raw;
   local_clock.ratio = 1;
 }
+
+
+void clockadj_set_freq(clockid_t clkid, double freq)
+{
+  struct timex tx;
+  memset(&tx, 0, sizeof(tx));
+
+  tx.modes |= ADJ_FREQUENCY;
+  tx.freq = (long) (freq * 65.536);
+  if (clock_adjtime(clkid, &tx) < 0)
+    printf("failed to adjust the clock");
+}
+
+void clockadj_step(clockid_t clkid, int64_t step)
+{
+  struct timex tx;
+  int sign = 1;
+  if (step < 0) {
+    sign = -1;
+    step *= -1;
+  }
+  memset(&tx, 0, sizeof(tx));
+  tx.modes = ADJ_SETOFFSET | ADJ_NANO;
+  tx.time.tv_sec  = sign * (step / nSEC_PER_SEC);
+  tx.time.tv_usec = sign * (step % nSEC_PER_SEC);
+  /*
+   * The value of a timeval is the sum of its fields, but the
+   * field tv_usec must always be non-negative.
+   */
+  if (tx.time.tv_usec < 0) {
+    tx.time.tv_sec  -= 1;
+    tx.time.tv_usec += 1000000000;
+  }
+  if (clock_adjtime(clkid, &tx) < 0)
+    printf("failed to step clock");
+}
+
+void adjust_clock(int fd)
+{
+  clockid_t tml_id = FD_TO_CLOCKID(fd);
+  double adj = (local_clock.ratio - 1) * nSEC_PER_SEC;
+  int64_t offset = local_clock.offset * nSEC_PER_SEC;
+
+  // Adjust offset gradually within one period
+  if(adj > MAXFREQADJ || adj < -MAXFREQADJ)
+    clockadj_step(tml_id, -offset);
+  // Offset is too big to be gradually adjusted, jump clock instead
+  else
+    clockadj_set_freq(tml_id, -adj);    
+}
+

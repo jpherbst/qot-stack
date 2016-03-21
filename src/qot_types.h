@@ -36,19 +36,21 @@
 
 /* For ease of conversion */
 #define ASEC_PER_NSEC (u64)1000000000ULL
-
-
+#define TIMEPOINT_MAX_SEC 9223372036854775807LL
+#define TIMEPOINT_MAX_ASEC 18446744073709551615ULL
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
 	#include <linux/ioctl.h>
  	#include <linux/math64.h>
+    #include <linux/kernel.h>
  	#define llabs abs
 #else
 	#include <time.h>
 	#include <stdint.h>
  	#include <string.h>
 	#include <sys/ioctl.h>
+    #include <stdlib.h>
     #define div64_u64(X,Y) (uint64_t)X/(uint64_t)Y;
  	#define u64 uint64_t
  	#define s64  int64_t
@@ -190,13 +192,23 @@ static inline void scalar_to_timepoint(timepoint_t *tp, s64 t, u64 dv, u64 ml)
     /* Check whether the value is negative */
     neg = (t < 0);
 
-    /* Absolute value of t */
+    /* Absolute value of t */ //-> Check this out 
+    #ifdef __KERNEL__
+    if(t > 0LL)
+    	tm = (u64) t;
+    else
+    	tm = (u64) (-1LL * t);
+    //tm = (u64) abs(t);
+    #else
     tm = (u64) llabs(t);
+    #endif   
 
     /* Get number of seconds */
 	tp->sec = div64_u64(tm, dv);
 	tp->asec = tm - dv * (u64) tp->sec;
-
+	#ifdef __KERNEL__
+	pr_info("Time t = %lld, tm = %llu, dv = %llu, sec = %lld, asec = %llu\n", t, tm, dv, tp->sec, tp->asec);
+	#endif
 	/* Are we dealing with a negative number */
 	if (neg) {
 		tp->sec = -tp->sec;
@@ -404,6 +416,11 @@ typedef struct qot_event {
 typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name */
     int index;                           /* The integer Y in /dev/timelineY */
+    #ifdef __KERNEL__
+    // Changes added by Sandeep -> Scheduler Specific Stuff
+    struct rb_root event_head;           /* RB tree head for events on this timeline */
+    spinlock_t rb_lock;                  /* RB tree spinlock */
+    #endif
 } qot_timeline_t;
 
 /**
