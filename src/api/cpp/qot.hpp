@@ -177,13 +177,26 @@ namespace qot
 		public: int CancelTimelineEventCallback(TimelineEventType type);
 ​
 ​
-​
-		/**
+​		/**
 		 * @brief Wait until some global time (if in past calls back immediately)
 		 * @param val Global time
-		 * @return Predicted error
+		 * @return Predicted error 
 		 **/
 		public: timeest_t WaitUntil(timeest_t absolute_time);
+
+		/**
+		 * @brief Wait until next period on some global time (if in past calls back immediately)
+		 * @param val Task Period in nanoseconds, epoch in ns (reference value from which task refers to time)
+		 * @return Predicted error 
+		 **/
+		//public: timeest_t WaitUntilNextPeriod(int64_t period, int64_t epoch);
+
+		/**
+		 * @brief Sleep for a given number of nanoseconds relative to the call time
+		 * @param val Number of nanoseconds
+		 * @return Predicted error 
+		 **/
+		public: timeest_t Sleep(timeest_t relative_time);
 ​
 		public: int CreateTimer(
 			const std::string &name,

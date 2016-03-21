@@ -1,9 +1,9 @@
 /*
  * @file qot_scheduler.h
  * @brief Interface to the QoT Scheduler
- * @author Andrew Symington
+ * @author Sandeep D'souza
  *
- * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,12 @@
 #define QOT_STACK_SRC_MODULES_QOT_QOT_SCHEDULER_H
 
 #include "qot_timeline.h"
+
+/* Puts task into a blocking sleep */
+int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline);
+
+/* Update tasks that are blocking when the notion of time changes */
+void qot_scheduler_update(void);
 
 /* Cleanup the timeline subsystem */
 void qot_scheduler_cleanup(struct class *qot_class);

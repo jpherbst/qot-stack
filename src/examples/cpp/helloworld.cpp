@@ -30,7 +30,7 @@
 #include <iostream>
 
 // Include the QoT API
-#include "../api/qot.hpp"
+#include "../api/c/qot.h"
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"

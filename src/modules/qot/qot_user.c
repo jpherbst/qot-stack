@@ -1,5 +1,5 @@
 /*
- * @file qot_scheduler.c
+ * @file qot_user.c
  * @brief user interface for the QoT stack
  * @author Andrew Symington
  *

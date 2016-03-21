@@ -1,9 +1,10 @@
 /*
  * @file qot_core.h
  * @brief Interfaces used by clocks to interact with core
- * @author Andrew Symington
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,10 +40,12 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
+#include <linux/sched.h>
 
 #include "qot_admin.h"
 #include "qot_clock.h"
 #include "qot_timeline.h"
+#include "qot_scheduler.h"
 
 #define DEVICE_NAME "timeline"
 
@@ -58,7 +61,7 @@ static spinlock_t qot_timelines_lock;
 
 /* Private data for a timeline, not visible outside this code      */
 typedef struct timeline_impl {
-    qot_timeline_t info;        /* Timeline info                   */
+    qot_timeline_t *info;        /* Timeline info                   */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
@@ -73,15 +76,18 @@ typedef struct timeline_impl {
     struct list_head head_res;  /* Head pointing to resolution     */
     struct list_head head_low;  /* Head pointing to accuracy (low) */
     struct list_head head_upp;  /* Head pointing to accuracy (upp) */
+    struct rb_root root;        /* Root of the RB-Tree of bindings */
 } timeline_impl_t;
 
 /* Private data for a binding, not visible outside this code       */
 typedef struct binding_impl {
-    qot_binding_t info;         /* Binding information             */
-    timeline_impl_t *parent;    /* Parent timeline                 */
-    struct list_head list_res;  /* Head pointing to resolution     */
-    struct list_head list_low;  /* Head pointing to accuracy (low) */
-    struct list_head list_upp;  /* Head pointing to accuracy (upp) */
+    qot_binding_t info;         /* Binding information                            */
+    timeline_impl_t *parent;    /* Parent timeline                                */
+    struct list_head list_res;  /* Head pointing to resolution                    */
+    struct list_head list_low;  /* Head pointing to accuracy (low)                */
+    struct list_head list_upp;  /* Head pointing to accuracy (upp)                */
+    int pid;                    /* Tracks the thread which created the binding    */
+    struct rb_node node;           /* Node on the RB Tree of bindings for a timeline */
 } binding_impl_t;
 
 /* Binding structure management */
@@ -131,6 +137,69 @@ static inline void qot_insert_list_upp(binding_impl_t *binding_list,
     list_add_tail(&binding_list->list_upp, head);
 }
 
+/* Binding RB-Tree Management */
+
+/* Find a binding using the pid of the thread which created the binding */
+binding_impl_t *find_binding(struct rb_root *root, int pid)
+{
+    struct rb_node *node = root->rb_node;
+
+    while (node) 
+    {
+        binding_impl_t *binding = container_of(node, binding_impl_t, node);
+        int result;
+
+        if(pid < binding->pid)
+           result = -1;
+        else if (pid > binding->pid)
+           result = 1;
+        else
+           result = 0;
+
+        if (result < 0)
+            node = node->rb_left;
+        else if (result > 0)
+            node = node->rb_right;
+        else
+            return binding;
+    }
+    return NULL;
+}
+
+/* Insert a binding into the RB-Tree Corresponding to the timeline */
+int insert_binding(struct rb_root *root, binding_impl_t *binding)
+{
+    struct rb_node **new = &(root->rb_node), *parent = NULL;
+
+    /* Figure out where to put new node */
+    while (*new) 
+    {
+        binding_impl_t *this = container_of(*new, binding_impl_t, node);
+        int result; // = strcmp(data->keystring, this->keystring);
+          
+        if(binding->pid < this->pid)
+            result = -1;
+        else if (binding->pid > this->pid)
+            result = 1;
+        else
+            result = 0;
+
+        parent = *new;
+        if (result < 0)
+            new = &((*new)->rb_left);
+        else if (result > 0)
+            new = &((*new)->rb_right);
+        else
+            return QOT_RETURN_TYPE_ERR;
+    }
+
+    /* Add new node and rebalance tree. */
+    rb_link_node(&binding->node, parent, new);
+    rb_insert_color(&binding->node, root);
+
+    return QOT_RETURN_TYPE_OK;
+}
+
 /* Add a new binding to a specified timeline */
 static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
     qot_binding_t *info)
@@ -145,13 +214,27 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
     /* Cache info and a pointer to the parent */
     memcpy(&binding_impl->info,info,sizeof(qot_binding_t));
     binding_impl->parent = timeline_impl;
-    /* Allocate an ID for this binding */
-    idr_preload(GFP_KERNEL);
+
+    // /* Allocate an ID for this binding */
+    // idr_preload(GFP_KERNEL);
+    // spin_lock_irqsave(&timeline_impl->lock, flags);
+    // binding_impl->info.id = idr_alloc(&timeline_impl->idr_bindings,
+    //     (void*) binding_impl,0,0,GFP_NOWAIT);
+    // spin_unlock_irqrestore(&timeline_impl->lock, flags);
+    // idr_preload_end();
+
+    /* Store the context (pid of the task) from which this binding has been invoked -> Sandeep*/
+    binding_impl->pid = current->pid;
+    /* Add the binding to the RB-Tree corresponding to the timeline using the pid of the task as id */
     spin_lock_irqsave(&timeline_impl->lock, flags);
-    binding_impl->info.id = idr_alloc(&timeline_impl->idr_bindings,
-        (void*) binding_impl,0,0,GFP_NOWAIT);
+    /* Check if a binding has already been created before */
+    if(insert_binding(&timeline_impl->root, binding_impl))
+    {
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        return NULL;
+    }
+    binding_impl->info.id = current->pid;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
-    idr_preload_end();
     /* Insert its metrics into the parent timeline's linked list */
     qot_insert_list_res(binding_impl, &timeline_impl->head_res);
     qot_insert_list_low(binding_impl, &timeline_impl->head_low);
@@ -163,6 +246,7 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
 /* Remove a binding from a specified timeline */
 static void qot_binding_del(binding_impl_t *binding_impl)
 {
+    unsigned long flags;
     /* Remove the binding from the parallel lists */
     if (!binding_impl)
         return;
@@ -170,8 +254,15 @@ static void qot_binding_del(binding_impl_t *binding_impl)
     list_del(&binding_impl->list_low);
     list_del(&binding_impl->list_upp);
     /* Remove the IDR reservation */
+    // if (binding_impl->parent)
+    //     idr_remove(&binding_impl->parent->idr_bindings,binding_impl->info.id);
+    /* Remove the binding from the RB-Tree */
     if (binding_impl->parent)
-        idr_remove(&binding_impl->parent->idr_bindings,binding_impl->info.id);
+    {
+        spin_lock_irqsave(&binding_impl->parent->lock, flags);
+        rb_erase(&binding_impl->node, &binding_impl->parent->root);
+        spin_unlock_irqrestore(&binding_impl->parent->lock, flags);
+    }
     /* Free the memory */
     kfree(binding_impl);
 }
@@ -186,7 +277,10 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
-    	return 1;
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        return 1;
+    }
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
@@ -204,7 +298,10 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
-    	return 1;
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        return 1;
+    }
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
@@ -240,7 +337,10 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
-    	return 1;
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        return 1;
+    }
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->last = ns;
     timeline_impl->nsec = timespec_to_ns(tp);
@@ -257,7 +357,10 @@ static int qot_timeline_chdev_gettime(struct posix_clock *pc,
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
-    	return 1;
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        return 1;
+    }
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
@@ -309,14 +412,19 @@ static int qot_timeline_chdev_release(struct posix_clock *pc)
     return 0;
 }
 
-static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
-    unsigned long arg)
-{
+static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
+{    
     utimepoint_t utp;
     qot_binding_t msgb;
     utimepoint_t msgu;
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+
+    utimepoint_t wait_until_time;
+    int wait_until_retval;
+
+    //pr_info("qot_timeline_chdev: in qot_timeline_chdev_ioctl by task %d\n", current->pid);
+
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
         return -EACCES;
@@ -324,16 +432,23 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
     switch (cmd) {
     /* Get information about this timeline */
     case TIMELINE_GET_INFO:
-        if (copy_to_user((qot_timeline_t*)arg, &timeline_impl->info, sizeof(qot_timeline_t)))
+        if (copy_to_user((qot_timeline_t*)arg, timeline_impl->info, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
     /* Bind to this timeline */
     case TIMELINE_BIND_JOIN:
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
+        {
+            pr_err("qot_timeline_chdev: error in copy from user\n");
             return -EACCES;
+        }
+        pr_info("qot_timeline_chdev: Binding to timeline\n");
         binding_impl = qot_binding_add(timeline_impl, &msgb);
         if (!binding_impl)
+        {
+            pr_info("qot_timeline_chdev: Could not bind to timeline\n");
             return -EACCES;
+        }
         /* Copy the ID back to the user */
         if (copy_to_user((qot_binding_t*)arg, &binding_impl->info, sizeof(qot_binding_t)))
             return -EACCES;
@@ -343,9 +458,15 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
             return -EACCES;
         /* Try and find the binding associated with this id */
-        binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
+        //binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
+        binding_impl = find_binding(&timeline_impl->root, current->pid);
         if (!binding_impl)
             return -EACCES;
+        pr_info("qot_timeline_chdev: Unbinding from timeline\n");
+
+        //  Check if the task calling actually owns the biding and is not spoofing another tasks binding id 
+        // if(binding_impl->pid != current->pid)
+        //     return -EACCES;
         qot_binding_del(binding_impl);
         break;
     /* Update binding parameters */
@@ -353,9 +474,13 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
             return -EACCES;
         /* Try and find the binding associated with this id */
-        binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
+        //binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
+        binding_impl = find_binding(&timeline_impl->root, current->pid);
+
         if (!binding_impl)
             return -EACCES;
+        pr_info("qot_timeline_chdev: Update the binding\n");
+
         /* Copy over the new data */
         memcpy(&binding_impl->info, &msgb, sizeof(qot_binding_t));
         /* Delete and add to resort list */
@@ -368,24 +493,43 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd,
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
+        // TODO: Doesnt work yet
+        if (qot_clock_get_core_time(&utp))
+            return -EACCES;
+        if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
+            return -EACCES;
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_REMOTE_TO_CORE:
+        // TODO: DOESNT WORK YET
+        if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
+            return -EACCES;
         break;
     /* Get the current time */
     case TIMELINE_GET_TIME_NOW:
-    	if (qot_clock_get_core_time(&utp))
+    	//pr_info("qot_timeline_chdev: Task %d trying to reading time\n", current->pid);
+
+        if (qot_clock_get_core_time(&utp))
     		return -EACCES;
+        //pr_info("qot_timeline_chdev: Task %d reading time\n", current->pid);
+        // TODO: Latency estimates are not being added for now...
         /* Add the latency due to the OS query */
         qot_admin_add_latency(&utp);
         /* Add the latency due to the CORE clock */
-        // qot_tsync_add_latency(&msgu.interval);
+        //qot_tsync_add_latency(&msgu.interval);
         /* Add the latency due to the CORE clock */
-        if (copy_to_user((utimepoint_t*)arg, &msgu, sizeof(utimepoint_t)))
+        if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
             return -EACCES;
         break;
     /* Blocking sleep until a given point in time */
     case TIMELINE_SLEEP_UNTIL:
+        // Get the parameters passed into the ioctl
+        if (copy_from_user(&wait_until_time, (utimepoint_t*)arg, sizeof(utimepoint_t)))
+            return -EACCES;
+        //pr_info("qot_timeline_chdev: Task %d called wait until @ %lld %llu\n", current->pid, utp.estimate.sec, utp.estimate.asec);
+        wait_until_retval = qot_attosleep(&wait_until_time, timeline_impl->info);
+        qot_clock_add_core_interrupt_latency(&wait_until_time);
+        return wait_until_retval;
         break;
     }
 	return 0;
@@ -451,7 +595,8 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         pr_err("qot_timeline: cannot allocate memory for timeline_impl");
         goto fail_memoryalloc;
     }
-    memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
+    timeline_impl->info = info;
+    //memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
@@ -479,11 +624,17 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 		pr_err("qot_timeline: cannot register sysfs interface");
 		goto fail_sysfs;
 	}
-	/* Initialize our list heads  to track bicd nding order */
+    
+
+    timeline_impl->info->index = timeline_impl->index;
+
+	/* Initialize our list heads  to track binding order */
 	INIT_LIST_HEAD(&timeline_impl->head_res);
 	INIT_LIST_HEAD(&timeline_impl->head_low);
 	INIT_LIST_HEAD(&timeline_impl->head_upp);
     /* Update the index before returning OK */
+    pr_info("qot_timeline_chdev: Timeline %d chdev created name is %s\n", info->index, info->name);
+
     return timeline_impl->index;
 
 fail_sysfs:

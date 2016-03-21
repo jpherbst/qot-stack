@@ -31,7 +31,7 @@
 #define QOT_STACK_SRC_API_C_QOT_H
 
 /* Include basic types, time math and ioctl interface */
-#include "qot_types.h"
+#include "../../qot_types.h"
 
 /* Opaque type */
 typedef struct timeline timeline_t;
@@ -41,6 +41,18 @@ typedef void (*qot_callback_t)(const qot_event_t *evt);
 
 /* Timer ids */
 typedef int qot_timer_t;
+
+/**
+ * @brief Constructor for the timeline_t data structure
+ * @return returns a pointer to the timeline_t data structure
+ **/
+timeline_t *timeline_t_create();
+
+/**
+ * @brief Destructor for the timeline_t data structure
+ * @param pointer to the timeline_t data structure
+ **/
+void timeline_t_destroy(timeline_t *timeline);
 
 /**
  * @brief Bind to a timeline with a given resolution and accuracy
@@ -83,7 +95,7 @@ qot_return_t timeline_get_resolution(timeline_t *timeline, timelength_t *res);
  * @param name Pointer to the where the name will be written
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_get_name(timeline_t *timeline, const char *name);
+qot_return_t timeline_get_name(timeline_t *timeline, char *name);
 
 /**
  * @brief Query the timeline's UUID
@@ -91,7 +103,7 @@ qot_return_t timeline_get_name(timeline_t *timeline, const char *name);
  * @param uuid Name of the timeline
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_get_uuid(timeline_t *timeline, const char *uuid);
+qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid);
 
 
 /**
@@ -109,6 +121,14 @@ qot_return_t timeline_get_uuid(timeline_t *timeline, const char *uuid);
  * @return A status code indicating success (0) or other
  **/
 qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res);
+
+/**
+ * @brief Query the time according to the core
+ * @param timeline Pointer to a timeline struct
+ * @param core_now Estimated time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now);
 
 /**
  * @brief Query the time according to the timeline

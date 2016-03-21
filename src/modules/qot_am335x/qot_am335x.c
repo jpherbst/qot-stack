@@ -1,7 +1,7 @@
 /*
  * @file qot_am335x.c
  * @brief Driver that exposes AM335x subsystem as a PTP clock for the QoT stack
- * @author Andrew Symington, Sandeep D'souza
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -308,7 +308,7 @@ static cycle_t qot_am335x_read(const struct cyclecounter *cc)
 static void qot_am335x_overflow(struct qot_am335x_channel *channel)
 {
 	timecounter_read(&channel->parent->tc);
-	pr_info("Timecounter read at overflow %llu\n", timecounter_read(&channel->parent->tc));
+	//pr_info("Timecounter read at overflow %llu\n", timecounter_read(&channel->parent->tc));
 
 }
 
@@ -409,7 +409,10 @@ static timepoint_t qot_am335x_read_time(void)
 	spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
 	spin_unlock_irqrestore(&pdata->lock, flags);
-	TP_FROM_nSEC(time_now,ns);
+	//pr_info("qot_am335x_read_time: time is %llu %llu\n", div_u64(ns, 1000000000ULL), ns - NSEC_PER_SEC*div_u64(ns, 1000000000ULL));
+
+	TP_FROM_nSEC(time_now, (s64)ns);
+	//pr_info("qot_am335x_read_time: time is %lld %llu\n", time_now.sec, time_now.asec);
 	return time_now;
 }
 
@@ -603,7 +606,7 @@ static int clkev_program_event(struct clock_event_device *dev, u64 delta)
      int rc;
 
      if (delta <= 0)
-             return -ETIME;
+        return -ETIME;
 
      delta = min(delta, (uint64_t) dev->max_delta_ns);
      delta = max(delta, (uint64_t) dev->min_delta_ns);
@@ -621,6 +624,7 @@ static long qot_am335x_program_sched_interrupt(timepoint_t expiry, long (*callba
 	struct qot_am335x_sched_interface *interface;
 	u64 ns;
 	interface = container_of(sched_timer, struct qot_am335x_sched_interface, timer);
+	//pr_info("qot_am335x: program interrupt timepoint_t %lld %llu ns %llu \n", expiry.sec, expiry.asec, TP_TO_nSEC(expiry));
 	ns = TP_TO_nSEC(expiry) - timecounter_read(&interface->parent->tc);
 	interface->callback = callback;
 	retval = clkev_program_event(&interface->qot_clockevent, ns);
@@ -639,7 +643,7 @@ static irqreturn_t qot_am335x_sched_interface_interrupt(int irq, void *data)
 {
 	struct qot_am335x_sched_interface *interface = data;
 	omap_dm_timer_write_status(interface->timer, OMAP_TIMER_INT_OVERFLOW);
-	pr_info("Interrupt Trigerred at %llu\n", timecounter_read(&interface->parent->tc));
+	//pr_info("Interrupt Trigerred at %llu\n", timecounter_read(&interface->parent->tc));
 	//clkev_program_event(&interface->qot_clockevent, 5*NSEC_PER_SEC);
 	interface->callback();
 	return IRQ_HANDLED;
@@ -1022,12 +1026,12 @@ err:
 
 
 // QoT PLATFORM CLOCK ABSTRACTIONS //////////////////////////////////////////////////////////////
-struct qot_clock qot_am335x_properties = {
+struct qot_clock qot_am335x_properties = { // Does not contain accurate values meeds to be filled TODO
 	.name = "qot_am335x",
-	// .nominal_freq = ,
-	// .nominal_power = ,
-	// .read_latency = ,
-	// .interrupt_latency = ,
+	.nom_freq_nhz = 24000000000,
+	.nom_freq_nwatt = 1000,
+	//.read_latency = ,
+	//.interrupt_latency = ,
 	// .errors = ,
 	// .phc_id = ,
 };
@@ -1050,6 +1054,11 @@ MODULE_DEVICE_TABLE(of, qot_am335x_dt_ids);
 
 static int qot_am335x_probe(struct platform_device *pdev)
 {
+	timelength_t read_lat_estimate;		/* Estimate of Read Latency */
+	timeinterval_t read_lat_interval;	/* Uncertainty interval around Read Latency */
+	timelength_t int_lat_estimate;		/* Estimate of Interrupt Latency */
+	timeinterval_t int_lat_interval;	/* Uncertainty interval around Interrupt Latency */
+
 	const struct of_device_id *match = of_match_device(
     	qot_am335x_dt_ids, &pdev->dev);
 	if (match) {
@@ -1062,13 +1071,43 @@ static int qot_am335x_probe(struct platform_device *pdev)
 		pr_err("of_match_device failed\n");
 		return -ENODEV;
 	}
+	// TODO: Values are hard coded and arbitrary, change them
+	/* Clock Read Latency */
+	read_lat_estimate.sec = 0;
+	read_lat_estimate.asec = 10*ASEC_PER_NSEC;             
+	read_lat_interval.below.sec = 0;
+	read_lat_interval.below.asec = 1*ASEC_PER_NSEC;        
+	read_lat_interval.above.sec = 0;
+	read_lat_interval.above.asec = 1*ASEC_PER_NSEC;
+	
+	/* Interrupt Read Latency */
+	int_lat_estimate.sec = 0;
+	int_lat_estimate.asec = 10*ASEC_PER_NSEC;
+	int_lat_interval.below.sec = 0;
+	int_lat_interval.below.asec = 1*ASEC_PER_NSEC;
+	int_lat_interval.above.sec = 0;
+	int_lat_interval.above.asec = 1*ASEC_PER_NSEC;
+	
+	/* QoT Clock Properties */ 
+	qot_am335x_properties.read_latency.estimate = read_lat_estimate;
+	qot_am335x_properties.read_latency.interval = read_lat_interval;
+	
+	qot_am335x_properties.interrupt_latency.estimate = int_lat_estimate;
+	qot_am335x_properties.interrupt_latency.interval = int_lat_interval;
+
 	qot_am335x_impl_info.info = qot_am335x_properties;
+
+	/* QoT PTP Clock Info */
 	qot_am335x_impl_info.ptpclk = qot_am335x_info;
+	if(qot_register(&qot_am335x_impl_info))
+		return -EACCES;
 	return 0;
 }
 
 static int qot_am335x_remove(struct platform_device *pdev)
 {
+	if(qot_unregister(&qot_am335x_impl_info))
+		return -EACCES;
 	if (pdev->dev.platform_data) {
 		qot_am335x_cleanup(pdev->dev.platform_data);
 		devm_kfree(&pdev->dev, pdev->dev.platform_data);

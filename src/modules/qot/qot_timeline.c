@@ -1,9 +1,10 @@
 /*
  * @file qot_timeline.c
  * @brief Interface to timeline management in the QoT stack
- * @author Andrew Symington
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,12 +46,17 @@ typedef struct timeline {
 /* Root of the red-black tree used to store timelines */
 static struct rb_root qot_timeline_root = RB_ROOT;
 
+// Timeline subsystem spin lock
+spinlock_t qot_timeline_lock;
+
 /* Search for a timeline given by a name */
 static timeline_t *qot_timeline_find(char *name)
 {
     int result;
+    unsigned long flags;
     timeline_t *timeline = NULL;
     struct rb_node *node = qot_timeline_root.rb_node;
+    //spin_lock_irqsave(&qot_timeline_lock, flags);
     while (node) {
         timeline = container_of(node, timeline_t, node);
         result = strcmp(name, timeline->info.name);
@@ -59,8 +65,12 @@ static timeline_t *qot_timeline_find(char *name)
         else if (result > 0)
             node = node->rb_right;
         else
+        {
+            //spin_unlock_irqrestore(&qot_timeline_lock, flags);
             return timeline;
+        }
     }
+    //spin_unlock_irqrestore(&qot_timeline_lock, flags);
     return NULL;
 }
 
@@ -68,8 +78,10 @@ static timeline_t *qot_timeline_find(char *name)
 static qot_return_t qot_timeline_insert(timeline_t *timeline)
 {
     int result;
+    unsigned long flags;
     timeline_t *target;
-    struct rb_node **new = &(qot_timeline_root.rb_node), *parent = NULL;
+    struct rb_node **new = &qot_timeline_root.rb_node, *parent = NULL;
+    spin_lock_irqsave(&qot_timeline_lock, flags);
     while (*new) {
         target = container_of(*new, timeline_t, node);
         result = strcmp(timeline->info.name, target->info.name);
@@ -79,41 +91,57 @@ static qot_return_t qot_timeline_insert(timeline_t *timeline)
         else if (result > 0)
             new = &((*new)->rb_right);
         else
+        {
+            spin_unlock_irqrestore(&qot_timeline_lock, flags);
             return QOT_RETURN_TYPE_ERR;
+        }
     }
     rb_link_node(&timeline->node, parent, new);
     rb_insert_color(&timeline->node, &qot_timeline_root);
+    spin_unlock_irqrestore(&qot_timeline_lock, flags);
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Public functions */
 
 /* Get the next timeline in the set */
-qot_return_t qot_timeline_first(qot_timeline_t *timeline)
+qot_return_t qot_timeline_first(qot_timeline_t **timeline)
 {
     timeline_t *timeline_priv = NULL;
     struct rb_node *node;
     node = rb_first(&qot_timeline_root);
-    timeline_priv = rb_entry(node, timeline_t, node);
-    memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    if(!node)
+        return QOT_RETURN_TYPE_ERR;
+    //timeline_priv = rb_entry(node, timeline_t, node);
+    timeline_priv = container_of(node, timeline_t, node);
+    // if(timeline_priv)
+    //     pr_info("qot_timeline:qot_first First timeline is %d \n", timeline_priv->info.index);
+    //memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    // Changed by Sandeep
+    *timeline = &timeline_priv->info;
+    // if(timeline)
+    //     pr_info("qot_timeline:qot_first First timeline is %d \n", timeline->index);
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Get the next timeline in the set */
-qot_return_t qot_timeline_next(qot_timeline_t *timeline)
+qot_return_t qot_timeline_next(qot_timeline_t **timeline)
 {
     timeline_t *timeline_priv = NULL;
     struct rb_node *node;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
-    timeline_priv = qot_timeline_find(timeline->name);
+    timeline_priv = qot_timeline_find((*timeline)->name);
     if (!timeline_priv)
         return QOT_RETURN_TYPE_ERR;
     node = rb_next(&timeline_priv->node);
     if (!node)
         return QOT_RETURN_TYPE_ERR;
-    timeline_priv = rb_entry(node, timeline_t, node);
-    memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    //timeline_priv = rb_entry(node, timeline_t, node);
+    //memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    // Changed by Sandeep
+    timeline_priv = container_of(node, timeline_t, node);
+    *timeline = &timeline_priv->info;
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -139,7 +167,12 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
     /* Make sure timeline doesn't already exist */
     timeline_priv = qot_timeline_find(timeline->name);
     if (timeline_priv)
-    	return QOT_RETURN_TYPE_ERR;
+    {
+    	/* If it exists return the timeline information */
+        pr_info("qot_timeline: timeline already exists");
+        memcpy(timeline, &timeline_priv->info, sizeof(qot_timeline_t));
+        return -QOT_RETURN_TYPE_ERR;
+    }
     /* Copy over the timeline information to some new private memory */
     timeline_priv = kzalloc(sizeof(timeline_t), GFP_KERNEL);
     if (!timeline_priv) {
@@ -147,6 +180,7 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
 		return QOT_RETURN_TYPE_ERR;
     }
 	memcpy(&timeline_priv->info,timeline,sizeof(qot_timeline_t));
+    
     /* Try and initialize the character device for this timeline */
     timeline_priv->info.index =
         qot_timeline_chdev_register(&timeline_priv->info);
@@ -161,6 +195,14 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
     }
     /* Copy the IDR back to the user */
 	memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    pr_info("qot_timeline: Timeline %d created name is %s\n", timeline->index, timeline->name);
+
+     // Create a root for the RB Tree along which timeline sleep events will be ordered -> Added by Sandeep
+    timeline_priv->info.event_head = RB_ROOT;
+
+    // Initialize a spinlock for the RB Tree along which timeline sleep events will be ordered -> Added by Sandeep
+    spin_lock_init(&timeline_priv->info.rb_lock);
+
     return QOT_RETURN_TYPE_OK;
 
 fail_timeline_insert:
@@ -174,6 +216,7 @@ fail_chdev_register:
 qot_return_t qot_timeline_remove(qot_timeline_t *timeline)
 {
     timeline_t *timeline_priv = NULL;
+    unsigned long flags;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
     /* Make certain that timeline->index has been set */
@@ -181,7 +224,10 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline)
 	if (!timeline_priv)
 		return QOT_RETURN_TYPE_ERR;
 	qot_timeline_chdev_unregister(timeline_priv->info.index);
+    spin_lock_irqsave(&qot_timeline_lock, flags);
 	rb_erase(&timeline_priv->node,&qot_timeline_root);
+    spin_unlock_irqrestore(&qot_timeline_lock, flags);
+
     kfree(timeline_priv);
     return QOT_RETURN_TYPE_OK;
 }
@@ -212,6 +258,7 @@ qot_return_t qot_timeline_init(struct class *qot_class)
         pr_err("qot_timeline: problem calling qot_timeline_chdev_init\n");
         goto fail_chdev_init;
     }
+    spin_lock_init(&qot_timeline_lock);
     return QOT_RETURN_TYPE_OK;
 fail_chdev_init:
     return QOT_RETURN_TYPE_ERR;

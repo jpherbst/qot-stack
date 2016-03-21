@@ -1,9 +1,10 @@
 /*
  * @file qot.h
  * @brief A simple C application programmer interface to the QoT stack
- * @author Andrew Symington
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,11 +38,15 @@
 /* This file includes */
 #include "qot.h"
 
+#define DEBUG 1
+
 /* Timeline implementation */
 typedef struct timeline {
-    qot_timeline_t info;    /* Basic binding information */
-    int fd;                 /* File descriptor to ioctl  */
-    pthread_t thread;       /* Thread to poll on fd */
+    qot_timeline_t info;    /* Basic timeline information               */
+    qot_binding_t binding;   /* Basic binding info                       */
+    int fd;                 /* File descriptor to /dev/timelineX ioctl  */
+    int qotusr_fd;          /* File descriptor to /dev/qotusr ioctl     */
+    //pthread_t thread;     /* Thread to poll on fd                     */
 } timeline_t;
 
 /* Is the given timeline a valid one */
@@ -51,43 +56,241 @@ qot_return_t timeline_check_fd(timeline_t *timeline) {
     return QOT_RETURN_TYPE_OK;
 }
 
+
 /* Exported methods */
 
-qot_return_t timeline_bind(timeline_t *timeline, const char *uuid,
-    const char *name, timelength_t res, timeinterval_t acc) {
-    return QOT_RETURN_TYPE_ERR;
+timeline_t *timeline_t_create()
+{
+    timeline_t *timeline;
+    timeline = (timeline_t*) malloc(sizeof(struct timeline));
+    return timeline;
 }
 
-qot_return_t timeline_unbind(timeline_t *timeline) {
-    return QOT_RETURN_TYPE_ERR;
+void timeline_t_destroy(timeline_t *timeline)
+{
+    free(timeline);
 }
 
-qot_return_t timeline_get_accuracy(timeline_t *timeline, timeinterval_t *acc) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *name, timelength_t res, timeinterval_t acc) 
+{
+    char qot_timeline_filename[15];
+    int usr_file;
+    clockid_t clk;
+
+    // Check to make sure the UUID is valid
+    if (strlen(uuid) > QOT_MAX_NAMELEN)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Open the QoT Core
+    if (DEBUG) 
+        printf("Opening IOCTL to qot_core\n");
+    usr_file = open("/dev/qotusr", O_RDWR);
+    if (DEBUG)
+        printf("IOCTL to qot_core opened %d\n", usr_file);
+    if (usr_file < 0)
+    {
+        printf("Error: Invalid file\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    timeline->qotusr_fd = usr_file;
+    
+    // Bind to the timeline
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
+
+    strcpy(timeline->info.name, uuid);  
+    // Try to create a new timeline if none exists
+    if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    // Construct the file handle to the posix clock /dev/timelineX
+    sprintf(qot_timeline_filename, "/dev/timeline%d", timeline->info.index);
+
+    // Open the clock
+    if (DEBUG) 
+        printf("Opening clock %s\n", qot_timeline_filename);
+    timeline->fd = open(qot_timeline_filename, O_RDWR);
+    if (!timeline->fd)
+    {
+        printf("Cant open /dev/timeline%d\n", timeline->info.index);
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    if (DEBUG) 
+        printf("Opened clock %s\n", qot_timeline_filename);
+    // Populate Binding fields
+    strcpy(timeline->binding.name, name);
+    timeline->binding.demand.resolution = res;
+    timeline->binding.demand.accuracy = acc;
+    
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
+    // Bind to the timeline
+    if(ioctl(timeline->fd, TIMELINE_BIND_JOIN, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    if (DEBUG) 
+        printf("Bound to timeline %s\n", uuid);
+
+    // This was there in the old api code
+    // if (DEBUG) std::cout << "Start polling " << std::endl;
+
+    // // We can now start polling, because the timeline is setup
+    // this->cv.notify_one();
+
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_get_resolution(timeline_t *timeline, timelength_t *res) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_unbind(timeline_t *timeline) 
+{
+    clockid_t clk;
+    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    // Unbind from the timeline
+    if(ioctl(timeline->fd, TIMELINE_BIND_LEAVE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Close the timeline file
+    if (timeline->fd)
+        close(timeline->fd);
+    if (timeline->qotusr_fd)
+        close(timeline->qotusr_fd);
+    
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_get_name(timeline_t *timeline, const char *name) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_get_accuracy(timeline_t *timeline, timeinterval_t *acc) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    *acc = timeline->binding.demand.accuracy;
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_get_uuid(timeline_t *timeline, const char *uuid) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_get_resolution(timeline_t *timeline, timelength_t *res) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    *res = timeline->binding.demand.resolution;
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_get_name(timeline_t *timeline, char *name) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    strcpy(name, timeline->binding.name);
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    strcpy(uuid, timeline->info.name);
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc) 
+{
+    clockid_t clk;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    timeline->binding.demand.accuracy = *acc;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *acc = timeline->binding.demand.accuracy;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res) 
+{
+    clockid_t clk;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    timeline->binding.demand.resolution = *res;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *res = timeline->binding.demand.resolution;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
+{
+    clockid_t clk;
+
+    printf("/dev/timeline%d\n", timeline->info.index);
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    // Get the core time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, core_now) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
+{ 
+    clockid_t clk;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    // // Get the core time
+    // if(ioctl(clk, TIMELINE_GET_TIME_NOW, est) < 0)
+    // {
+    //     return QOT_RETURN_TYPE_ERR;
+    // }
+    // Convert to remote timeline time
+    if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
 }
 
 qot_return_t timeline_config_pin_interrupt(timeline_t *timeline,
@@ -105,11 +308,53 @@ qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
     return QOT_RETURN_TYPE_ERR;
 }
 
-qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) 
+{
+    clockid_t clk;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    if(DEBUG)
+        printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
+    
+    // Clocking wait on remote timeline time
+    if(ioctl(timeline->fd, TIMELINE_SLEEP_UNTIL, utp) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl) {
+qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl) 
+{
+    clockid_t clk;
+    utimepoint_t utp;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Convert the file descriptor to a clock handle
+    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    // Convert timelength to a timepoint
+    utp.interval =  utl->interval;
+    utp.estimate.sec = (s64) utl->estimate.sec;
+    utp.estimate.asec = utl->estimate.asec;
+    // Clocking wait on remote timeline time
+    if(ioctl(timeline->fd, TIMELINE_SLEEP_UNTIL, utp) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
     return QOT_RETURN_TYPE_ERR;
 }
 
