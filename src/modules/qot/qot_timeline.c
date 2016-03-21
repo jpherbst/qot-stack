@@ -177,20 +177,21 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
     timeline_priv = kzalloc(sizeof(timeline_t), GFP_KERNEL);
     if (!timeline_priv) {
         pr_err("qot_timeline: cannot allocate memory for timeline_priv");
-		return QOT_RETURN_TYPE_ERR;
+        return QOT_RETURN_TYPE_ERR;
     }
+
 	memcpy(&timeline_priv->info,timeline,sizeof(qot_timeline_t));
     
     /* Try and initialize the character device for this timeline */
     timeline_priv->info.index =
         qot_timeline_chdev_register(&timeline_priv->info);
     if (timeline_priv->info.index < 0) {
-    	pr_err("qot_timeline: cannot create the character device");
+        pr_err("qot_timeline: cannot create the character device");
         goto fail_chdev_register;
     }
     /* Try and insert into the red-black tree */
     if (qot_timeline_insert(timeline_priv)) {
-    	pr_err("qot_timeline: cannot insert the timeline");
+        pr_err("qot_timeline: cannot insert the timeline");
         goto fail_timeline_insert;
     }
     /* Copy the IDR back to the user */
@@ -202,14 +203,13 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
 
     // Initialize a spinlock for the RB Tree along which timeline sleep events will be ordered -> Added by Sandeep
     spin_lock_init(&timeline_priv->info.rb_lock);
-
     return QOT_RETURN_TYPE_OK;
 
 fail_timeline_insert:
-	qot_timeline_chdev_unregister(timeline_priv->info.index);
+    qot_timeline_chdev_unregister(timeline_priv->info.index);
 fail_chdev_register:
-	kfree(timeline_priv);
-	return QOT_RETURN_TYPE_ERR;
+    kfree(timeline_priv);
+    return QOT_RETURN_TYPE_ERR;
 }
 
 /* Remove a timeline */
@@ -227,7 +227,6 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline)
     spin_lock_irqsave(&qot_timeline_lock, flags);
 	rb_erase(&timeline_priv->node,&qot_timeline_root);
     spin_unlock_irqrestore(&qot_timeline_lock, flags);
-
     kfree(timeline_priv);
     return QOT_RETURN_TYPE_OK;
 }

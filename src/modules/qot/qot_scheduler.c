@@ -118,6 +118,7 @@ static timepoint_t qot_get_next_event(void)
 {
 	qot_return_t retval;
 	qot_timeline_t *timeline = NULL;	
+
 	struct rb_root *timeline_root = NULL;	
 	struct rb_node *timeline_node = NULL;
 	struct timeline_sleeper *sleeping_task;	
@@ -156,7 +157,9 @@ static timepoint_t qot_get_next_event(void)
 		if(retval == QOT_RETURN_TYPE_ERR)
 			break;
 	}
+
 	//pr_info("qot_scheduler: qot_get_next_event is %lld %llu\n", expires_next.sec, expires_next.asec);
+
 	if(expires_next.sec < 0)
 		expires_next.sec = 0;
 	if(expires_next.asec < 0)
@@ -176,6 +179,7 @@ static long scheduler_interface_interrupt(void)
 
 	utimepoint_t current_core_time;
 	timepoint_t current_timeline_time;
+
 	timepoint_t next_expires = {TIMEPOINT_MAX_SEC, TIMEPOINT_MAX_ASEC};
 
 	//raw_spin_lock(&core_lock);
@@ -223,7 +227,6 @@ retry:
     	next_interrupt_callback = next_expires;
         return 0;
     }
-
     /*
      * The next timer was already expired due to:
      * - tracing
@@ -236,6 +239,7 @@ retry:
      *
      */
     qot_clock_get_core_time(&current_core_time);
+
     if (++retries < 3)
         goto retry;
     /* Reprogram the timer */
@@ -268,7 +272,6 @@ static int qot_sleeper_start_expires(struct timeline_sleeper *sleeper, timepoint
 	}
 	spin_unlock_irqrestore(&qot_scheduler_lock, flags);
 	//pr_info("qot_scheduler:qot_sleeper_start_expires Task %d returning\n", sleeper->task->pid);
-
 	return retval;
 }
 
@@ -289,6 +292,7 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
     int retval = 0;
     struct timeline_sleeper sleep_timer;
     unsigned long flags;
+
     timepoint_t core_time_expiry;
     
     //pr_info("qot_scheduler:qot_attosleep Task %d trying to sleep until %lld %llu\n", current->pid, expiry_time->estimate.sec, expiry_time->estimate.asec);
@@ -354,6 +358,7 @@ void qot_scheduler_update(void)
 	        }
 		}
 		spin_unlock_irqrestore(&timeline->rb_lock, flags);
+
 		retval = qot_timeline_next(&timeline);
 		if(retval == QOT_RETURN_TYPE_ERR)
 			break;
@@ -365,6 +370,7 @@ void qot_scheduler_update(void)
 		expires_next.asec = 0;
 	spin_lock_irqsave(&qot_scheduler_lock, flags);
 	qot_clock_program_core_interrupt(expires_next, scheduler_interface_interrupt);
+
 	spin_unlock_irqrestore(&qot_scheduler_lock, flags);
 	return;
 }

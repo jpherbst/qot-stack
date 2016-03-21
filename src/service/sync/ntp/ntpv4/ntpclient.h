@@ -1,6 +1,6 @@
 /*
  * Local NTP (LNTP)
- * Author: Zhou Fang (zhoufang@ucsd.edu)
+ * Author: Fatima Anwar, Zhou Fang
  * Reference: 
  * 1. NTPv4: https://www.eecis.udel.edu/~mills/database/reports/ntp4/ntp4.pdf
  * 2. Use some source code from: http://blog.csdn.net/rich_baba/article/details/6052863
@@ -26,10 +26,15 @@
 #include   <fcntl.h>
 #include   <errno.h>
 #include   <sys/mman.h>  
+#include   <inttypes.h>
+#include   <sys/timex.h>
 
 #include <math.h>
 //#include <pthread.h>
 #include "ntpconfig.h"
+
+// QoT base types
+#include "../../../../qot_types.h"
 
 #define  JAN_1970   0x83aa7e80      //3600s*24h*(365days*70years+17days)
 #define  MILLION 1000000
@@ -47,13 +52,24 @@
 #define INT8(a) ( a&128 ? a - 256 : a )
 
 // ntp package send head
-#define  LI 0          // protocol head elements
-#define  VN 4          // version
-#define  MODE 3        // mode: client request
-#define  STRATUM 0
-#define  POLL 4        // maximal interval between requests
+#define  LI       0         // protocol head elements
+#define  VN       4         // version
+#define  MODE     3         // mode: client request
+#define  STRATUM  0
+#define  POLL     4         // maximal interval between requests
 
-#define  DEF_NTP_PORT 8000  // NTP port (normal NTP uses 123)
+#define  DEF_NTP_PORT 123   // NTP port
+
+#define CLOCKFD 3
+#define FD_TO_CLOCKID(fd) ((~(clockid_t) (fd) << 3) | CLOCKFD)
+
+#ifndef ADJ_NANO
+#define ADJ_NANO 0x2000
+#endif
+
+#ifndef ADJ_SETOFFSET
+#define ADJ_SETOFFSET 0x0100
+#endif
 
 typedef struct{
   //char servaddr[256];
@@ -106,14 +122,17 @@ typedef struct{
 
 int log_record( char *record, ...);
 
-void ntp_process();
-extern Response resp_list[NSTAGE];
-extern int total;
-extern int cursor;
-extern Clock local_clock;
-extern long long *mapped;
-extern FILE *fp_result;
+void load_default_cfg(NtpConfig *NtpCfg);
+int ntp_conn_server(const char *servname, int port);
+void send_packet(int fd, int timelinefd);
+bool get_server_time(int sock, Response *resp, int timelinefd);
+
+void ntp_process(int fd, Response resp_list[], const int total);
+void reset_clock();
+//extern long long *mapped;
+//extern FILE *fp_result;
 
 unsigned long longnative_read_tsc(void);
-long long gettime();
+int gettime(int fd, struct timespec *tml_ts);
+void adjust_clock(int fd);
 void reset_ratio();

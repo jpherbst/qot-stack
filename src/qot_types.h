@@ -207,6 +207,7 @@ static inline void scalar_to_timepoint(timepoint_t *tp, s64 t, u64 dv, u64 ml)
 	tp->sec = div64_u64(tm, dv);
 	tp->asec = tm - dv * (u64) tp->sec;
 	#ifdef __KERNEL__
+
 	//pr_info("Time t = %lld, tm = %llu, dv = %llu, sec = %lld, asec = %llu\n", t, tm, dv, tp->sec, tp->asec);
 	#endif
 	/* Are we dealing with a negative number */

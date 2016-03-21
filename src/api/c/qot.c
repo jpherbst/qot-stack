@@ -87,6 +87,7 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     usr_file = open("/dev/qotusr", O_RDWR);
     if (DEBUG)
         printf("IOCTL to qot_core opened %d\n", usr_file);
+
     if (usr_file < 0)
     {
         printf("Error: Invalid file\n");
@@ -100,6 +101,7 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
         printf("Binding to timeline %s\n", uuid);
 
     strcpy(timeline->info.name, uuid);  
+
     // Try to create a new timeline if none exists
     if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
     {
@@ -254,7 +256,6 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
-
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
@@ -319,6 +320,7 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
 
     // Convert the file descriptor to a clock handle
     clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
     if(DEBUG)
         printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
     

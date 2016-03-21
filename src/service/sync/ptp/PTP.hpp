@@ -1,7 +1,7 @@
 /**
  * @file PTP.hpp
  * @brief Provides ptp instance to the sync interface
- * @author Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -70,7 +70,7 @@ namespace qot
 	{
 
 		// Constructor and destructor
-		public: PTP(boost::asio::io_service *io, const std::string &iface, int ptp_index);
+		public: PTP(boost::asio::io_service *io, const std::string &iface);
 		public: ~PTP();
 
 		// Control functions
@@ -79,13 +79,12 @@ namespace qot
 		public: void Stop();						// Stop
 
 		// This thread performs rhe actual syncrhonization
-		private: int SyncThread(int phc_index, int *timelinesfd, uint16_t timelines_size);
+		private: int SyncThread(int *timelinesfd, uint16_t timelines_size);
 
 		// Boost ASIO
 		private: boost::asio::io_service *asio;
 		private: boost::thread thread;
 		private: std::string baseiface;
-		private: int ptpindex = 0;
 		private: bool kill;
 
 		// PTP settings

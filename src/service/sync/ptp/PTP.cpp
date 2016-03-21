@@ -1,7 +1,7 @@
 /**
  * @file PTP.cpp
  * @brief Provides ptp instance to the sync interface
- * @author Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -36,9 +36,8 @@ using namespace qot;
 #define TEST  true
 
 PTP::PTP(boost::asio::io_service *io,	// ASIO handle
-		const std::string &iface,		// interface
-		int ptp_index)					// index of the ptp char device						
-	: Sync(), asio(io), baseiface(iface), ptpindex(ptp_index)
+		const std::string &iface		// interface
+	) : asio(io), baseiface(iface)
 {	
 	this->Reset();	
 }
@@ -94,7 +93,7 @@ void PTP::Reset()
 	cfg_settings.pod.min_neighbor_prop_delay = -20000000;
 	cfg_settings.pod.tx_timestamp_offset = 0;
 	cfg_settings.pod.rx_timestamp_offset = 0;
-	cfg_settings.timestamping = TS_SOFTWARE;
+	cfg_settings.timestamping = TS_HARDWARE;
 	cfg_settings.dm = DM_E2E;
 	cfg_settings.transport = TRANS_IEEE_802_3;
 	cfg_settings.assume_two_step = &assume_two_step;
@@ -139,7 +138,7 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
 
-	thread = boost::thread(boost::bind(&PTP::SyncThread, this, ptpindex, timelinesfd, timelines_size));
+	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelinesfd, timelines_size));
 }
 
 void PTP::Stop()
@@ -150,10 +149,10 @@ void PTP::Stop()
 }
 
 
-int PTP::SyncThread(int ptp_index, int *timelinesfd, uint16_t timelines_size)
+int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
-	char *config = NULL;
+	char *config = NULL, *req_phc = NULL;
 	int c, i;
 	struct interface *iface;
 	int *cfg_ignore = &cfg_settings.cfg_ignore;
@@ -162,7 +161,7 @@ int PTP::SyncThread(int ptp_index, int *timelinesfd, uint16_t timelines_size)
 	enum timestamp_type *timestamping = &cfg_settings.timestamping;
 	struct clock *clock;
 	struct defaultDS *ds = &cfg_settings.dds.dds;
-	int required_modes = 0;
+	int phc_index = -1, required_modes = 0;
 
 	// Set fault timeouts
 	for (i = 0; i < FT_CNT; i++)
@@ -249,12 +248,36 @@ int PTP::SyncThread(int ptp_index, int *timelinesfd, uint16_t timelines_size)
 		if (iface->ts_info.valid && ((iface->ts_info.so_timestamping & required_modes) != required_modes))
 		{
 			fprintf(stderr, "interface '%s' does not support requested timestamping mode.\n", iface->name);
-			return -1;
+			//return -1;
+			*timestamping = TS_SOFTWARE; //QOT, switch to software timestamping if hardware is not supported
 		}
 	}
 
-	// Generate the clock identity
+	/* determine PHC Clock index */
 	iface = STAILQ_FIRST(&cfg_settings.interfaces);
+	if (cfg_settings.dds.free_running) {
+		phc_index = -1;
+	} else if (*timestamping == TS_SOFTWARE || *timestamping == TS_LEGACY_HW) {
+		phc_index = -1;
+	} else if (req_phc) {
+		if (1 != sscanf(req_phc, "/dev/ptp%d", &phc_index)) {
+			fprintf(stderr, "bad ptp device string\n");
+			return -1;
+		}
+	} else if (iface->ts_info.valid) {
+		phc_index = iface->ts_info.phc_index;
+	} else {
+		fprintf(stderr, "ptp device not specified and\n"
+			        "automatic determination is not\n"
+			        "supported. please specify ptp device\n");
+		return -1;
+	}
+
+	if (phc_index >= 0) {
+		pr_info("selected /dev/ptp%d as PTP clock", phc_index);
+	}
+
+	// Generate the clock identity
 	if (generate_clock_identity(&ds->clockIdentity, iface->name))
 	{
 		fprintf(stderr, "failed to generate a clock identity\n");
@@ -262,7 +285,7 @@ int PTP::SyncThread(int ptp_index, int *timelinesfd, uint16_t timelines_size)
 	}
 
 	// Create the clock
-	clock = clock_create(ptp_index, (struct interfaces_head*)&cfg_settings.interfaces, 
+	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, 
 		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelinesfd, timelines_size);
 	if (!clock)
 	{
