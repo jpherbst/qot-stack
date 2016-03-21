@@ -1,7 +1,7 @@
 /*
  * @file qot.cpp
  * @brief Userspace C++ API to manage QoT timelines
- * @author Andrew Symington and Fatima Anwar
+ * @author Andrew Symington, Fatima Anwar and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
@@ -36,7 +36,7 @@
 // Private functionality
 extern "C"
 {
-	#include "qot.h"
+	#include "../../src/qot_types.h"
 }
 
 #define DEBUG false
@@ -67,7 +67,7 @@ Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
 
 	// Add this clock to the qot clock list through scheduler
 	if (DEBUG) std::cout << "Binding to timeline " << uuid << std::endl;
-	if (ioctl(this->fd_qot, QOT_BIND_TIMELINE, &msg))
+	if (ioctl(this->fd_qot, TIMELINE_BIND_JOIN, &msg))
 		throw CannotBindToTimelineException();
 
 	// Construct the file handle tot he poix clock /dev/timelineX
@@ -207,28 +207,89 @@ int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
 // Wait until some global time
 int64_t Timeline::WaitUntil(int64_t val)
 {
-	// TODO: Adwait to improve this
+	// TODO: Adwait to improve this -> Changes made by Sandeep
+	struct qot_message msg;
 	int64_t cur = this->GetTime();
 	if (cur < val)
 		return -1;
-	uint64_t dif = (uint64_t)(val - cur);
-	struct timespec ts, ret;
-	ts.tv_sec  = dif / 1e9;
-	ts.tv_nsec = dif - ((uint64_t)1e9 * ts.tv_sec);
-	nanosleep(&ts, &ret);
-	return 0;
+	
+	msg.wait_until.tv_sec  = val / 1e9;
+	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
+	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
+		return 0;
+	return -2;
+}
+
+// Wait until the next period on some global time
+int64_t Timeline::WaitUntilNextPeriod(int64_t period, int64_t epoch)
+{
+	// TODO: Adwait to improve this -> Changes made by Sandeep
+	struct qot_message msg;
+	int64_t cur = this->GetTime();
+
+	int64_t periods_since_epoch = 0;
+	int64_t val;
+
+	if (cur < epoch)
+		return -1;
+	
+	periods_since_epoch = cur/period;
+	if(periods_since_epoch == 0)
+		return 0;
+	val = period*(periods_since_epoch + 1);
+	if (val < cur)
+	{
+		printf("val less than current time\n");
+		return -1;
+	}
+
+	msg.wait_until.tv_sec  = val / 1e9;
+	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
+	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
+		return 0;
+	printf("sleepfailed\n");
+	return -2;
 }
 
 // Sleep for a given number of nanoseconds
 int64_t Timeline::Sleep(uint64_t val)
 {
-	// TODO: Adwait to improve this
-	struct timespec ts, ret;
-	ts.tv_sec  = val / 1e9;
-	ts.tv_nsec = val - ((uint64_t)1e9 * ts.tv_sec);
-	nanosleep(&ts, &ret);
-	return 0;
+	// TODO: Adwait to improve this -> Changes made by Sandeep
+	struct qot_message msg;
+	int64_t cur = this->GetTime();
+	val = (uint64_t)(val + cur);
+	msg.wait_until.tv_sec  = val / 1e9;
+	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
+	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
+		return 0;
+	return -1;
 }
+
+// // Wait until some global time
+// int64_t Timeline::WaitUntil(int64_t val)
+// {
+// 	// TODO: Adwait to improve this
+// 	int64_t cur = this->GetTime();
+// 	if (cur < val)
+// 		return -1;
+// 	uint64_t dif = (uint64_t)(val - cur);
+// 	struct timespec ts, ret;
+// 	ts.tv_sec  = dif / 1e9;
+// 	ts.tv_nsec = dif - ((uint64_t)1e9 * ts.tv_sec);
+// 	nanosleep(&ts, &ret);
+// 	return 0;
+// }
+
+// // Sleep for a given number of nanoseconds
+// int64_t Timeline::Sleep(uint64_t val)
+// {
+// 	// TODO: Adwait to improve this
+// 	struct timespec ts, ret;
+// 	ts.tv_sec  = val / 1e9;
+// 	ts.tv_nsec = val - ((uint64_t)1e9 * ts.tv_sec);
+// 	nanosleep(&ts, &ret);
+// 	return 0;
+// }
 
 // Listen for an interrupt on a pin
 void Timeline::SetCaptureCallback(CaptureCallbackType callback)

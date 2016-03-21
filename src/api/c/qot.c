@@ -1,9 +1,10 @@
 /*
  * @file qot.h
  * @brief A simple C application programmer interface to the QoT stack
- * @author Andrew Symington
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,7 +85,9 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     if (DEBUG) 
         printf("Opening IOCTL to qot_core\n");
     usr_file = open("/dev/qotusr", O_RDWR);
-    printf("IOCTL to qot_core opened %d\n", usr_file);
+    if (DEBUG)
+        printf("IOCTL to qot_core opened %d\n", usr_file);
+
     if (usr_file < 0)
     {
         printf("Error: Invalid file\n");
@@ -97,7 +100,8 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     if (DEBUG) 
         printf("Binding to timeline %s\n", uuid);
 
-    strcpy(timeline->info.name, uuid);
+    strcpy(timeline->info.name, uuid);  
+
     // Try to create a new timeline if none exists
     if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
     {
@@ -257,6 +261,7 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 
     // Convert the file descriptor to a clock handle
     clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
     // Get the core time
     if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, core_now) < 0)
     {
@@ -315,6 +320,9 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
 
     // Convert the file descriptor to a clock handle
     clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+
+    if(DEBUG)
+        printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
     
     // Clocking wait on remote timeline time
     if(ioctl(timeline->fd, TIMELINE_SLEEP_UNTIL, utp) < 0)

@@ -1,9 +1,10 @@
 /*
  * @file qot_timeline.h
  * @brief Interface to timeline management in the QoT stack
- * @author Andrew Symington
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,14 +42,14 @@
  * @param timeline A pointer to a timeline
  * @return A status code indicating success (0) or other (no more timelines)
  **/
-qot_return_t qot_timeline_first(qot_timeline_t *timeline);
+qot_return_t qot_timeline_first(qot_timeline_t **timeline);
 
 /**
  * @brief Find the next timeline in the system based on the specified name.
  * @param timeline A pointer to a timeline with the name field populated
  * @return A status code indicating success (0) or other (no more timelines)
  **/
-qot_return_t qot_timeline_next(qot_timeline_t *timeline);
+qot_return_t qot_timeline_next(qot_timeline_t **timeline);
 
 /**
  * @brief Get information about a timeline  based on the specified name.
