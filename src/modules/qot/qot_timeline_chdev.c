@@ -1,9 +1,10 @@
 /*
  * @file qot_core.h
  * @brief Interfaces used by clocks to interact with core
- * @author Andrew Symington
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,6 +40,7 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
+#include <linux/sched.h>
 
 #include "qot_admin.h"
 #include "qot_clock.h"
@@ -59,7 +61,7 @@ static spinlock_t qot_timelines_lock;
 
 /* Private data for a timeline, not visible outside this code      */
 typedef struct timeline_impl {
-    qot_timeline_t info;        /* Timeline info                   */
+    qot_timeline_t *info;        /* Timeline info                   */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
@@ -223,7 +225,7 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
 
     /* Store the context (pid of the task) from which this binding has been invoked -> Sandeep*/
     binding_impl->pid = current->pid;
-    binding_impl->info.id = current->pid; // added by Fatima
+
     /* Add the binding to the RB-Tree corresponding to the timeline using the pid of the task as id */
     spin_lock_irqsave(&timeline_impl->lock, flags);
     /* Check if a binding has already been created before */
@@ -323,7 +325,10 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
+    }
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
@@ -341,7 +346,11 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
+    }
+
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
@@ -377,7 +386,11 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
+    }
+
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->last = ns;
     timeline_impl->nsec = timespec_to_ns(tp);
@@ -394,7 +407,11 @@ static int qot_timeline_chdev_gettime(struct posix_clock *pc,
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
+    {
+    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
+    }
+
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
@@ -460,7 +477,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     utimepoint_t wait_until_time;
     int wait_until_retval;
 
-    pr_info("qot_timeline_chdev: in qot_timeline_chdev_ioctl\n");
+    //pr_info("qot_timeline_chdev: in qot_timeline_chdev_ioctl by task %d\n", current->pid);
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -469,7 +486,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     switch (cmd) {
     /* Get information about this timeline */
     case TIMELINE_GET_INFO:
-        if (copy_to_user((qot_timeline_t*)arg, &timeline_impl->info, sizeof(qot_timeline_t)))
+        if (copy_to_user((qot_timeline_t*)arg, timeline_impl->info, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
     /* Bind to this timeline */
@@ -518,9 +535,6 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         pr_info("qot_timeline_chdev: Update the binding\n");
 
-        /* Check if the task calling actually owns the biding and is not spoofing another bindings id */
-        // if(binding_impl->pid != current->pid)
-        //     return -EACCES;
         /* Copy over the new data */
         memcpy(&binding_impl->info, &msgb, sizeof(qot_binding_t));
         /* Delete and add to resort list */
@@ -559,11 +573,11 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         break;
     /* Get the current core time */
     case TIMELINE_GET_TIME_NOW:
-        pr_info("qot_timeline_chdev: Trying to read Core Time\n");
-        if (qot_clock_get_core_time(&utp))
-            return -EACCES;
-        pr_info("qot_timeline_chdev: Reading Core Time\n");
+    	//pr_info("qot_timeline_chdev: Task %d trying to reading time\n", current->pid);
 
+        if (qot_clock_get_core_time(&utp))
+    		return -EACCES;
+        //pr_info("qot_timeline_chdev: Task %d reading time\n", current->pid);
         // TODO: Latency estimates are not being added for now...
         /* Add the latency due to the OS query */
         //qot_admin_add_latency(&utp);
@@ -578,8 +592,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         // Get the parameters passed into the ioctl
         if (copy_from_user(&wait_until_time, (utimepoint_t*)arg, sizeof(utimepoint_t)))
             return -EACCES;
-        
-        wait_until_retval = qot_attosleep(&wait_until_time, &timeline_impl->info);
+        //pr_info("qot_timeline_chdev: Task %d called wait until @ %lld %llu\n", current->pid, utp.estimate.sec, utp.estimate.asec);
+        wait_until_retval = qot_attosleep(&wait_until_time, timeline_impl->info);
         qot_clock_add_core_interrupt_latency(&wait_until_time);
         return wait_until_retval;
         break;
@@ -647,7 +661,8 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         pr_err("qot_timeline: cannot allocate memory for timeline_impl");
         goto fail_memoryalloc;
     }
-    memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
+    timeline_impl->info = info;
+    //memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
@@ -671,15 +686,21 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         goto fail_posixclock;
     }
     /* Create the sysfs interface into the timeline */
-    if (qot_timeline_sysfs_init(timeline_impl->dev)) {
-        pr_err("qot_timeline: cannot register sysfs interface");
-        goto fail_sysfs;
-    }
-    /* Initialize our list heads  to track binding order */
-    INIT_LIST_HEAD(&timeline_impl->head_res);
-    INIT_LIST_HEAD(&timeline_impl->head_low);
-    INIT_LIST_HEAD(&timeline_impl->head_upp);
+	if (qot_timeline_sysfs_init(timeline_impl->dev)) {
+		pr_err("qot_timeline: cannot register sysfs interface");
+		goto fail_sysfs;
+	}
+    
+
+    timeline_impl->info->index = timeline_impl->index;
+
+	/* Initialize our list heads  to track binding order */
+	INIT_LIST_HEAD(&timeline_impl->head_res);
+	INIT_LIST_HEAD(&timeline_impl->head_low);
+	INIT_LIST_HEAD(&timeline_impl->head_upp);
     /* Update the index before returning OK */
+    pr_info("qot_timeline_chdev: Timeline %d chdev created name is %s\n", info->index, info->name);
+
     return timeline_impl->index;
 
 fail_sysfs:

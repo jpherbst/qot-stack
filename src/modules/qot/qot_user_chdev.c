@@ -1,9 +1,10 @@
 /*
  * @file qot_user_chdev.c
  * @brief User ioctl interface (/dev/qotusr) to the QoT core
- * @author Andrew Symington
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -133,7 +134,6 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 {
     qot_timeline_t *timeline;
     event_t *event;
-
     /* Create a new connection */
     qot_user_chdev_con_t *con =
         kzalloc(sizeof(qot_user_chdev_con_t), GFP_KERNEL);
@@ -151,7 +151,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 
     /* Notify the connection (by polling) of all existing timelines */
     timeline = NULL;
-    if (qot_timeline_first(timeline)==QOT_RETURN_TYPE_OK) {
+    if (qot_timeline_first(&timeline)==QOT_RETURN_TYPE_OK) {
         do {
             event = kzalloc(sizeof(event_t), GFP_KERNEL);
             if (!event) {
@@ -161,7 +161,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
             event->info.type = QOT_EVENT_CLOCK_CREATE;
             strncpy(event->info.data,timeline->name,QOT_MAX_NAMELEN);
             list_add_tail(&event->list, &con->event_list);
-        } while (qot_timeline_next(timeline)==QOT_RETURN_TYPE_OK);
+        } while (qot_timeline_next(&timeline)==QOT_RETURN_TYPE_OK);
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
     }
@@ -190,9 +190,12 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     event_t *event;
     qot_event_t msge;
     qot_timeline_t msgt;
+
+
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (!con)
         return -EACCES;
+ 
     switch (cmd) {
     /* Get the next event in the queue for this connection */
     case QOTUSR_GET_NEXT_EVENT:
@@ -226,6 +229,7 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return QOT_RETURN_TYPE_ERR;     // Timeline Exists 
         else if (retval)
             return -EACCES;
+        pr_info("qot_usr_chdev: Timeline %d created name is %s\n", msgt.index, msgt.name);
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;

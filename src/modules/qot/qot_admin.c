@@ -74,6 +74,10 @@ qot_return_t qot_admin_init(struct class *qot_class)
         pr_err("qot_admin: problem calling qot_admin_chdev_init\n");
         goto fail_chdev_init;
     }
+    // Arbitrary initialization values
+    TL_FROM_uSEC(os_latency.estimate, 100);
+    TL_FROM_uSEC(os_latency.interval.below, 10);
+    TL_FROM_uSEC(os_latency.interval.above, 10);
     return QOT_RETURN_TYPE_OK;
 fail_chdev_init:
     return QOT_RETURN_TYPE_ERR;

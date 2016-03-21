@@ -1,9 +1,9 @@
 /*
  * @file qot_scheduler.h
  * @brief Interface to the QoT Scheduler
- * @author Andrew Symington
+ * @author Sandeep D'souza
  *
- * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

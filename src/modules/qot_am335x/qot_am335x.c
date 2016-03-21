@@ -1,7 +1,7 @@
 /*
  * @file qot_am335x.c
  * @brief Driver that exposes AM335x subsystem as a PTP clock for the QoT stack
- * @author Andrew Symington, Sandeep D'souza
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -308,7 +308,7 @@ static cycle_t qot_am335x_read(const struct cyclecounter *cc)
 static void qot_am335x_overflow(struct qot_am335x_channel *channel)
 {
 	timecounter_read(&channel->parent->tc);
-	pr_info("Timecounter read at overflow %llu\n", timecounter_read(&channel->parent->tc));
+	//pr_info("Timecounter read at overflow %llu\n", timecounter_read(&channel->parent->tc));
 
 }
 
@@ -409,7 +409,10 @@ static timepoint_t qot_am335x_read_time(void)
 	spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
 	spin_unlock_irqrestore(&pdata->lock, flags);
-	TP_FROM_nSEC(time_now,ns);
+	//pr_info("qot_am335x_read_time: time is %llu %llu\n", div_u64(ns, 1000000000ULL), ns - NSEC_PER_SEC*div_u64(ns, 1000000000ULL));
+
+	TP_FROM_nSEC(time_now, (s64)ns);
+	//pr_info("qot_am335x_read_time: time is %lld %llu\n", time_now.sec, time_now.asec);
 	return time_now;
 }
 
@@ -621,6 +624,7 @@ static long qot_am335x_program_sched_interrupt(timepoint_t expiry, long (*callba
 	struct qot_am335x_sched_interface *interface;
 	u64 ns;
 	interface = container_of(sched_timer, struct qot_am335x_sched_interface, timer);
+	//pr_info("qot_am335x: program interrupt timepoint_t %lld %llu ns %llu \n", expiry.sec, expiry.asec, TP_TO_nSEC(expiry));
 	ns = TP_TO_nSEC(expiry) - timecounter_read(&interface->parent->tc);
 	interface->callback = callback;
 	retval = clkev_program_event(&interface->qot_clockevent, ns);
@@ -639,7 +643,7 @@ static irqreturn_t qot_am335x_sched_interface_interrupt(int irq, void *data)
 {
 	struct qot_am335x_sched_interface *interface = data;
 	omap_dm_timer_write_status(interface->timer, OMAP_TIMER_INT_OVERFLOW);
-	pr_info("Interrupt Trigerred at %llu\n", timecounter_read(&interface->parent->tc));
+	//pr_info("Interrupt Trigerred at %llu\n", timecounter_read(&interface->parent->tc));
 	//clkev_program_event(&interface->qot_clockevent, 5*NSEC_PER_SEC);
 	interface->callback();
 	return IRQ_HANDLED;

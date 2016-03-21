@@ -1,9 +1,10 @@
 /*
  * @file qot_clock.c
  * @brief Interface to clock management in the QoT stack
- * @author Andrew Symington
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -97,6 +98,8 @@ qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
         return QOT_RETURN_TYPE_ERR;
     /* Get a measurement of core time */
     utp->estimate = core->impl.read_time();
+    TL_FROM_uSEC(utp->interval.below, 0);
+    TL_FROM_uSEC(utp->interval.above, 0);
     /* Add the uncertainty to the measurement */
     utimepoint_add(utp, &core->impl.info.read_latency);
     /* Success */
