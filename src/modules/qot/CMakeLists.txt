@@ -1,6 +1,6 @@
 # Set the source files
 SET(MODULE_SOURCE_FILES
-    Kbuild
+    ../Kbuild
     qot_core.c
     qot_clock.c
     qot_clock_sysfs.c
