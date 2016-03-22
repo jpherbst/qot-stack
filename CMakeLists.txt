@@ -8,14 +8,14 @@ PROJECT(qot-stack)
 OPTION(CROSS_AM335X "Build for the am335x" OFF)
 IF (CROSS_AM335X)
     SET(CROSS_KERNEL /export/bb-kernel/KERNEL)
-    SET(CROSS_PREFIX /export/bb-kernel/dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-)
+    SET(CROSS_PREFIX /export/bb-kernel/dl/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-)
 	SET(CROSS_COMPILE_ROOTFS "/export/rootfs")
 	SET(CMAKE_INSTALL_PREFIX "${CROSS_COMPILE_ROOTFS}/usr/local")
 	SET(CMAKE_SYSTEM_NAME Linux)
 	SET(CMAKE_SYSTEM_PROCESSOR arm)
 	SET(CMAKE_SYSTEM_VERSION 1)
-	SET(CMAKE_C_COMPILER ${CROSS_PREFIX}-gcc)
-	SET(CMAKE_CXX_COMPILER ${CROSS_PREFIX}-g++)
+	SET(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
+	SET(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
 	LINK_DIRECTORIES(
 		"/usr/arm-linux-gnueabihf/lib"
 		"/usr/lib/arm-linux-gnueabihf"
