@@ -431,6 +431,7 @@ typedef struct qot_timeline {
 #define QOTUSR_GET_NEXT_EVENT     _IOR(QOTUSR_MAGIC_CODE, 1, qot_event_t*)
 #define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
 #define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
+#define QOTUSR_DESTROY_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 4, qot_timeline_t*)
 
 /* QoT clock type (admin only) */
 typedef struct qot_clock {

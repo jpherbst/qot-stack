@@ -206,14 +206,14 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
     return QOT_RETURN_TYPE_OK;
 
 fail_timeline_insert:
-    qot_timeline_chdev_unregister(timeline_priv->info.index);
+    qot_timeline_chdev_unregister(timeline_priv->info.index, 0);
 fail_chdev_register:
     kfree(timeline_priv);
     return QOT_RETURN_TYPE_ERR;
 }
 
 /* Remove a timeline */
-qot_return_t qot_timeline_remove(qot_timeline_t *timeline)
+qot_return_t qot_timeline_remove(qot_timeline_t *timeline, bool admin_flag)
 {
     timeline_t *timeline_priv = NULL;
     unsigned long flags;
@@ -223,7 +223,11 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline)
     timeline_priv = qot_timeline_find(timeline->name);
 	if (!timeline_priv)
 		return QOT_RETURN_TYPE_ERR;
-	qot_timeline_chdev_unregister(timeline_priv->info.index);
+
+    /* Will destroy the character device is the admin flag is set */
+	if(qot_timeline_chdev_unregister(timeline_priv->info.index, admin_flag))
+        return QOT_RETURN_TYPE_ERR;
+
     spin_lock_irqsave(&qot_timeline_lock, flags);
 	rb_erase(&timeline_priv->node,&qot_timeline_root);
     spin_unlock_irqrestore(&qot_timeline_lock, flags);
@@ -236,7 +240,7 @@ void qot_timeline_remove_all(void) {
     timeline_t *timeline, *timeline_next;
     rbtree_postorder_for_each_entry_safe(timeline, timeline_next,
         &qot_timeline_root, node) {
-        qot_timeline_chdev_unregister(timeline->info.index);
+        qot_timeline_chdev_unregister(timeline->info.index, 1);
         rb_erase(&timeline->node,&qot_timeline_root);
         kfree(timeline);
     }
