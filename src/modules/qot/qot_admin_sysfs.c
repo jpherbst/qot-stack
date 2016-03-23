@@ -70,7 +70,7 @@ static ssize_t timeline_remove_store(struct device *dev,
     	pr_err("qot_admin_sysfs: could not capture the timeline name\n");
         return -EINVAL;
     }
-	if (qot_timeline_remove(&timeline)) {
+	if (qot_timeline_remove(&timeline, 1)) {
 		pr_err("qot_admin_sysfs: could not remove a timeline\n");
 		return -EINVAL;
 	}

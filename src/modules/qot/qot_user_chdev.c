@@ -233,6 +233,13 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;
+    /* Try to Destroy a timeline */
+    case QOTUSR_DESTROY_TIMELINE:
+        if (copy_from_user(&msgt, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
+            return -EACCES;
+        if(qot_timeline_remove(&msgt, 0))
+            return QOT_RETURN_TYPE_ERR;
+        break;
     default:
         return -EINVAL;
     }
