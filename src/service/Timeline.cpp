@@ -43,7 +43,7 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const s
 {
 	// First, save the id to the message data structure. Having this present
 	// in the data structure will cause us to bind without affecting metrics
-	this->msg.id = id;
+	//this->msg.id = id;
 
 	// Second, bind to the timeline to get the base requirements
 	std::ostringstream oss("");
@@ -54,15 +54,20 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const s
 		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
 		return;
 	}
-	if (ioctl(fd, TIMELINE_BIND_JOIN, &msg))
+	if (ioctl(fd, TIMELINE_GET_INFO, &msgt))
 	{
-		BOOST_LOG_TRIVIAL(warning) << "Timeline " << this->msg.id << " was not added by the QoT stack. Ignoring.";
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id << " have no info.";
 		return;
 	}
-	BOOST_LOG_TRIVIAL(info) << "Timeline opened successfully";
+	if (ioctl(fd, TIMELINE_GET_BINDING_INFO, &msgb))
+	{
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id << " have binding problems";
+		return;
+	}
+	BOOST_LOG_TRIVIAL(info) << "Timeline information received successfully";
 
 	// Initialize the coordinator with the given PHC id, UUID, accuracy and resolution
-	coordinator.Start(id, this->fd, msg.name, msg.demand.accuracy, msg.demand.resolution);
+	coordinator.Start(id, this->fd, msgt.name, msgb.demand.accuracy, msgb.demand.resolution);
 
 	// We can now start polling, because the timeline is setup
 	thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));

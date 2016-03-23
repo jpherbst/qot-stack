@@ -17,11 +17,11 @@ ENDIF (CROSS_AM335X)
 
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
-ADD_DEFINITIONS(-std=gnu++14)
 
 # Preprocessor directive required to link boost trivial logging
-FIND_PACKAGE(Boost 1.54 REQUIRED
+FIND_PACKAGE(Boost 1.55 REQUIRED
 	COMPONENTS thread system program_options log date_time)
+FIND_PACKAGE(Threads REQUIRED)
 
 # Location of header files for the entire project
 INCLUDE_DIRECTORIES(
@@ -115,11 +115,6 @@ ADD_LIBRARY(ntp SHARED
 )
 TARGET_LINK_LIBRARIES(ntp m)
 
-# opensplice datamodel library
-ADD_LIBRARY(dds SHARED
-	${OpenSplice_DATAMODEL}
-)
-TARGET_LINK_LIBRARIES(dds m)
 #########################################################################################################
 
 ADD_EXECUTABLE(qotdaemon
@@ -138,8 +133,9 @@ ADD_EXECUTABLE(qotdaemon
 	Notifier.cpp
 	Notifier.hpp
 	main.cpp
+	${OpenSplice_DATAMODEL}
 )
-TARGET_LINK_LIBRARIES(qotdaemon ptp ntp dds ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} -lboost_log -lpthread)
+TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 # Install the PTP library
 INSTALL(

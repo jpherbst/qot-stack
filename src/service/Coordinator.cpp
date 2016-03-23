@@ -85,8 +85,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 						// (Re)start the synchronization service as master
 						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
-						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-						sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
+						if(timeline.accuracy() > 0){
+							int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+							sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
+						}
 					}
 				}
 
@@ -102,8 +104,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 					// (Re)start the synchronization service as master
 					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
-					int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-					sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+					if(timeline.accuracy() > 0){
+						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+						sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+					}
 				}
 
 				// If I am a slave and this node thinks that it is the master
@@ -123,8 +127,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 						// (Re)start the synchronization service
 						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
-						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-						sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
+						if(timeline.accuracy() > 0){
+							int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+							sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
+						}
 					}
 
 					// Make sure that we are on the right domain
@@ -152,8 +158,10 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					// (Re)start the synchronization service as master
 					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 					// Convert the file descriptor to a clock handle
-					int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-					sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+					if(timeline.accuracy() > 0){
+						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+						sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+					}
 				}
 			}
 		}
@@ -186,15 +194,22 @@ void Coordinator::Start(int id, int fd, const char* uuid, timeinterval_t acc, ti
 
 	// Set the timeline information
 	timeline.uuid() = (std::string) uuid;	
+	BOOST_LOG_TRIVIAL(info) << "UUID of timeline is " << timeline.uuid();
 
+	
 	//choose the max of the upper and lower bound of accuracy
+	BOOST_LOG_TRIVIAL(info) << "Lower Accuracy of timeline is " << acc.below.sec << ", " << acc.below.asec;
+	BOOST_LOG_TRIVIAL(info) << "Higher Accuracy of timeline is " << acc.above.sec << ", " << acc.above.asec;
 	timelength_t max_acc_bound;
 	timelength_max(&max_acc_bound, &acc.above, &acc.below);
-	double scalar_acc = max_acc_bound.sec * aSEC_PER_SEC + max_acc_bound.asec;
+	double scalar_acc = (double) max_acc_bound.sec * aSEC_PER_SEC + (double) max_acc_bound.asec;
 	timeline.accuracy() = scalar_acc;				// Our accuracy
+	BOOST_LOG_TRIVIAL(info) << "timeline accuracy is " << timeline.accuracy();
 
+	BOOST_LOG_TRIVIAL(info) << "Resolution of timeline is " << res.sec << ", " << res.asec;
 	double scalar_res = res.sec * aSEC_PER_SEC + res.asec;
 	timeline.resolution() = scalar_res;			// Our resolution
+	BOOST_LOG_TRIVIAL(info) << "timeline resolution is " << timeline.resolution();
 	timeline.master() = "";					// Indicates master unknown!
 
 	// Create the listener
@@ -236,8 +251,10 @@ void Coordinator::Update(timeinterval_t acc, timelength_t res)
 	// If I am a slave then my accuracy may change the sync rate
 	if (timeline.master().compare(timeline.name())){
 		//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
-		int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-		sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+		if(timeline.accuracy() > 0){
+			int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+			sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+		}
 	}
 }
 
@@ -279,8 +296,10 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	
 	// (Re)start the synchronization service as master
 	//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
-	int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
-	sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+	if(timeline.accuracy() > 0){
+		int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+		sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
+	}
 
 	// Reset the heartbeat timer to be 1s from last firing
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_HEARTBEAT));
