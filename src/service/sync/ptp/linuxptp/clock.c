@@ -239,7 +239,8 @@ static int create_timelines_servos(struct clock *c, int sw_ts, enum servo_type s
             max_adj = phc_max_adj(tml_id);
 			if (!max_adj) {
 				pr_err("clock is not adjustable");
-				return -1;
+				//return -1;
+				max_adj = 1000000;
 			}
 
             struct servo *s, *piter, *lasts = NULL;

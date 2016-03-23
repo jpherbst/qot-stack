@@ -115,11 +115,6 @@ ADD_LIBRARY(ntp SHARED
 )
 TARGET_LINK_LIBRARIES(ntp m)
 
-# opensplice datamodel library
-ADD_LIBRARY(dds SHARED
-	${OpenSplice_DATAMODEL}
-)
-TARGET_LINK_LIBRARIES(dds m)
 #########################################################################################################
 
 ADD_EXECUTABLE(qotdaemon
@@ -138,8 +133,9 @@ ADD_EXECUTABLE(qotdaemon
 	Notifier.cpp
 	Notifier.hpp
 	main.cpp
+	${OpenSplice_DATAMODEL}
 )
-TARGET_LINK_LIBRARIES(qotdaemon ptp ntp dds ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 # Install the PTP library
 INSTALL(
