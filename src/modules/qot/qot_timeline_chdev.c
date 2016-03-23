@@ -488,6 +488,32 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     case TIMELINE_GET_INFO:
         if (copy_to_user((qot_timeline_t*)arg, timeline_impl->info, sizeof(qot_timeline_t)))
             return -EACCES;
+        
+        break;
+    /* Get information about this timeline's requirements */
+    case TIMELINE_GET_BINDING_INFO:
+        // find the binding with minimum resolution (need to satisfy tightest req.)
+        binding_impl = list_entry(&timeline_impl->head_res, binding_impl_t, list_res);
+        msgb.demand.resolution = binding_impl->info.demand.resolution;
+        if (!binding_impl)
+            return -EACCES;
+
+        // find the binding with minimum lower accuracy (need to satisfy tightest req.)
+        binding_impl = list_entry(&timeline_impl->head_low, binding_impl_t, list_low);
+        msgb.demand.accuracy.below = binding_impl->info.demand.accuracy.below;
+        if (!binding_impl)
+            return -EACCES;
+
+        // find the binding with minimum upper accuracy (need to satisfy tightest req.)
+        binding_impl = list_entry(&timeline_impl->head_upp, binding_impl_t, list_upp);
+        msgb.demand.accuracy.above = binding_impl->info.demand.accuracy.above;
+        if (!binding_impl)
+            return -EACCES;
+
+        /* Copy the binding back to the user */
+        if (copy_to_user((qot_binding_t*)arg, &msgb, sizeof(qot_binding_t)))
+            return -EACCES;
+
         break;
     /* Bind to this timeline */
     case TIMELINE_BIND_JOIN:
