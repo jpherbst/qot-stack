@@ -31,7 +31,7 @@
 #include <unistd.h>
 
 // Include the QoT API
-#include "qot.h"
+#include "../../api/c/qot.h"
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
