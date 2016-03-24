@@ -70,7 +70,7 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline);
  * @param timeline A pointer to a timeline with the name field populated
  * @return A status code indicating success (0) or other (no more timelines)
  **/
-qot_return_t qot_timeline_remove(qot_timeline_t *timeline);
+qot_return_t qot_timeline_remove(qot_timeline_t *timeline, bool admin_flag);
 
 /**
  * @brief Remove all timelines
@@ -104,7 +104,7 @@ int qot_timeline_chdev_register(qot_timeline_t *timeline);
  * @param timeline The timeline to register
  * @return A status code indicating success (0) or failure (!0)
  **/
-qot_return_t qot_timeline_chdev_unregister(int index);
+qot_return_t qot_timeline_chdev_unregister(int index, bool admin_flag);
 
 /**
  * @brief Clean up the timeline character device subsystem

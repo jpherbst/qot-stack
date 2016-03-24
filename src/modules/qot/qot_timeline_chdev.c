@@ -741,11 +741,16 @@ fail_noinfo:
 }
 
 /* Destroy the timeline based on an index */
-qot_return_t qot_timeline_chdev_unregister(int index)
+qot_return_t qot_timeline_chdev_unregister(int index, bool admin_flag)
 {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
     if (!timeline_impl)
         return QOT_RETURN_TYPE_ERR;
+    /* If the Admin Flag is not set Check if no binding is there */
+    if(rb_first(&timeline_impl->root) != NULL && admin_flag == 0)
+    {    
+        return QOT_RETURN_TYPE_ERR;
+    }
     /* Clean up the sysfs interface */
     qot_timeline_sysfs_cleanup(timeline_impl->dev);
     /* Delete the character device - also deletes IDR */
