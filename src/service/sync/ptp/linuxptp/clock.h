@@ -290,4 +290,8 @@ double clock_rate_ratio(struct clock *c);
  */
 int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts);
 
+
+/* QoT */
+void get_core_time(struct clock *c, struct timespec *ts);
+
 #endif
