@@ -131,11 +131,15 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *
 	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
 	cfg_settings.dds.dds.domainNumber = sync_session;	
-	cfg_settings.pod.logSyncInterval = log_sync_interval;
-	if (master)
-		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-	else
+	//cfg_settings.pod.logSyncInterval = log_sync_interval;
+	cfg_settings.pod.logSyncInterval = 0;
+	if (!master){
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
+	}
+		//cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	//else
+		//cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	kill = false;
 
 	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelinesfd, timelines_size));

@@ -137,6 +137,17 @@ ADD_EXECUTABLE(qotdaemon
 )
 TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
+ADD_EXECUTABLE(phc2phc
+	phc2phc.c
+)
+TARGET_LINK_LIBRARIES(phc2phc ptp)
+
+#ADD_EXECUTABLE(testptp
+#	testptp.c
+#)
+#TARGET_LINK_LIBRARIES(testptp -lrt)
+#########################################################################################################
+
 # Install the PTP library
 INSTALL(
 	TARGETS
@@ -157,7 +168,7 @@ INSTALL(
 		libraries
 )
 
-# Install the qot library to the given prefix
+# Install the qot daemon to the given prefix
 INSTALL(
 	TARGETS
 		qotdaemon
@@ -166,3 +177,23 @@ INSTALL(
 	COMPONENT
 		applications
 )
+
+# Install the phc2phc to the given prefix
+INSTALL(
+	TARGETS
+		phc2phc
+	DESTINATION
+		bin
+	COMPONENT
+		applications
+)
+
+# Install the testptp to the given prefix
+#INSTALL(
+#	TARGETS
+#		testptp
+#	DESTINATION
+#		bin
+#	COMPONENT
+#		applications
+#)

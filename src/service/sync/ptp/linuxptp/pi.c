@@ -122,6 +122,8 @@ static double pi_sample(struct servo *servo,
 		s->count = 2;
 		break;
 	case 2:
+		//pr_info("PI servo: ppb %.3f lastppb %.3f drift %.3f kp %.3f ki %.6f\n",
+		 //ppb, s->last_freq, s->drift, s->kp, s->ki);
 		/*
 		 * reset the clock servo when offset is greater than the max
 		 * offset value. Note that the clock jump will be performed in

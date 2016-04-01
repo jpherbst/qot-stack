@@ -515,6 +515,10 @@ static int peer_prepare_and_send(struct port *p, struct ptp_message *msg,
 		return -1;
 	}
 	if (msg_sots_valid(msg)) {
+		//pr_info("PEER SEND: msg->hwts.ts.sec: %u msg->hwts.ts.nsec: %lu\n", (int)msg->hwts.ts.tv_sec, msg->hwts.ts.tv_nsec);
+
+		get_core_time(p->clock, &msg->hwts.ts); /* QoT */
+
 		ts_add(&msg->hwts.ts, p->pod.tx_timestamp_offset);
 	}
 	return 0;
@@ -1017,7 +1021,6 @@ static void port_synchronize(struct port *p,
 
 	state = clock_synchronize(p->clock, ingress_ts, origin_ts,
 				  correction1, correction2);
-
 	switch (state) {
 	case SERVO_UNLOCKED:
 		port_dispatch(p, EV_SYNCHRONIZATION_FAULT, 0);
@@ -2223,9 +2226,12 @@ enum fsm_event port_event(struct port *p, int fd_index)
 		msg_put(msg);
 		return EV_NONE;
 	}
-
 	if (msg_sots_valid(msg)) {
+		//pr_info("RECEIVE: msg->hwts.ts.sec: %u msg->hwts.ts.nsec: %lu\n", (int)msg->hwts.ts.tv_sec, msg->hwts.ts.tv_nsec);
+		get_core_time(p->clock, &msg->hwts.ts); /* QoT */
+
 		ts_add(&msg->hwts.ts, -p->pod.rx_timestamp_offset);
+
 		clock_check_ts(p->clock, msg->hwts.ts);
 	}
 	if (port_ignore(p, msg)) {
@@ -2299,6 +2305,9 @@ int port_prepare_and_send(struct port *p, struct ptp_message *msg, int event)
 		return -1;
 	}
 	if (msg_sots_valid(msg)) {
+		//pr_info("SEND: msg->hwts.ts.sec: %u msg->hwts.ts.nsec: %lu\n", (int)msg->hwts.ts.tv_sec, msg->hwts.ts.tv_nsec);
+		get_core_time(p->clock, &msg->hwts.ts); /* QoT */
+
 		ts_add(&msg->hwts.ts, p->pod.tx_timestamp_offset);
 	}
 	return 0;
@@ -2508,16 +2517,12 @@ struct port *port_open(int phc_index,
 		if (interface->boundary_clock_jbod) {
 			pr_warning("port %d: just a bunch of devices", number);
 			p->phc_index = interface->ts_info.phc_index;
-		} 
-		/*
-		else
-		{
+		} else {
 			pr_err("port %d: PHC device mismatch", number);
 			pr_err("port %d: /dev/ptp%d requested, ptp%d attached",
 			       number, phc_index, interface->ts_info.phc_index);
 			goto err_port;
 		}
-		*/
 	}
 
 	p->pod = interface->pod;

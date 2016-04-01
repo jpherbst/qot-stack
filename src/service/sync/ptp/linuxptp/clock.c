@@ -135,6 +135,7 @@ struct clock_subscriber {
 
 struct clock {
 	clockid_t clkid;
+	clockid_t core_clkid; /* QOT */
 	struct servo *servo;
 	enum servo_type servo_type;
 	struct defaultDS dds;
@@ -161,6 +162,7 @@ struct clock {
 	int utc_offset;  /* grand master role */
 	int time_flags;  /* grand master role */
 	int time_source; /* grand master role */
+	int	sw_ts; /* software timestamping, QOT */
 	enum servo_state servo_state;
 	tmv_t master_offset;
 	tmv_t path_delay;
@@ -228,20 +230,21 @@ static int create_timelines_servos(struct clock *c, int sw_ts, enum servo_type s
         for (i = 0; i < c->timelines_size; i++) {
         	tml_id = FD_TO_CLOCKID(c->timelinesfd[i]);
 
-            if (tml_id != CLOCK_INVALID) {
+            /*if (tml_id != CLOCK_INVALID) {
 				fadj = (int) clockadj_get_freq(tml_id);
 				/* Due to a bug in older kernels, the reading may silently fail
 		   		and return 0. Set the frequency back to make sure fadj is
 		   		the actual frequency of the clock. */
-				clockadj_set_freq(tml_id, fadj);
-			}
+				/*clockadj_set_freq(tml_id, fadj);
+			}*/
             //TODO: Get max_adj value through core
-            max_adj = phc_max_adj(tml_id);
-			if (!max_adj) {
-				pr_err("clock is not adjustable");
+            //max_adj = phc_max_adj(tml_id);
+			//if (!max_adj) {
+				//pr_err("clock is not adjustable");
 				//return -1;
 				max_adj = 1000000;
-			}
+			//}
+			//pr_info("clock, max_adj: %d", max_adj);
 
             struct servo *s, *piter, *lasts = NULL;
             s = servo_create(servo, -fadj, max_adj, sw_ts);
@@ -1095,9 +1098,20 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	struct clock *c = &the_clock;
 	struct port *p;
 	char phc[32];
+	char phccore[32]; /* QOT */
 	struct interface *udsif = &c->uds_interface;
 	struct interface *iface;
 	struct timespec ts;
+
+	/* Add core clock index and clockid , Fatima_START */
+	int phccore_index = 1;
+	snprintf(phccore, 31, "/dev/ptp%d", phccore_index);
+	c->core_clkid = phc_open(phccore);
+		if (c->core_clkid == CLOCK_INVALID) {
+			pr_err("Failed to open %s: %m", phccore);
+			return NULL;
+	}
+	/* Add core clock index and clockid , Fatima_END */
 
 	clock_gettime(CLOCK_REALTIME, &ts);
 	srandom(ts.tv_sec ^ ts.tv_nsec);
@@ -1109,6 +1123,7 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	udsif->transport = TRANS_UDS;
 	udsif->delay_filter_length = 1;
 
+	c->sw_ts = sw_ts; /* QOT */
 	c->free_running = dds->free_running;
 	c->freq_est_interval = dds->freq_est_interval;
 	c->grand_master_capable = dds->grand_master_capable;
@@ -1731,9 +1746,13 @@ enum servo_state clock_synchronize(struct clock *c,
 		pr_warning("timeline projection failed");
 		return SERVO_UNLOCKED;
 	}
+	
+
 	//ingress = timespec_to_tmv(ingress_ts); 	/* QOT */
 	ingress = timespec_to_tmv(ingress_tml);		/* QOT */
 	origin  = timestamp_to_tmv(origin_ts);
+
+	//pr_info("core %10" PRId64 " tml %10" PRId64 " remote core %10" PRId64, timespec_to_tmv(ingress_ts), ingress, origin);
 
 	c->t1 = origin;
 	c->t2 = ingress;
@@ -1770,7 +1789,7 @@ enum servo_state clock_synchronize(struct clock *c,
 				   tmv_to_nanoseconds(c->master_offset), adj);
 	} else {
 		*/
-		pr_info("timeline clock id: %i master offset %10" PRId64 " s%d freq %+7.0f "
+		pr_info("tid: %i master offset %10" PRId64 " s%d freq %+7.0f "
 			"path delay %9" PRId64,
 			s->tml_clkid,
 			tmv_to_nanoseconds(c->master_offset), state, adj,
@@ -1805,17 +1824,17 @@ enum servo_state clock_synchronize(struct clock *c,
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
 
-		if(s->local_ts && s->ppb){ /* QOT, calculate uncertainty values, provided it is not the first sample */
+		/*if(s->local_ts && s->ppb){ // QOT, calculate uncertainty values, provided it is not the first sample
 			uint64_t disp = ((tmv_to_nanoseconds(ingress) - s->local_ts)/NS_PER_SEC) * s->ppb;
 			add_clock_uncertainty_sample(&s->cu_stats, disp, 
 				tmv_to_nanoseconds(c->master_offset), tmv_to_nanoseconds(c->path_delay));	
 			struct Bound bound; 
 			update_clock_uncertainty(&s->cu_stats, &bound); // Todo: send uncertainty to core
-		}
+		}*/
 		break;
 	}
-		s->local_ts = tmv_to_nanoseconds(ingress);	/* QOT */
-		s->ppb = adj; /* QOT */
+		//s->local_ts = tmv_to_nanoseconds(ingress);	/* QOT */
+		//s->ppb = adj; /* QOT */
 	}
 	return state;
 }
@@ -1960,10 +1979,19 @@ int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec 
 	int fd = CLOCKID_TO_FD(clkid);
 
 	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
-		tml_ts->tv_sec = tp.sec;
-		tml_ts->tv_nsec= tp.asec / NS_PER_SEC;
-		return 0;
+		return -1;
 	}
-	return -1;
+	tml_ts->tv_sec = tp.sec;
+    tml_ts->tv_nsec= tp.asec / NS_PER_SEC;
+	return 0;
+}
+
+void get_core_time(struct clock *c, struct timespec *ts){
+	if(c->sw_ts){
+		if(clock_gettime(c->core_clkid, ts))
+			pr_err("failed to read core clock: %m");
+		//pr_info("core time, sec: %u core time nsec: %lu\n",
+				//(int)ts->tv_sec, ts->tv_nsec);
+	}
 }
 /* QoT_end */ 

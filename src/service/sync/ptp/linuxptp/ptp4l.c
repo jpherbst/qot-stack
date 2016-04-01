@@ -41,6 +41,7 @@ int assume_two_step = 0;
 
 static struct config cfg_settings = {
 	.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces),
+
 	.dds = {
 		.dds = {
 			.flags = DDS_TWO_STEP_FLAG,
@@ -76,6 +77,7 @@ static struct config cfg_settings = {
 		.delay_filter_length = 10,
 		.boundary_clock_jbod = 0,
 	},
+
 	.pod = {
 		.logAnnounceInterval = 1,
 		.logSyncInterval = 0,
@@ -94,16 +96,20 @@ static struct config cfg_settings = {
 		.tx_timestamp_offset = 0,
 		.rx_timestamp_offset = 0,
 	},
+
 	.timestamping = TS_HARDWARE,
 	.dm = DM_P2P,
 	.transport = TRANS_IEEE_802_3,
 	.assume_two_step = &assume_two_step,
 	.tx_timestamp_timeout = &sk_tx_timeout,
 	.check_fup_sync = &sk_check_fupsync,
+
 	.clock_servo = CLOCK_SERVO_PI,
+
 	.step_threshold = &servo_step_threshold,
 	.first_step_threshold = &servo_first_step_threshold,
 	.max_frequency = &servo_max_frequency,
+
 	.pi_proportional_const = &configured_pi_kp,
 	.pi_integral_const = &configured_pi_ki,
 	.pi_proportional_scale = &configured_pi_kp_scale,
@@ -113,10 +119,12 @@ static struct config cfg_settings = {
 	.pi_integral_exponent = &configured_pi_ki_exponent,
 	.pi_integral_norm_max = &configured_pi_ki_norm_max,
 	.ntpshm_segment = &ntpshm_segment,
+
 	.ptp_dst_mac = ptp_dst_mac,
 	.p2p_dst_mac = p2p_dst_mac,
 	.udp6_scope = &udp6_scope,
 	.uds_address = uds_path,
+
 	.print_level = LOG_INFO,
 	.use_syslog = 1,
 	.verbose = 1,
