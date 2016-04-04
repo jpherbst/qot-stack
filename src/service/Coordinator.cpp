@@ -286,7 +286,8 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am starting as master";
 
 		// Pick a new random domain in the interval [0, 127]
-		timeline.domain() = rand() % 128;
+		//timeline.domain() = rand() % 128;
+		timeline.domain() = 0;
 		timeline.master() = timeline.name();
 	}
 	else

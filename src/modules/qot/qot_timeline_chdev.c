@@ -294,11 +294,11 @@ static void qot_binding_del(binding_impl_t *binding_impl)
 static int qot_loc2rem(timeline_impl_t *timeline_impl, int period, s64 *val)
 {
     if (period)
-        *val += ((*val) * timeline_impl->mult);
+        *val += div_s64(timeline_impl->mult * (*val),1000000000ULL);
     else
     {
         *val -= (s64) timeline_impl->last;
-        *val  = timeline_impl->nsec + (*val) + (*val) * timeline_impl->mult;
+        *val  = timeline_impl->nsec + (*val) + div_s64(timeline_impl->mult * (*val),1000000000ULL);
     }
     return 0;
 }
@@ -306,11 +306,11 @@ static int qot_loc2rem(timeline_impl_t *timeline_impl, int period, s64 *val)
 static int qot_rem2loc(timeline_impl_t *timeline_impl, int period, s64 *val)
 {
     if (period)
-        *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1));
+        *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL;
     else
     {
         *val = timeline_impl->last 
-             + div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1));
+             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);
     }
     return 0;
 }
@@ -440,8 +440,9 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
         err = qot_timeline_chdev_adj_adjtime(pc, delta);
     } else if (tx->modes & ADJ_FREQUENCY) {
         s32 ppb = qot_timeline_chdev_ppm_to_ppb(tx->freq);
-        if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
-            return -ERANGE;
+        pr_info("Fatima: adjfreq %d\n", ppb);
+        //if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
+            //return -ERANGE;
         err = qot_timeline_chdev_adj_adjfreq(pc, ppb);
         timeline_impl->dialed_frequency = tx->freq;
     } else if (tx->modes == 0) {
@@ -493,19 +494,19 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     /* Get information about this timeline's requirements */
     case TIMELINE_GET_BINDING_INFO:
         // find the binding with minimum resolution (need to satisfy tightest req.)
-        binding_impl = list_entry(&timeline_impl->head_res, binding_impl_t, list_res);
+        binding_impl = list_entry((&timeline_impl->head_res)->next, binding_impl_t, list_res);
         msgb.demand.resolution = binding_impl->info.demand.resolution;
         if (!binding_impl)
             return -EACCES;
 
         // find the binding with minimum lower accuracy (need to satisfy tightest req.)
-        binding_impl = list_entry(&timeline_impl->head_low, binding_impl_t, list_low);
+        binding_impl = list_entry((&timeline_impl->head_low)->next, binding_impl_t, list_low);
         msgb.demand.accuracy.below = binding_impl->info.demand.accuracy.below;
         if (!binding_impl)
             return -EACCES;
 
         // find the binding with minimum upper accuracy (need to satisfy tightest req.)
-        binding_impl = list_entry(&timeline_impl->head_upp, binding_impl_t, list_upp);
+        binding_impl = list_entry((&timeline_impl->head_upp)->next, binding_impl_t, list_upp);
         msgb.demand.accuracy.above = binding_impl->info.demand.accuracy.above;
         if (!binding_impl)
             return -EACCES;
@@ -578,7 +579,11 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
 
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(tp);
+        pr_info("qot_timeline_chdev: Fatima: core time nsec %llu\n", coretime);
+
         qot_loc2rem(timeline_impl, 0, &coretime);
+        pr_info("qot_timeline_chdev: Fatima: timeline time nsec %llu\n", coretime);
+
         TP_FROM_nSEC(tp, coretime);
 
         if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
@@ -717,6 +722,14 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 		goto fail_sysfs;
 	}
     
+    /* added by Fatima START */
+    // NEED TO INITIALIZE SYNC PARAMETERS
+    timeline_impl->mult = 0;
+    timeline_impl->last = 0;
+    timeline_impl->nsec = 0;
+    timeline_impl->dialed_frequency = 0;
+    timeline_impl->max_adj = 1000000;
+    /* added by Fatima END */
 
     timeline_impl->info->index = timeline_impl->index;
 
