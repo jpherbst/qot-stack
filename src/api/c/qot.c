@@ -277,7 +277,7 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
     clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
 
     // Get the core time
-    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, core_now) < 0)
+    if(ioctl(timeline->fd, TIMELINE_GET_CORE_TIME_NOW, core_now) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
@@ -295,16 +295,12 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est)
 
     // Convert the file descriptor to a clock handle
     clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
-    // // Get the core time
-    // if(ioctl(clk, TIMELINE_GET_TIME_NOW, est) < 0)
-    // {
-    //     return QOT_RETURN_TYPE_ERR;
-    // }
-    // Convert to remote timeline time
-    if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
+    // Get the timeline time
+    if(ioctl(clk, TIMELINE_GET_TIME_NOW, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    
     return QOT_RETURN_TYPE_OK;
 }
 

@@ -478,16 +478,15 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
 {    
     utimepoint_t utp;
     qot_binding_t msgb;
-    //utimepoint_t msgu;
     timepoint_t tp;
     s64 coretime;
+    s64 loctime;
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
     utimepoint_t wait_until_time;
     int wait_until_retval;
 
-    //pr_info("qot_timeline_chdev: in qot_timeline_chdev_ioctl by task %d\n", current->pid);
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -553,10 +552,6 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (!binding_impl)
             return -EACCES;
         pr_info("qot_timeline_chdev: Unbinding from timeline\n");
-
-        //  Check if the task calling actually owns the biding and is not spoofing another tasks binding id 
-        // if(binding_impl->pid != current->pid)
-        //     return -EACCES;
         qot_binding_del(binding_impl);
         break;
     /* Update binding parameters */
@@ -599,21 +594,35 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_from_user(&tp, (timepoint_t*)arg, sizeof(timepoint_t)))
             return -EACCES;
 
-        // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(tp);
-        qot_rem2loc(timeline_impl->index, 0, &coretime);
-        TP_FROM_nSEC(tp, coretime);
+        // convert from timeline reference to core of time
+        loctime = TP_TO_nSEC(tp);
+        qot_rem2loc(timeline_impl->index, 0, &loctime);
+        TP_FROM_nSEC(tp, loctime);
 
         if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
             return -EACCES;
         break;
     /* Get the current core time */
-    case TIMELINE_GET_TIME_NOW:
-    	//pr_info("qot_timeline_chdev: Task %d trying to reading time\n", current->pid);
-
+    case TIMELINE_GET_CORE_TIME_NOW:
         if (qot_clock_get_core_time(&utp))
     		return -EACCES;
-        //pr_info("qot_timeline_chdev: Task %d reading time\n", current->pid);
+        // TODO: Latency estimates are not being added for now...
+        /* Add the latency due to the OS query */
+        //qot_admin_add_latency(&utp);
+        /* Add the latency due to the CORE clock */
+        //qot_tsync_add_latency(&msgu.interval);
+        /* Add the latency due to the CORE clock */
+        if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
+            return -EACCES;
+        break;
+    /* Get the current timeline time */
+    case TIMELINE_GET_TIME_NOW:
+        if (qot_clock_get_core_time(&utp))
+            return -EACCES;
+        // convert from core time to timeline reference of time
+        coretime = TP_TO_nSEC(utp.estimate);
+        qot_loc2rem(timeline_impl->index, 0, &coretime);
+        TP_FROM_nSEC(utp.estimate, coretime);
         // TODO: Latency estimates are not being added for now...
         /* Add the latency due to the OS query */
         //qot_admin_add_latency(&utp);
@@ -628,9 +637,15 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         // Get the parameters passed into the ioctl
         if (copy_from_user(&wait_until_time, (utimepoint_t*)arg, sizeof(utimepoint_t)))
             return -EACCES;
-        //pr_info("qot_timeline_chdev: Task %d called wait until @ %lld %llu\n", current->pid, utp.estimate.sec, utp.estimate.asec);
         wait_until_retval = qot_attosleep(&wait_until_time, timeline_impl->info);
         qot_clock_get_core_time(&wait_until_time);
+        // convert from core time to timeline reference of time
+        coretime = TP_TO_nSEC(wait_until_time.estimate);
+        qot_loc2rem(timeline_impl->index, 0, &coretime);
+        TP_FROM_nSEC(wait_until_time.estimate, coretime);
+        /* Send the time at which the node woke up back to user */
+        if (copy_to_user((utimepoint_t*)arg, &wait_until_time, sizeof(utimepoint_t)))
+            return -EACCES;
         return wait_until_retval;
         break;
     }
