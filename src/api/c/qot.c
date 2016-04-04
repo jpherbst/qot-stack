@@ -33,12 +33,13 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 /* This file includes */
 #include "qot.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -265,7 +266,7 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 {
     clockid_t clk;
 
-    printf("/dev/timeline%d\n", timeline->info.index);
+    //printf("/dev/timeline%d\n", timeline->info.index);
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;

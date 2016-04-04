@@ -291,8 +291,13 @@ static void qot_binding_del(binding_impl_t *binding_impl)
 
 // BASIC TIME PROJECTION FUNCTIONS /////////////////////////////////////////////
 
-static int qot_loc2rem(timeline_impl_t *timeline_impl, int period, s64 *val)
+qot_return_t qot_loc2rem(int index, int period, s64 *val)
 {
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
+    
+    if(timeline_impl == NULL)
+        return QOT_RETURN_TYPE_ERR;
+
     if (period)
         *val += ((*val) * timeline_impl->mult);
     else
@@ -300,11 +305,16 @@ static int qot_loc2rem(timeline_impl_t *timeline_impl, int period, s64 *val)
         *val -= (s64) timeline_impl->last;
         *val  = timeline_impl->nsec + (*val) + (*val) * timeline_impl->mult;
     }
-    return 0;
+    return QOT_RETURN_TYPE_OK;
 }
 
-static int qot_rem2loc(timeline_impl_t *timeline_impl, int period, s64 *val)
+qot_return_t qot_rem2loc(int index, int period, s64 *val)
 {
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
+    
+    if(timeline_impl == NULL)
+        return QOT_RETURN_TYPE_ERR;
+
     if (period)
         *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1));
     else
@@ -312,7 +322,7 @@ static int qot_rem2loc(timeline_impl_t *timeline_impl, int period, s64 *val)
         *val = timeline_impl->last 
              + div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1));
     }
-    return 0;
+    return QOT_RETURN_TYPE_OK;
 }
 
 /* Dicipline operations */
@@ -578,7 +588,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
 
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(tp);
-        qot_loc2rem(timeline_impl, 0, &coretime);
+        qot_loc2rem(timeline_impl->index, 0, &coretime);
         TP_FROM_nSEC(tp, coretime);
 
         if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
@@ -591,7 +601,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
 
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(tp);
-        qot_rem2loc(timeline_impl, 0, &coretime);
+        qot_rem2loc(timeline_impl->index, 0, &coretime);
         TP_FROM_nSEC(tp, coretime);
 
         if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
@@ -620,7 +630,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         //pr_info("qot_timeline_chdev: Task %d called wait until @ %lld %llu\n", current->pid, utp.estimate.sec, utp.estimate.asec);
         wait_until_retval = qot_attosleep(&wait_until_time, timeline_impl->info);
-        qot_clock_add_core_interrupt_latency(&wait_until_time);
+        qot_clock_get_core_time(&wait_until_time);
         return wait_until_retval;
         break;
     }

@@ -89,6 +89,9 @@ static int qot_timeline_event_add(struct rb_root *head, struct timeline_sleeper 
 static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline *timeline)
 {
 	timepoint_t remote_time;
+	// s64 nsec_time = TP_TO_nSEC(core_time);
+ //    qot_loc2rem(timeline->index, 0, &nsec_time);
+ //    TP_FROM_nSEC(remote_time, nsec_time);
 	remote_time = core_time;
 	return remote_time;
 }
@@ -97,6 +100,9 @@ static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline
 static timepoint_t qot_remote_to_core(timepoint_t remote_time, struct qot_timeline *timeline)
 {
 	timepoint_t core_time;
+	// s64 nsec_time = TP_TO_nSEC(remote_time);
+ //    qot_rem2loc(timeline->index, 0, &nsec_time);
+ //    TP_FROM_nSEC(core_time, nsec_time);
 	core_time = remote_time;
 	return core_time;
 }

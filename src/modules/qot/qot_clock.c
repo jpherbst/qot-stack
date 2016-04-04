@@ -34,6 +34,7 @@
 #include <linux/rbtree.h>
 
 #include "qot_clock.h"
+#include "qot_admin.h"
 
 /* Private data */
 
@@ -101,7 +102,8 @@ qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
     TL_FROM_uSEC(utp->interval.below, 0);
     TL_FROM_uSEC(utp->interval.above, 0);
     /* Add the uncertainty to the measurement */
-    utimepoint_add(utp, &core->impl.info.read_latency);
+    // utimepoint_add(utp, &core->impl.info.read_latency);
+    qot_admin_add_latency(utp);
     /* Success */
     return QOT_RETURN_TYPE_OK;
 }

@@ -236,14 +236,14 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (qot_clock_switch(&msgc))
             return -EACCES;
         break;
-    /* Switch core to a specific clock */
+    /* Set OS Latency */
     case QOTADM_SET_OS_LATENCY:
         if (copy_from_user(&msgt, (utimelength_t*)arg, sizeof(utimelength_t)))
             return -EACCES;
         if (qot_admin_set_latency(&msgt))
             return -EACCES;
         break;
-    /* Switch core to a specific clock */
+    /* Get OS Latency */
     case QOTADM_GET_OS_LATENCY:
         if (qot_admin_get_latency(&msgt))
             return -EACCES;
