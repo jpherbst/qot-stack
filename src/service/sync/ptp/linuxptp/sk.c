@@ -280,6 +280,7 @@ int sk_receive(int fd, void *buf, int buflen,
 		memset(&hwts->ts, 0, sizeof(hwts->ts));
 		return cnt;
 	}
+
 	switch (hwts->type) {
 	case TS_SOFTWARE:
 		hwts->ts = ts[0];

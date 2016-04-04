@@ -171,12 +171,12 @@ qot_return_t timeline_unbind(timeline_t *timeline)
     // Try to destroy the timeline if possible (will destroy if no other bindings exist)
     if(ioctl(timeline->qotusr_fd, QOTUSR_DESTROY_TIMELINE, &timeline->info) == 0)
     {
-        if(DEBUG)
+       // if(DEBUG)
             printf("Timeline %d destroyed\n", timeline->info.index);
     }
     else
     {
-        if(DEBUG)
+       // if(DEBUG)
             printf("Timeline %d not destroyed\n", timeline->info.index);
     }
 

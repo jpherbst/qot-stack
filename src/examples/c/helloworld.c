@@ -74,12 +74,12 @@ int main(int argc, char *argv[])
 {
 	// Variable declaration
 	timeline_t *my_timeline;
-	qot_binding_t b;
+	timelength_t res;
 	qot_return_t retval;
 	utimepoint_t est_now;
 	timelength_t step_size;
-	timelength_t resolution = { .sec = 0, .asec = ASEC_PER_NSEC };
-	timeinterval_t accuracy = { .below.sec = 0, .below.asec = ASEC_PER_NSEC, .above.sec = 0, .above.asec = 10*ASEC_PER_NSEC };
+	timelength_t resolution = { .sec = 0, .asec = 1000000000 };
+	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1000000000, .above.sec = 0, .above.asec = 10000000000 };
 
 	// Allow this to go on for a while
 	int n = NUM_ITERATIONS;
@@ -118,6 +118,9 @@ int main(int argc, char *argv[])
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
+	
+	timeline_get_resolution(my_timeline, &res);
+	printf("timeline_get_resolution:  %lld %llu\n", res.sec, res.asec);
 
 	for (i = 0; i < n; i++)
 	{
