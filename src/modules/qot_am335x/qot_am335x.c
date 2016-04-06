@@ -843,6 +843,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pr_info("qot_am335x: Creating core time counter...\n");
 	pdata->cc.read = qot_am335x_read;
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
+	pdata->cc_mult = 2796202667UL;
 	pdata->cc.mult = 2796202667UL;
 	pdata->cc.shift = 26;
 	spin_lock_irqsave(&pdata->lock, flags);
