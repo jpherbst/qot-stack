@@ -348,7 +348,7 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
-    timeline_impl->mult += ppb;
+    timeline_impl->mult = ppb;
     timeline_impl->last  = ns;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     qot_scheduler_update(timeline_impl->info);
