@@ -319,8 +319,13 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
         *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL;
     else
     {
-        *val = timeline_impl->last 
-             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);
+        u32 rem;
+        u64 diff = (u64)(*val - timeline_impl->nsec);
+        u64 quot = div_u64_rem(diff, (timeline_impl->mult + 1000000000ULL), &rem);
+        *val = timeline_impl->last + (quot * 1000000000ULL) + rem; 
+
+        /**val = timeline_impl->last 
+             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);*/
     }
     return QOT_RETURN_TYPE_OK;
 }
@@ -342,7 +347,7 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
-    timeline_impl->mult += ppb;
+    timeline_impl->mult = ppb;
     timeline_impl->last  = ns;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
