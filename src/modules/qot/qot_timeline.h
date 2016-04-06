@@ -134,5 +134,26 @@ void qot_timeline_sysfs_cleanup(struct device *qot_device);
  **/
 qot_return_t qot_timeline_sysfs_init(struct device *qot_device);
 
+// BASIC TIME PROJECTION FUNCTIONS /////////////////////////////////////////////
+
+/**
+ * @brief Convert Local Core time to remote timeline time
+ * @param index Timeline index
+ * @param period Period ?
+ * @param val Pointer to a time value in ns 
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_loc2rem(int index, int period, s64 *val);
+
+/**
+ * @brief Convert Remote Timeline time to core time
+ * @param index Timeline index
+ * @param period Period ?
+ * @param val Pointer to a time value in ns 
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_rem2loc(int index, int period, s64 *val);
+
+
 
 #endif

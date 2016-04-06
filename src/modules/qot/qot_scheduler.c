@@ -89,7 +89,11 @@ static int qot_timeline_event_add(struct rb_root *head, struct timeline_sleeper 
 static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline *timeline)
 {
 	timepoint_t remote_time;
-	remote_time = core_time;
+	s64 nsec_time = TP_TO_nSEC(core_time);
+    qot_loc2rem(timeline->index, 0, &nsec_time);
+    TP_FROM_nSEC(remote_time, nsec_time);
+    // pr_info("qot_scheduler: core_to_remote: core time = %lld %llu, remote_time = %lld %llu\n", core_time.sec, core_time.asec, remote_time.sec, remote_time.asec);
+	//remote_time = core_time;
 	return remote_time;
 }
 
@@ -97,7 +101,13 @@ static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline
 static timepoint_t qot_remote_to_core(timepoint_t remote_time, struct qot_timeline *timeline)
 {
 	timepoint_t core_time;
-	core_time = remote_time;
+	s64 nsec_time = TP_TO_nSEC(remote_time);
+	//pr_info("qot_scheduler: remote_to_core: nsec_time %llu\n", nsec_time);
+    qot_rem2loc(timeline->index, 0, &nsec_time);
+    //pr_info("qot_scheduler: remote_to_core: core nsec_time %llu\n", nsec_time);
+    TP_FROM_nSEC(core_time, nsec_time);
+    //pr_info("qot_scheduler: remote_to_core: core time = %lld %llu, remote_time = %lld %llu\n", core_time.sec, core_time.asec, remote_time.sec, remote_time.asec);
+	//core_time = remote_time;
 	return core_time;
 }
 
@@ -324,13 +334,12 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
      __set_current_state(TASK_RUNNING);
     return 0;
 }
-EXPORT_SYMBOL(qot_attosleep);
 
 /* Updates timeline nodes waiting on a queue when a time change happens, called by the set_time adj_time functions*/
-void qot_scheduler_update(void)
+void qot_scheduler_update(qot_timeline_t *timeline)
 {
-	qot_return_t retval;
-	qot_timeline_t *timeline = NULL;	
+	// qot_return_t retval;
+	// qot_timeline_t *timeline = NULL;	
 	struct rb_root *timeline_root = NULL;	
 	struct rb_node *timeline_node = NULL;
 	struct timeline_sleeper *sleeping_task;	
@@ -339,11 +348,11 @@ void qot_scheduler_update(void)
 
 	timepoint_t expires_next = next_interrupt_callback;
 
-	retval = qot_timeline_first(&timeline);
+	//retval = qot_timeline_first(&timeline);
 	
-	// Iterate over all the timelines to find earliest reprogramming instant
-	while(retval != QOT_RETURN_TYPE_ERR)
-	{
+	// Check the first node of a timeline if it needs to be woken up due to change in time
+	// while(retval != QOT_RETURN_TYPE_ERR)
+	// {
 		spin_lock_irqsave(&timeline->rb_lock, flags);
 		timeline_root = &timeline->event_head;
 		timeline_node = rb_first(timeline_root);
@@ -359,10 +368,10 @@ void qot_scheduler_update(void)
 		}
 		spin_unlock_irqrestore(&timeline->rb_lock, flags);
 
-		retval = qot_timeline_next(&timeline);
-		if(retval == QOT_RETURN_TYPE_ERR)
-			break;
-	}
+	// 	retval = qot_timeline_next(&timeline);
+	// 	if(retval == QOT_RETURN_TYPE_ERR)
+	// 		break;
+	// }
 
 	if(expires_next.sec < 0)
 		expires_next.sec = 0;
@@ -374,7 +383,6 @@ void qot_scheduler_update(void)
 	spin_unlock_irqrestore(&qot_scheduler_lock, flags);
 	return;
 }
-EXPORT_SYMBOL(qot_scheduler_update);
 
 /* Cleanup the timeline subsystem */
 void qot_scheduler_cleanup(struct class *qot_class)

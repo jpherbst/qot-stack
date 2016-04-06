@@ -36,7 +36,7 @@
 int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline);
 
 /* Update tasks that are blocking when the notion of time changes */
-void qot_scheduler_update(void);
+void qot_scheduler_update(qot_timeline_t *timeline);
 
 /* Cleanup the timeline subsystem */
 void qot_scheduler_cleanup(struct class *qot_class);

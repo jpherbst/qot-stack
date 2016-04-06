@@ -594,7 +594,7 @@ void clkev_configure(struct clock_event_device *dev, u32 freq)
 // Programs the Sched Timer Interrupt
 static int qot_am335x_sched_interface_program_interrupt(unsigned long cycles)
 {
-	omap_dm_timer_stop(*sched_timer);
+	//omap_dm_timer_stop(*sched_timer);
 	omap_dm_timer_set_load_start(*sched_timer, 0, 0xffffffff - cycles);
 	return 0;
 }
