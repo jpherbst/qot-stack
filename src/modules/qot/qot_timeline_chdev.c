@@ -316,16 +316,22 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
         return QOT_RETURN_TYPE_ERR;
 
     if (period)
-        *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL;
+        *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
     else
     {
-        *val = timeline_impl->last 
-             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);
+        u32 rem;
+        u64 diff = (u64)(*val - timeline_impl->nsec);
+        u64 quot = div_u64_rem(diff, (timeline_impl->mult + 1000000000ULL), &rem);
+        *val = timeline_impl->last + (quot * 1000000000ULL) + rem; 
+
+        /**val = timeline_impl->last 
+             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);*/
     }
+
     return QOT_RETURN_TYPE_OK;
 }
 
-/* Dicipline operations */
+/* Discipline operations */
 
 static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
 {
@@ -345,6 +351,7 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     timeline_impl->mult += ppb;
     timeline_impl->last  = ns;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
+    qot_scheduler_update(timeline_impl->info);
     return 0;
 }
 
@@ -366,6 +373,7 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
     timeline_impl->last = ns;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
+    qot_scheduler_update(timeline_impl->info);
     return 0;
 }
 
@@ -405,6 +413,7 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     timeline_impl->last = ns;
     timeline_impl->nsec = timespec_to_ns(tp);
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
+    qot_scheduler_update(timeline_impl->info);
     return 0;
 }
 

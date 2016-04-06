@@ -76,7 +76,7 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
 {
     char qot_timeline_filename[15];
     int usr_file;
-    clockid_t clk;
+    
 
     // Check to make sure the UUID is valid
     if (strlen(uuid) > QOT_MAX_NAMELEN)
@@ -121,8 +121,8 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
         return QOT_RETURN_TYPE_ERR;
     }
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
     if (DEBUG) 
         printf("Opened clock %s\n", qot_timeline_filename);
     // Populate Binding fields
@@ -151,12 +151,12 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
 
 qot_return_t timeline_unbind(timeline_t *timeline) 
 {
-    clockid_t clk;
+    
     
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     // Unbind from the timeline
     if(ioctl(timeline->fd, TIMELINE_BIND_LEAVE, &timeline->binding) < 0)
@@ -220,15 +220,15 @@ qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid)
 
 qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc) 
 {
-    clockid_t clk;
+    
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
 
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     timeline->binding.demand.accuracy = *acc;
     // Update the binding
@@ -242,15 +242,15 @@ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc)
 
 qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res) 
 {
-    clockid_t clk;
+    
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     timeline->binding.demand.resolution = *res;
     // Update the binding
@@ -264,7 +264,7 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
 
 qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 {
-    clockid_t clk;
+    
 
     //printf("/dev/timeline%d\n", timeline->info.index);
 
@@ -273,8 +273,8 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     // Get the core time
     if(ioctl(timeline->fd, TIMELINE_GET_CORE_TIME_NOW, core_now) < 0)
@@ -286,17 +286,17 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 
 qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
 { 
-    clockid_t clk;
+    
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
     // Get the timeline time
-    if(ioctl(clk, TIMELINE_GET_TIME_NOW, est) < 0)
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
@@ -321,15 +321,15 @@ qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
 
 qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) 
 {
-    clockid_t clk;
+    
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     if(DEBUG)
         printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
@@ -345,7 +345,7 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
 
 qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl) 
 {
-    clockid_t clk;
+    
     utimepoint_t utp;
 
     if(!timeline)
@@ -353,8 +353,8 @@ qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl)
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
-    // Convert the file descriptor to a clock handle
-    clk = ((~(clockid_t) (timeline->fd) << 3) | 3);
+    
+    
 
     // Convert timelength to a timepoint
     utp.interval =  utl->interval;
