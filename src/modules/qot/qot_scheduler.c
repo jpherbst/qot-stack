@@ -92,7 +92,7 @@ static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline
 	s64 nsec_time = TP_TO_nSEC(core_time);
     qot_loc2rem(timeline->index, 0, &nsec_time);
     TP_FROM_nSEC(remote_time, nsec_time);
-    pr_info("qot_scheduler: core_to_remote: core time = %lld %llu, remote_time = %lld %llu\n", core_time.sec, core_time.asec, remote_time.sec, remote_time.asec);
+    // pr_info("qot_scheduler: core_to_remote: core time = %lld %llu, remote_time = %lld %llu\n", core_time.sec, core_time.asec, remote_time.sec, remote_time.asec);
 	//remote_time = core_time;
 	return remote_time;
 }
