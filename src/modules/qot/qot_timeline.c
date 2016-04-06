@@ -53,7 +53,7 @@ spinlock_t qot_timeline_lock;
 static timeline_t *qot_timeline_find(char *name)
 {
     int result;
-    unsigned long flags;
+    // unsigned long flags;
     timeline_t *timeline = NULL;
     struct rb_node *node = qot_timeline_root.rb_node;
     //spin_lock_irqsave(&qot_timeline_lock, flags);
