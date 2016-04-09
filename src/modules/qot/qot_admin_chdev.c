@@ -37,6 +37,7 @@
 
 #include "qot_admin.h"
 #include "qot_clock.h"
+#include "qot_timeline.h"
 
 #define DEVICE_NAME "qotadm"
 
@@ -131,7 +132,7 @@ static int qot_admin_chdev_con_remove(qot_admin_chdev_con_t *con)
 /* chardev ioctl open callback implementation */
 static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
 {
-    qot_clock_t *clk;
+    qot_clock_t clk;
     event_t *event;
 
     /* Create a new connection */
@@ -150,8 +151,7 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
     qot_admin_chdev_con_insert(con);
 
     /* Notify the connection (by polling) of all existing timelines */
-    clk = NULL;
-    if (qot_clock_first(clk)==QOT_RETURN_TYPE_OK) {
+    if (qot_clock_first(&clk)==QOT_RETURN_TYPE_OK) {
         do {
             event = kzalloc(sizeof(event_t), GFP_KERNEL);
             if (!event) {
@@ -159,9 +159,9 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
                 continue;
             }
             event->info.type = QOT_EVENT_CLOCK_CREATE;
-            strncpy(event->info.data,clk->name,QOT_MAX_NAMELEN);
+            strncpy(event->info.data,clk.name,QOT_MAX_NAMELEN);
             list_add_tail(&event->list, &con->event_list);
-        } while (qot_clock_next(clk)==QOT_RETURN_TYPE_OK);
+        } while (qot_clock_next(&clk)==QOT_RETURN_TYPE_OK);
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
     }
@@ -189,6 +189,7 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
     qot_event_t msge;
     qot_clock_t msgc;
     utimelength_t msgt;
+    timepoint_t msgtp;
     qot_admin_chdev_con_t *con = qot_admin_chdev_con_search(f);
     if (!con)
         return -EACCES;
@@ -236,18 +237,25 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (qot_clock_switch(&msgc))
             return -EACCES;
         break;
-    /* Set OS Latency */
+    /* Set OS Clock Read Latency */
     case QOTADM_SET_OS_LATENCY:
         if (copy_from_user(&msgt, (utimelength_t*)arg, sizeof(utimelength_t)))
             return -EACCES;
         if (qot_admin_set_latency(&msgt))
             return -EACCES;
         break;
-    /* Get OS Latency */
+    /* Get OS Clock Read Latency */
     case QOTADM_GET_OS_LATENCY:
         if (qot_admin_get_latency(&msgt))
             return -EACCES;
         if (copy_to_user((utimelength_t*)arg, &msgt, sizeof(utimelength_t)))
+            return -EACCES;
+        break;
+    /* Returns Core time without any uncertainity estimates */
+    case QOTADM_GET_CORE_TIME_RAW:
+        if (qot_clock_get_core_time_raw(&msgtp))
+            return -EACCES;
+        if (copy_to_user((timepoint_t*)arg, &msgtp, sizeof(timepoint_t)))
             return -EACCES;
         break;
     default:

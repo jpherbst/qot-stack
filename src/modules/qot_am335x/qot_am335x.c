@@ -49,7 +49,7 @@
 #include <linux/ptp_clock_kernel.h>
 
 /*QoT Core Clock Registration*/
-#include "../qot/qot_core.h"
+#include "qot_core.h"
 
 /* DMTimer Code specific to the AM335x */
 #include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
@@ -93,7 +93,7 @@ struct qot_am335x_channel {
 };
 
 struct qot_am335x_data {
-	spinlock_t lock;						/* Protects timer registers */
+	raw_spinlock_t lock;					/* Protects timer registers */
 	struct qot_am335x_channel  core;		/* Timer channel (core) */
 	struct qot_am335x_channel *pins;		/* Timer channel (GPIO) */
 	int num_pins;							/* Number of pins */
@@ -197,8 +197,8 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
 			return -EINVAL;
-
-		spin_lock_irqsave(&channel->parent->lock, flags);
+		pr_info("qot_am335x_perout:\n");
+		raw_spin_lock_irqsave(&channel->parent->lock, flags);
 
 		/* Work out the cycle count corresponding to this edge */
 		ts = ts - channel->parent->tc.nsec;
@@ -211,7 +211,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		tp = div_u64((tp << channel->parent->cc.shift)
 			+ channel->parent->tc.frac, channel->parent->cc.mult);
 
-		spin_unlock_irqrestore(&channel->parent->lock, flags);
+		raw_spin_unlock_irqrestore(&channel->parent->lock, flags);
 
 		/* Map to an offset, load and match */
 		offset = tc; 		// (start)
@@ -320,7 +320,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 	unsigned int irq_status;
 	struct ptp_clock_event pevent;
 	struct qot_am335x_channel *channel = data;
-	spin_lock_irqsave(&channel->parent->lock, flags);
+	raw_spin_lock_irqsave(&channel->parent->lock, flags);
 	irq_status = omap_dm_timer_read_status(channel->timer);
 	switch (channel->state.type) {
 	case PTP_CLK_REQ_EXTTS:
@@ -346,7 +346,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 		break;
 	}
 	__omap_dm_timer_write_status(channel->timer, irq_status);
-	spin_unlock_irqrestore(&channel->parent->lock, flags);
+	raw_spin_unlock_irqrestore(&channel->parent->lock, flags);
 	return IRQ_HANDLED;
 }
 
@@ -368,10 +368,10 @@ static int qot_am335x_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
 	adj = mult;
 	adj *= ppb;
 	diff = div_u64(adj, 1000000000ULL);
-	spin_lock_irqsave(&pdata->lock, flags);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_read(&pdata->tc);
 	pdata->cc.mult = neg_adj ? mult - diff : mult + diff;
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	return 0;
 }
 
@@ -380,9 +380,9 @@ static int qot_am335x_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	unsigned long flags;
 	struct qot_am335x_data *pdata = container_of(
         ptp, struct qot_am335x_data, info);
-	spin_lock_irqsave(&pdata->lock, flags);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_adjtime(&pdata->tc, delta);
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	return 0;
 }
 
@@ -392,9 +392,9 @@ static int qot_am335x_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	unsigned long flags;
 	struct qot_am335x_data *pdata = container_of(
     	ptp, struct qot_am335x_data, info);
-	spin_lock_irqsave(&pdata->lock, flags);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
 	ns = timecounter_read(&pdata->tc);
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	*ts = ns_to_timespec64(ns);
 	return 0;
 }
@@ -406,12 +406,13 @@ static timepoint_t qot_am335x_read_time(void)
 	unsigned long flags;
 	struct qot_am335x_data *pdata;
 	pdata = qot_am335x_data_ptr;
-	spin_lock_irqsave(&pdata->lock, flags);
-	ns = timecounter_read(&pdata->tc);
-	spin_unlock_irqrestore(&pdata->lock, flags);
-	//pr_info("qot_am335x_read_time: time is %llu %llu\n", div_u64(ns, 1000000000ULL), ns - NSEC_PER_SEC*div_u64(ns, 1000000000ULL));
 
+	raw_spin_lock_irqsave(&pdata->lock, flags);
+	ns = timecounter_read(&pdata->tc);
+	//pr_info("qot_am335x_read_time: time is %llu %llu\n", div_u64(ns, 1000000000ULL), ns - NSEC_PER_SEC*div_u64(ns, 1000000000ULL));
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	TP_FROM_nSEC(time_now, (s64)ns);
+
 	//pr_info("qot_am335x_read_time: time is %lld %llu\n", time_now.sec, time_now.asec);
 	return time_now;
 }
@@ -424,9 +425,9 @@ static int qot_am335x_settime(struct ptp_clock_info *ptp,
 	struct qot_am335x_data *pdata = container_of(
         ptp, struct qot_am335x_data, info);
 	ns = timespec64_to_ns(ts);
-	spin_lock_irqsave(&pdata->lock, flags);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_init(&pdata->tc, &pdata->cc, ns);
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	return 0;
 }
 
@@ -594,7 +595,6 @@ void clkev_configure(struct clock_event_device *dev, u32 freq)
 // Programs the Sched Timer Interrupt
 static int qot_am335x_sched_interface_program_interrupt(unsigned long cycles)
 {
-	//omap_dm_timer_stop(*sched_timer);
 	omap_dm_timer_set_load_start(*sched_timer, 0, 0xffffffff - cycles);
 	return 0;
 }
@@ -618,14 +618,37 @@ static int clkev_program_event(struct clock_event_device *dev, u64 delta)
 }
 
 // Interface function to qot_core, used to program the scheduler interface interrupt using a timepoint_t value
-static long qot_am335x_program_sched_interrupt(timepoint_t expiry, long (*callback)(void))
+static long qot_am335x_program_sched_interrupt(timepoint_t expiry, int force, long (*callback)(void))
 {
 	int retval;
+	unsigned long flags;
 	struct qot_am335x_sched_interface *interface;
 	u64 ns;
+	u64 expiry_ns;
+	struct qot_am335x_data *pdata;
+	pdata = qot_am335x_data_ptr;
 	interface = container_of(sched_timer, struct qot_am335x_sched_interface, timer);
-	//pr_info("qot_am335x: program interrupt timepoint_t %lld %llu ns %llu \n", expiry.sec, expiry.asec, TP_TO_nSEC(expiry));
-	ns = TP_TO_nSEC(expiry) - timecounter_read(&interface->parent->tc);
+	expiry_ns = TP_TO_nSEC(expiry);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
+	ns = timecounter_read(&interface->parent->tc);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
+	
+	// Check if expiry is not behind current time Else return error code
+	if(expiry_ns > ns + interface->qot_clockevent.min_delta_ns)
+	{
+		ns = expiry_ns - ns;
+	}
+	else
+	{
+		if(force == 1)
+		{
+			ns = interface->qot_clockevent.min_delta_ns;
+		}
+		else
+		{
+			return 1;
+		}
+	}
 	interface->callback = callback;
 	retval = clkev_program_event(&interface->qot_clockevent, ns);
 	return retval;
@@ -643,8 +666,6 @@ static irqreturn_t qot_am335x_sched_interface_interrupt(int irq, void *data)
 {
 	struct qot_am335x_sched_interface *interface = data;
 	omap_dm_timer_write_status(interface->timer, OMAP_TIMER_INT_OVERFLOW);
-	//pr_info("Interrupt Trigerred at %llu\n", timecounter_read(&interface->parent->tc));
-	//clkev_program_event(&interface->qot_clockevent, 5*NSEC_PER_SEC);
 	interface->callback();
 	return IRQ_HANDLED;
 }
@@ -666,7 +687,6 @@ static int qot_am335x_core_sched(struct qot_am335x_sched_interface *interface, i
 		interface->qot_clockevent.max_delta_ticks = 0xffffffff;
 		pr_info("qot_am335x: Configure Clockevent device\n");
 		clkev_configure(&interface->qot_clockevent, timer->rate);
-		//clkev_program_event(&interface->qot_clockevent, 10*NSEC_PER_SEC);
 		break;
 	case EVENT_STOP:
 		omap_dm_timer_set_int_disable(timer, OMAP_TIMER_INT_OVERFLOW);
@@ -791,7 +811,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 	/* Initialize spin lock for protecting time registers */
 	pr_info("qot_am335x: Initializing spinlock...\n");
-	spin_lock_init(&pdata->lock);
+	raw_spin_lock_init(&pdata->lock);
 
 	/* Setup core timer */
 	nodec = pdev->dev.of_node;
@@ -843,12 +863,11 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pr_info("qot_am335x: Creating core time counter...\n");
 	pdata->cc.read = qot_am335x_read;
 	pdata->cc.mask = CLOCKSOURCE_MASK(32);
-	pdata->cc_mult = 2796202667UL;
 	pdata->cc.mult = 2796202667UL;
 	pdata->cc.shift = 26;
-	spin_lock_irqsave(&pdata->lock, flags);
+	raw_spin_lock_irqsave(&pdata->lock, flags);
 	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
-	spin_unlock_irqrestore(&pdata->lock, flags);
+	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 
 	/* Register a Timer to drive the Scheduler Interface */
 	phand = of_get_property(nodec, "sched", NULL);

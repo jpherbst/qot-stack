@@ -47,7 +47,6 @@ typedef struct timeline {
     qot_binding_t binding;   /* Basic binding info                       */
     int fd;                 /* File descriptor to /dev/timelineX ioctl  */
     int qotusr_fd;          /* File descriptor to /dev/qotusr ioctl     */
-    //pthread_t thread;     /* Thread to poll on fd                     */
 } timeline_t;
 
 /* Is the given timeline a valid one */
@@ -321,15 +320,11 @@ qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
 
 qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) 
 {
-    
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-
-    
-    
 
     if(DEBUG)
         printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
@@ -352,9 +347,6 @@ qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-
-    
-    
 
     // Convert timelength to a timepoint
     utp.interval =  utl->interval;
