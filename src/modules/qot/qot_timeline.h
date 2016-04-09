@@ -31,9 +31,13 @@
 #ifndef QOT_STACK_SRC_MODULES_QOT_QOT_TIMELINE_H
 #define QOT_STACK_SRC_MODULES_QOT_QOT_TIMELINE_H
 
+#include <linux/spinlock.h>
 #include "qot_core.h"
 
 /* qot_timeline.h */
+
+/* Timeline subsystem spin lock */
+extern raw_spinlock_t qot_timeline_lock;
 
 /* All the functions below assume the argument pointer has been allocated */
 
@@ -53,10 +57,10 @@ qot_return_t qot_timeline_next(qot_timeline_t **timeline);
 
 /**
  * @brief Get information about a timeline  based on the specified name.
- * @param timeline A pointer to a timeline with the name field populated
+ * @param timeline A pointer to a pointer to a timeline with the name field populated
  * @return A status code indicating success (0) or other (no more timelines)
  **/
-qot_return_t qot_timeline_get_info(qot_timeline_t *timeline);
+qot_return_t qot_timeline_get_info(qot_timeline_t **timeline);
 
 /**
  * @brief Create a timeline based on the specified name.
@@ -71,6 +75,7 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline);
  * @return A status code indicating success (0) or other (no more timelines)
  **/
 qot_return_t qot_timeline_remove(qot_timeline_t *timeline, bool admin_flag);
+
 
 /**
  * @brief Remove all timelines

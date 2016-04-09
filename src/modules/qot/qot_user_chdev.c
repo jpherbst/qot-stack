@@ -134,6 +134,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 {
     qot_timeline_t *timeline;
     event_t *event;
+    unsigned long flags;
     /* Create a new connection */
     qot_user_chdev_con_t *con =
         kzalloc(sizeof(qot_user_chdev_con_t), GFP_KERNEL);
@@ -152,6 +153,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
     /* Notify the connection (by polling) of all existing timelines */
     timeline = NULL;
     if (qot_timeline_first(&timeline)==QOT_RETURN_TYPE_OK) {
+        raw_spin_lock_irqsave(&qot_timeline_lock, flags);
         do {
             event = kzalloc(sizeof(event_t), GFP_KERNEL);
             if (!event) {
@@ -162,6 +164,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
             strncpy(event->info.data,timeline->name,QOT_MAX_NAMELEN);
             list_add_tail(&event->list, &con->event_list);
         } while (qot_timeline_next(&timeline)==QOT_RETURN_TYPE_OK);
+        raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
     }
@@ -190,6 +193,7 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     event_t *event;
     qot_event_t msge;
     qot_timeline_t msgt;
+    qot_timeline_t *timeline = NULL;
 
 
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
@@ -214,8 +218,10 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     case QOTUSR_GET_TIMELINE_INFO:
         if (copy_from_user(&msgt, (qot_timeline_t*)arg, sizeof(qot_timeline_t)))
             return -EACCES;
-        if (qot_timeline_get_info(&msgt))
+        timeline = &msgt;
+        if (qot_timeline_get_info(&timeline))
             return -EACCES;
+        msgt = *timeline;
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;
         break;

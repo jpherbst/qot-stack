@@ -420,7 +420,7 @@ typedef struct qot_timeline {
     #ifdef __KERNEL__
     // Changes added by Sandeep -> Scheduler Specific Stuff
     struct rb_root event_head;           /* RB tree head for events on this timeline */
-    spinlock_t rb_lock;                  /* RB tree spinlock */
+    raw_spinlock_t rb_lock;              /* RB tree spinlock */
     #endif
 } qot_timeline_t;
 
@@ -456,6 +456,8 @@ typedef struct qot_clock {
 #define QOTADM_SET_CLOCK_ACTIVE   _IOW(QOTADM_MAGIC_CODE, 5, qot_clock_t*)
 #define QOTADM_SET_OS_LATENCY     _IOW(QOTADM_MAGIC_CODE, 6, utimelength_t*)
 #define QOTADM_GET_OS_LATENCY     _IOR(QOTADM_MAGIC_CODE, 7, utimelength_t*)
+#define QOTADM_GET_CORE_TIME_RAW     _IOR(QOTADM_MAGIC_CODE, 8, timepoint_t*)
+
 
 /* QoT timeline type */
 typedef struct qot_binding {

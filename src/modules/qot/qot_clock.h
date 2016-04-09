@@ -40,12 +40,19 @@
 qot_return_t qot_clock_get_core_time(utimepoint_t *utp);
 
 /**
+ * @brief Get the core time without uncertainity estimate
+ * @param tp A pointer to an data structure to fill
+ * @return A status code indicating success (0) or other (no more clocks)
+ **/
+qot_return_t qot_clock_get_core_time_raw(timepoint_t *tp);
+
+/**
  * @brief Program an interrupt on core time
  * @param expiry Expiry time in core time
  * @param callback Function which must be called when the interrupt expires
  * @return A status code indicating success (0) or other (no more clocks)
  **/
-qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, long (*callback)(void));
+qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, int force, long (*callback)(void));
 
 /**
  * @brief Add the uncertainity in interrupt latency to the callback
