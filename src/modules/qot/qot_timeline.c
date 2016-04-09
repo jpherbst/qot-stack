@@ -46,17 +46,17 @@ typedef struct timeline {
 /* Root of the red-black tree used to store timelines */
 static struct rb_root qot_timeline_root = RB_ROOT;
 
-// Timeline subsystem spin lock
-spinlock_t qot_timeline_lock;
+/* Timeline subsystem spin lock */
+raw_spinlock_t qot_timeline_lock;
 
 /* Search for a timeline given by a name */
-static timeline_t *qot_timeline_find(char *name)
+timeline_t *qot_timeline_find(char *name)
 {
     int result;
-    // unsigned long flags;
+    unsigned long flags;
     timeline_t *timeline = NULL;
     struct rb_node *node = qot_timeline_root.rb_node;
-    //spin_lock_irqsave(&qot_timeline_lock, flags);
+    raw_spin_lock_irqsave(&qot_timeline_lock, flags);
     while (node) {
         timeline = container_of(node, timeline_t, node);
         result = strcmp(name, timeline->info.name);
@@ -66,11 +66,11 @@ static timeline_t *qot_timeline_find(char *name)
             node = node->rb_right;
         else
         {
-            //spin_unlock_irqrestore(&qot_timeline_lock, flags);
+            raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
             return timeline;
         }
     }
-    //spin_unlock_irqrestore(&qot_timeline_lock, flags);
+    raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
     return NULL;
 }
 
@@ -81,7 +81,7 @@ static qot_return_t qot_timeline_insert(timeline_t *timeline)
     unsigned long flags;
     timeline_t *target;
     struct rb_node **new = &qot_timeline_root.rb_node, *parent = NULL;
-    spin_lock_irqsave(&qot_timeline_lock, flags);
+    raw_spin_lock_irqsave(&qot_timeline_lock, flags);
     while (*new) {
         target = container_of(*new, timeline_t, node);
         result = strcmp(timeline->info.name, target->info.name);
@@ -92,13 +92,13 @@ static qot_return_t qot_timeline_insert(timeline_t *timeline)
             new = &((*new)->rb_right);
         else
         {
-            spin_unlock_irqrestore(&qot_timeline_lock, flags);
+            raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
             return QOT_RETURN_TYPE_ERR;
         }
     }
     rb_link_node(&timeline->node, parent, new);
     rb_insert_color(&timeline->node, &qot_timeline_root);
-    spin_unlock_irqrestore(&qot_timeline_lock, flags);
+    raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -146,15 +146,16 @@ qot_return_t qot_timeline_next(qot_timeline_t **timeline)
 }
 
 /* Get information about a timeline */
-qot_return_t qot_timeline_get_info(qot_timeline_t *timeline)
+qot_return_t qot_timeline_get_info(qot_timeline_t **timeline)
 {
     timeline_t *timeline_priv = NULL;
     if (!timeline)
         return QOT_RETURN_TYPE_ERR;
-    timeline_priv = qot_timeline_find(timeline->name);
+    timeline_priv = qot_timeline_find((*timeline)->name);
     if (!timeline_priv)
         return QOT_RETURN_TYPE_ERR;
-    memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    //memcpy(timeline,&timeline_priv->info,sizeof(qot_timeline_t));
+    *timeline = &timeline_priv->info;
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -202,7 +203,7 @@ qot_return_t qot_timeline_create(qot_timeline_t *timeline)
     timeline_priv->info.event_head = RB_ROOT;
 
     // Initialize a spinlock for the RB Tree along which timeline sleep events will be ordered -> Added by Sandeep
-    spin_lock_init(&timeline_priv->info.rb_lock);
+    raw_spin_lock_init(&timeline_priv->info.rb_lock);
     return QOT_RETURN_TYPE_OK;
 
 fail_timeline_insert:
@@ -228,9 +229,9 @@ qot_return_t qot_timeline_remove(qot_timeline_t *timeline, bool admin_flag)
 	if(qot_timeline_chdev_unregister(timeline_priv->info.index, admin_flag))
         return QOT_RETURN_TYPE_ERR;
 
-    spin_lock_irqsave(&qot_timeline_lock, flags);
+    raw_spin_lock_irqsave(&qot_timeline_lock, flags);
 	rb_erase(&timeline_priv->node,&qot_timeline_root);
-    spin_unlock_irqrestore(&qot_timeline_lock, flags);
+    raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
     kfree(timeline_priv);
     return QOT_RETURN_TYPE_OK;
 }
@@ -261,7 +262,7 @@ qot_return_t qot_timeline_init(struct class *qot_class)
         pr_err("qot_timeline: problem calling qot_timeline_chdev_init\n");
         goto fail_chdev_init;
     }
-    spin_lock_init(&qot_timeline_lock);
+    raw_spin_lock_init(&qot_timeline_lock);
     return QOT_RETURN_TYPE_OK;
 fail_chdev_init:
     return QOT_RETURN_TYPE_ERR;

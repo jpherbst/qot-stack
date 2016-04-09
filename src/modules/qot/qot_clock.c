@@ -103,18 +103,29 @@ qot_return_t qot_clock_get_core_time(utimepoint_t *utp)
     TL_FROM_uSEC(utp->interval.above, 0);
     /* Add the uncertainty to the measurement */
     // utimepoint_add(utp, &core->impl.info.read_latency);
-    qot_admin_add_latency(utp);
+    // qot_admin_add_latency(utp);
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Get the core time without uncertainity estimate */
+qot_return_t qot_clock_get_core_time_raw(timepoint_t *tp)
+{
+    if (!tp || !core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Get a measurement of core time */
+    *tp = core->impl.read_time();
     /* Success */
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Program an interrupt on core time */
-qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, long (*callback)(void))
+qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, int force, long (*callback)(void))
 {
     if (!core)
         return QOT_RETURN_TYPE_ERR;
     /* Program an interrupt on core time */
-    if(core->impl.program_interrupt(expiry, callback))
+    if(core->impl.program_interrupt(expiry, force, callback))
         return QOT_RETURN_TYPE_ERR;
     /* Success */
     return QOT_RETURN_TYPE_OK;
