@@ -75,9 +75,9 @@ qot_return_t qot_admin_init(struct class *qot_class)
         goto fail_chdev_init;
     }
     // Arbitrary initialization values
-    TL_FROM_uSEC(os_latency.estimate, 100);
-    TL_FROM_uSEC(os_latency.interval.below, 10);
-    TL_FROM_uSEC(os_latency.interval.above, 10);
+    TL_FROM_uSEC(os_latency.estimate, 0);
+    TL_FROM_uSEC(os_latency.interval.below, 0);
+    TL_FROM_uSEC(os_latency.interval.above, 0);
     return QOT_RETURN_TYPE_OK;
 fail_chdev_init:
     return QOT_RETURN_TYPE_ERR;
