@@ -36,8 +36,9 @@
 
 /* For ease of conversion */
 #define ASEC_PER_NSEC (u64)1000000000ULL
-#define TIMEPOINT_MAX_SEC 9223372036854775807LL
-#define TIMEPOINT_MAX_ASEC 18446744073709551615ULL
+#define MAX_TIMEPOINT_SEC  9223372036LL
+#define MAX_LL  9223372036854775807LL
+#define MAX_ULL 18446744073709551615ULL
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
