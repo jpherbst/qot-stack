@@ -106,8 +106,8 @@ int main(int argc, char *argv[])
 	char *progname;								/* This binary name */
 	char *device_m = "/dev/ptp1";				/* PTP device (master) */
 	char *device_s = "/dev/ptp0";				/* PTP device (slave) */
-	int index_m = 0;							/* Channel index (master) */
-	int index_s = 1;							/* Channel index (slave) */
+	int index_m = 0;							/* Channel index (master), '0' by default corresponds to 'TIMER5' */
+	int index_s = 1;							/* Channel index (slave), '1' by default corresponds to listen to 'TIMER5' Interrupt */
 	int64_t period = NSEC_PER_MSEC*1000*6;		/* Synchronization period (ms) */
 	int64_t error = 1000;						/* Timestamp tolerance (nsec) */
 
@@ -287,6 +287,9 @@ int main(int argc, char *argv[])
 			//weight,			/* Weighting */
 			&state 			/* Next state */
 		);
+
+		if(ppb > 50 || ppb < -50) // Fatima: just a small hack
+			ppb = -7;
 		
 		/* What we do depends on the servo state */
 		switch (state) {

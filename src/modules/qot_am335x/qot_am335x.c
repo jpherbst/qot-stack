@@ -49,7 +49,7 @@
 #include <linux/ptp_clock_kernel.h>
 
 /*QoT Core Clock Registration*/
-#include "qot_core.h"
+#include "../qot/qot_core.h"
 
 /* DMTimer Code specific to the AM335x */
 #include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
@@ -331,6 +331,7 @@ static irqreturn_t qot_am335x_interrupt(int irq, void *data)
 			pevent.type = PTP_CLOCK_EXTTS;
 			pevent.index = channel->state.extts.index;
 			ptp_clock_event(channel->parent->clock, &pevent);
+			qot_am335x_overflow(channel); // Fatima: Fix for time going backward in capture
 		}
 		break;
 	case PTP_CLK_REQ_PEROUT:

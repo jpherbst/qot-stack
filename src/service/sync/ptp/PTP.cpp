@@ -99,7 +99,7 @@ void PTP::Reset()
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;
 	cfg_settings.check_fup_sync = &sk_check_fupsync;
-	cfg_settings.clock_servo = CLOCK_SERVO_PI;
+	cfg_settings.clock_servo = CLOCK_SERVO_LINREGNEW;
 	cfg_settings.step_threshold = &servo_step_threshold;
 	cfg_settings.first_step_threshold = &servo_first_step_threshold;
 	cfg_settings.max_frequency = &servo_max_frequency;
@@ -130,16 +130,18 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *
 	// Restart sync
 	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
-	cfg_settings.dds.dds.domainNumber = sync_session;	
-	//cfg_settings.pod.logSyncInterval = log_sync_interval;
-	cfg_settings.pod.logSyncInterval = 0;
-	if (!master){
+	//cfg_settings.dds.dds.domainNumber = sync_session;	
+	cfg_settings.dds.dds.domainNumber = 0;
+	cfg_settings.pod.laterlogSyncInterval = log_sync_interval; // Change this when you need to slow down sync later
+	cfg_settings.pod.logSyncInterval = log_sync_interval; 
+
+	if (master){
+		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	}else{
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 	}
-		//cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-	//else
-		//cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+
 	kill = false;
 
 	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelinesfd, timelines_size));
@@ -304,4 +306,5 @@ int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 	// Clean up
 	clock_destroy(clock);
 	config_destroy(&cfg_settings);
+	return 0;
 }

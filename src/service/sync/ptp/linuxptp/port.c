@@ -104,6 +104,7 @@ struct port {
 	UInteger8           syncReceiptTimeout;
 	UInteger8           transportSpecific;
 	Integer8            logSyncInterval;
+	Integer8            laterlogSyncInterval;
 	Enumeration8        delayMechanism;
 	Integer8            logMinPdelayReqInterval;
 	UInteger32          neighborPropDelayThresh;
@@ -1305,6 +1306,12 @@ static int port_tx_sync(struct port *p)
 	msg->header.domainNumber       = clock_domain_number(p->clock);
 	msg->header.sourcePortIdentity = p->portIdentity;
 	msg->header.sequenceId         = p->seqnum.sync++;
+
+	if(p->seqnum.sync > 10){
+		pr_notice("Change sync interval");
+		p->logSyncInterval = p->laterlogSyncInterval; //QOT, just for testing
+	}
+
 	msg->header.control            = CTL_SYNC;
 	msg->header.logMessageInterval = p->logSyncInterval;
 
@@ -1448,6 +1455,7 @@ static int port_initialize(struct port *p)
 	p->syncReceiptTimeout      = p->pod.syncReceiptTimeout;
 	p->transportSpecific       = p->pod.transportSpecific;
 	p->logSyncInterval         = p->pod.logSyncInterval;
+	p->laterlogSyncInterval    = p->pod.laterlogSyncInterval; //QOT
 	p->logMinPdelayReqInterval = p->pod.logMinPdelayReqInterval;
 	p->neighborPropDelayThresh = p->pod.neighborPropDelayThresh;
 	p->min_neighbor_prop_delay = p->pod.min_neighbor_prop_delay;

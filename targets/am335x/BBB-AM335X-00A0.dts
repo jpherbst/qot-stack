@@ -24,7 +24,7 @@
             qot_am335x_pins: qot_am335x_pins {
                 pinctrl-single,pins = <
                     0x9C  0x02      /* P8.9   0x22 = INP PD, 0x02 = OUT PD */
-                    0x98  0x02      /* P8.10  0x22 = INP PD, 0x02 = OUT PD */
+                    0x98  0x22      /* P8.10  0x22 = INP PD, 0x02 = OUT PD */
                     0x94  0x02      /* P8.8   0x22 = INP PD, 0x02 = OUT PD */
                 >;
             };

@@ -35,6 +35,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <errno.h>
+
+#include <linux/ptp_clock.h>
 
 /* This file includes */
 #include "qot.h"
@@ -263,17 +267,12 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
 
 qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 {
-    
-
     //printf("/dev/timeline%d\n", timeline->info.index);
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-
-    
-    
 
     // Get the core time
     if(ioctl(timeline->fd, TIMELINE_GET_CORE_TIME_NOW, core_now) < 0)
@@ -284,15 +283,11 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 }
 
 qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
-{ 
-    
-
+{    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-
-    
     
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
@@ -305,12 +300,14 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est)
 
 qot_return_t timeline_config_pin_interrupt(timeline_t *timeline,
     qot_perout_t *request, qot_callback_t callback) {
+
     return QOT_RETURN_TYPE_ERR;
 }
 
 qot_return_t timeline_config_pin_timestamp(timeline_t *timeline,
     qot_extts_t *request, qot_callback_t callback) {
-    return QOT_RETURN_TYPE_ERR;
+
+    return QOT_RETURN_TYPE_OK;
 }
 
 qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
@@ -369,4 +366,20 @@ qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
 
 qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer) {
     return QOT_RETURN_TYPE_ERR;
+}
+
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est) 
+{    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
 }

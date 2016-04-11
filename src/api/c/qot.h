@@ -207,4 +207,6 @@ qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
  **/
 qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer);
 
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est); 
+
 #endif
