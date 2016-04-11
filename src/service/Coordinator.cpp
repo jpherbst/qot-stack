@@ -82,11 +82,12 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 
 						// Handover the master ownership to the peer
 						timeline.master() = s->data().name();
+						timeline.domain() = s->data().domain(); //Added by Fatima
 
 						// (Re)start the synchronization service as master
 						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
 						if(timeline.accuracy() > 0){
-							int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+							int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 							sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
 						}
 					}
@@ -105,7 +106,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					// (Re)start the synchronization service as master
 					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 					if(timeline.accuracy() > 0){
-						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+						int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 						sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
 					}
 				}
@@ -128,7 +129,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 						// (Re)start the synchronization service
 						//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
 						if(timeline.accuracy() > 0){
-							int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+							int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 							sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
 						}
 					}
@@ -159,7 +160,7 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 					//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 					// Convert the file descriptor to a clock handle
 					if(timeline.accuracy() > 0){
-						int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+						int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 						sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
 					}
 				}
@@ -252,7 +253,7 @@ void Coordinator::Update(timeinterval_t acc, timelength_t res)
 	if (timeline.master().compare(timeline.name())){
 		//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 		if(timeline.accuracy() > 0){
-			int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+			int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 			sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
 		}
 	}
@@ -286,8 +287,7 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 		BOOST_LOG_TRIVIAL(info) << "I hear no peers, so I am starting as master";
 
 		// Pick a new random domain in the interval [0, 127]
-		//timeline.domain() = rand() % 128;
-		timeline.domain() = 0;
+		timeline.domain() = rand() % 128;
 		timeline.master() = timeline.name();
 	}
 	else
@@ -298,7 +298,7 @@ void Coordinator::Timeout(const boost::system::error_code& err)
 	// (Re)start the synchronization service as master
 	//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
 	if(timeline.accuracy() > 0){
-		int sync_interval = (int) floor(log2(timeline.accuracy()/(20.0*nSEC_PER_SEC)));
+		int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
 		sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
 	}
 

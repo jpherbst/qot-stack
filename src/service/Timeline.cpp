@@ -70,7 +70,7 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const s
 	coordinator.Start(id, this->fd, msgt.name, msgb.demand.accuracy, msgb.demand.resolution);
 
 	// We can now start polling, because the timeline is setup
-	thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
+	//thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
 }
 
 Timeline::~Timeline()
@@ -80,7 +80,7 @@ Timeline::~Timeline()
 
 	// Kill the thread
 	this->kill = true;
-    this->thread.join();
+    //this->thread.join();
 
 	// Close ioctl
 	if (fd > 0)
@@ -93,13 +93,14 @@ void Timeline::MonitorThread()
     BOOST_LOG_TRIVIAL(info) << "Polling for activity";
 
     // Start polling
-    while (!this->kill)
-    {
+    //while (!this->kill)
+   // {
+
     	// Initialize the polling struct
-		struct pollfd pfd[1];
+		/*struct pollfd pfd[1];
 		memset(pfd,0,sizeof(pfd));
 		pfd[0].fd = this->fd;
-		pfd[0].events = POLLIN;
+		pfd[0].events = POLLIN;*/
 
 		//TODO: change according to new core
 		// Wait until an asynchronous data push from the kernel module
@@ -125,5 +126,5 @@ void Timeline::MonitorThread()
 			}
 		}
 		*/
-	}
+	//}
 }

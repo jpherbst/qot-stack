@@ -4,10 +4,24 @@ ADD_EXECUTABLE(helloworld
 )
 TARGET_LINK_LIBRARIES(helloworld qot)
 
-# Install the qot library to the given prefix
+ADD_EXECUTABLE(helloworld_capture
+	helloworld_capture.c
+)
+TARGET_LINK_LIBRARIES(helloworld_capture qot)
+
+# Install the executables to the given prefix
 INSTALL(
 	TARGETS 
 		helloworld
+	DESTINATION 
+		bin 
+	COMPONENT 
+		applications
+)
+
+INSTALL(
+	TARGETS 
+		helloworld_capture
 	DESTINATION 
 		bin 
 	COMPONENT 
