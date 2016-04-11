@@ -50,7 +50,7 @@
 #include "qot_clock.h"
 
 // Core Time at which the interrupt will trigger a callback
-timepoint_t next_interrupt_callback = {TIMEPOINT_MAX_SEC, TIMEPOINT_MAX_ASEC};
+timepoint_t next_interrupt_callback = {MAX_TIMEPOINT_SEC, 0};
 
 // Scheduler subsystem spin lock
 raw_spinlock_t qot_scheduler_lock;
@@ -129,7 +129,7 @@ static timepoint_t qot_get_next_event(void)
 	
 	timepoint_t core_expires;
 
-	timepoint_t expires_next = {TIMEPOINT_MAX_SEC, TIMEPOINT_MAX_ASEC};
+	timepoint_t expires_next = {MAX_TIMEPOINT_SEC, 0};
 
     raw_spin_lock_irqsave(&qot_timeline_lock, flags);
 	retval = qot_timeline_first(&timeline);
@@ -190,8 +190,8 @@ static long scheduler_interface_interrupt(void)
 	timepoint_t current_core_time;
 	timepoint_t current_timeline_time;
 
-	timepoint_t next_expires = {TIMEPOINT_MAX_SEC, TIMEPOINT_MAX_ASEC};
-
+	timepoint_t next_expires = {MAX_TIMEPOINT_SEC, 0};
+	
 	// Get the current core time
 	qot_clock_get_core_time_raw(&current_core_time);
 
@@ -205,7 +205,6 @@ retry:
 	{
 		current_timeline_time = qot_core_to_remote(current_core_time, timeline);
 		raw_spin_lock_irqsave(&timeline->rb_lock, flags);
-
 		timeline_root = &timeline->event_head;
 		for (timeline_node = rb_first(timeline_root); timeline_node != NULL;) 
 		{
@@ -234,13 +233,14 @@ retry:
 	next_expires = qot_get_next_event();
 
     /* Reprogramming necessary ? */
+    raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
     if (!qot_clock_program_core_interrupt(next_expires, 0, scheduler_interface_interrupt)) 
     {
-    	raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
     	next_interrupt_callback = next_expires;
     	raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
         return 0;
     }
+    raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
     /*
      * The next timer was already expired due to:
      * - tracing
@@ -257,8 +257,8 @@ retry:
     if (++retries < 3)
         goto retry;
     /* Reprogram the timer */
-    qot_clock_program_core_interrupt(next_expires, 0, scheduler_interface_interrupt);
     raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
+    qot_clock_program_core_interrupt(next_expires, 0, scheduler_interface_interrupt);
     next_interrupt_callback = next_expires;
     raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
     return 0;
@@ -275,16 +275,16 @@ static int qot_sleeper_start_expires(struct timeline_sleeper *sleeper, timepoint
     if(timepoint_cmp(&core_time_expiry, &time_now) > 0)
         return QOT_RETURN_TYPE_ERR;
 
-	//pr_info("qot_scheduler:qot_sleeper_start_expires Task %d going to sleep after lock\n", sleeper->task->pid);
 	if(timepoint_cmp(&core_time_expiry, &next_interrupt_callback) > 0 && sleeper->sleeper_active == 1)
 	{
+	    raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
 	    retval = qot_clock_program_core_interrupt(core_time_expiry, 0, scheduler_interface_interrupt);
 	    if(!retval)
 	    {
-	    	raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
 	        next_interrupt_callback = core_time_expiry;
-	    	raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
 	    }
+	    raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
+
 	}
 	return retval;
 }
@@ -313,7 +313,6 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
     raw_spin_lock_irqsave(&timeline->rb_lock, flags);
     qot_init_sleeper(&sleep_timer, current, timeline, expiry_time);
     raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
-    //pr_info("qot_scheduler:qot_attosleep Task %d trying to sleep passed lock %lld %llu\n", current->pid, expiry_time->estimate.sec, expiry_time->estimate.asec);
 
     core_time_expiry = qot_remote_to_core(expiry_time->estimate, timeline);
     do {
@@ -321,7 +320,7 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
         retval = qot_sleeper_start_expires(&sleep_timer, core_time_expiry);
         if (retval != 0)
             sleep_timer.task = NULL;
-        //pr_info("qot_scheduler:qot_attosleep Task %d going to sleep\n", sleep_timer.task->pid);
+
         if (likely(sleep_timer.task)) 
         {
             freezable_schedule();
