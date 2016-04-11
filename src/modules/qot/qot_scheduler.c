@@ -258,7 +258,7 @@ retry:
         goto retry;
     /* Reprogram the timer */
     raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
-    qot_clock_program_core_interrupt(next_expires, 0, scheduler_interface_interrupt);
+    qot_clock_program_core_interrupt(next_expires, 1, scheduler_interface_interrupt);
     next_interrupt_callback = next_expires;
     raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
     return 0;
@@ -338,8 +338,6 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
 /* Updates timeline nodes waiting on a queue when a time change happens, called by the set_time adj_time functions*/
 void qot_scheduler_update(qot_timeline_t *timeline)
 {
-	// qot_return_t retval;
-	// qot_timeline_t *timeline = NULL;	
 	struct rb_root *timeline_root = NULL;	
 	struct rb_node *timeline_node = NULL;
 	struct timeline_sleeper *sleeping_task;	
