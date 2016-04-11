@@ -25,6 +25,8 @@
 #include <string.h>
 #include <time.h>
 #include <sys/queue.h>
+#include <math.h>
+#include <fcntl.h>
 
 #include "address.h"
 #include "bmc.h"
@@ -43,7 +45,6 @@
 #include "tlv.h"
 #include "uds.h"
 #include "util.h"
-#include <math.h>
 
 #define N_CLOCK_PFD (N_POLLFD + 1) /* one extra per port, for the fault timer */
 #define POW2_41 ((double)(1ULL << 41))
@@ -309,6 +310,8 @@ static void filter(struct clock_uncertainty_stats *u, struct Interval *interv_li
     sum += SQUARE(diff);
   }
   long long jitter = (long long) sqrt(sum/total);
+  //todo: fix it
+  //long long jitter = (long long) (sum/total);
   
 #ifdef DEBUG
   printf("peer_disp: %lld\n", peer_disp);
@@ -1103,7 +1106,7 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 	struct interface *iface;
 	struct timespec ts;
 
-	/* Add core clock index and clockid , Fatima_START */
+	/* Add core clock index and clockid , Fatima_START */ //todo: added for test
 	int phccore_index = 1;
 	snprintf(phccore, 31, "/dev/ptp%d", phccore_index);
 	c->core_clkid = phc_open(phccore);
@@ -1735,7 +1738,8 @@ enum servo_state clock_synchronize(struct clock *c,
 	tmv_t ingress, origin;
 	enum servo_state state;
 	struct servo *s;
-	struct timespec ingress_tml;
+	struct timespec ingress_tml, ingress_tml_inv; //QOT
+	tmv_t tml_offset, tml_local; //QOT
 
 	/* QOT, synchronize all the timelines */
 	LIST_FOREACH(s, &c->tmls_servos, list) {
@@ -1747,15 +1751,30 @@ enum servo_state clock_synchronize(struct clock *c,
 		return SERVO_UNLOCKED;
 	}
 	
+	/*** Code snippet used to debug qot_rem2loc ***/
+	/*if(clock_project_inverse_timeline(s->tml_clkid, ingress_tml, &ingress_tml_inv)){ //Used for debugging
+		pr_warning("timeline inverse projection failed");
+		//return SERVO_UNLOCKED;
+	}
 
-	//ingress = timespec_to_tmv(ingress_ts); 	/* QOT */
-	ingress = timespec_to_tmv(ingress_tml);		/* QOT */
+	tmv_t diff = tmv_sub(timespec_to_tmv(ingress_ts),timespec_to_tmv(ingress_tml_inv));
+
+	pr_info("core %10" PRId64 " tml %10" PRId64 " tml inverse %10" PRId64 " diff %10" PRId64, 
+		timespec_to_tmv(ingress_ts), timespec_to_tmv(ingress_tml), timespec_to_tmv(ingress_tml_inv), diff);*/
+
+	/********************************************/
+	
+	//printf("Core: %lld.%.9ld\nTML: %lld.%.9ld\nOrig: %lld.%.9lu\n", 
+	//	(long long)ingress_ts.tv_sec, ingress_ts.tv_nsec, (long long)ingress_tml.tv_sec, ingress_tml.tv_nsec, (long long)origin_ts.sec, (long)origin_ts.nsec);
+
+	//pr_info("core %10" PRId64 " tml %10" PRId64, timespec_to_tmv(ingress_ts), timespec_to_tmv(ingress_tml));
+
+	ingress = timespec_to_tmv(ingress_ts); 		/* QOT */
+	//ingress = timespec_to_tmv(ingress_tml);	/* QOT */
 	origin  = timestamp_to_tmv(origin_ts);
 
-	//pr_info("core %10" PRId64 " tml %10" PRId64 " remote core %10" PRId64, timespec_to_tmv(ingress_ts), ingress, origin);
-
 	c->t1 = origin;
-	c->t2 = ingress;
+	c->t2 = timespec_to_tmv(ingress_ts);
 
 	c->c1 = correction_to_tmv(correction1);
 	c->c2 = correction_to_tmv(correction2);
@@ -1765,6 +1784,10 @@ enum servo_state clock_synchronize(struct clock *c,
 	 */
 	c->master_offset = tmv_sub(ingress,
 		tmv_add(origin, tmv_add(c->path_delay, tmv_add(c->c1, c->c2))));
+
+	tml_local = timespec_to_tmv(ingress_tml); /* QOT */
+	tml_offset = tmv_sub(tml_local,
+		tmv_add(origin, tmv_add(c->path_delay, tmv_add(c->c1, c->c2)))); /* QOT */
 
 	if (!c->path_delay)
 		return state;
@@ -1781,6 +1804,7 @@ enum servo_state clock_synchronize(struct clock *c,
 			   tmv_to_nanoseconds(ingress), &state);*/
 	adj = servo_sample(s, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state); /* QOT */
+
 	c->servo_state = state;
 
 	/* QOT, Stats maintained in QOT core */
@@ -1790,10 +1814,11 @@ enum servo_state clock_synchronize(struct clock *c,
 	} else {
 		*/
 		pr_info("tid: %i master offset %10" PRId64 " s%d freq %+7.0f "
-			"path delay %9" PRId64,
+			"path delay %9" PRId64 "c1 %9" PRId64 "c2 %9" PRId64,
 			s->tml_clkid,
-			tmv_to_nanoseconds(c->master_offset), state, adj,
-			tmv_to_nanoseconds(c->path_delay));
+			tmv_to_nanoseconds(tml_offset),
+			/*tmv_to_nanoseconds(c->master_offset),*/ state, adj,
+			tmv_to_nanoseconds(c->path_delay), tmv_to_nanoseconds(c->c1), tmv_to_nanoseconds(c->c2));
 	//}
 
 	switch (state) {
@@ -1804,7 +1829,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
-		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1820,6 +1845,7 @@ enum servo_state clock_synchronize(struct clock *c,
 			sysclk_set_sync();
 		*/
 		// Adjust the timeline
+		//clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
@@ -1979,6 +2005,21 @@ int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec 
 	int fd = CLOCKID_TO_FD(clkid);
 
 	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
+		return -1;
+	}
+	tml_ts->tv_sec = tp.sec;
+    tml_ts->tv_nsec= tp.asec / NS_PER_SEC;
+	return 0;
+}
+
+int clock_project_inverse_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts)
+{
+	timepoint_t tp;
+	timepoint_from_timespec(&tp, &ts); 
+
+	int fd = CLOCKID_TO_FD(clkid);
+
+	if(ioctl(fd, TIMELINE_REMOTE_TO_CORE, &tp)){
 		return -1;
 	}
 	tml_ts->tv_sec = tp.sec;

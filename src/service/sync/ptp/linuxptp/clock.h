@@ -33,7 +33,8 @@
 #include "transport.h"
 
 // QoT base types
-#include "../../../../qot_types.h"
+//#include "../../../../qot_types.h"
+#include "qot_types.h"
 
 struct ptp_message; /*forward declaration*/
 
@@ -290,6 +291,7 @@ double clock_rate_ratio(struct clock *c);
  */
 int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts);
 
+int clock_project_inverse_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts);
 
 /* QoT */
 void get_core_time(struct clock *c, struct timespec *ts);
