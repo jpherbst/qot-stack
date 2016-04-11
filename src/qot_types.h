@@ -425,6 +425,12 @@ typedef struct qot_timeline {
     #endif
 } qot_timeline_t;
 
+/* QoT wait until */
+typedef struct qot_sleeper {
+	qot_timeline_t timeline;	        /* Timeline Information    */
+	utimepoint_t wait_until_time;	    /* Uncertain time of event */
+} qot_sleeper_t;
+
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
@@ -433,6 +439,8 @@ typedef struct qot_timeline {
 #define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
 #define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 #define QOTUSR_DESTROY_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 4, qot_timeline_t*)
+#define QOTUSR_WAIT_UNTIL       _IOWR(QOTUSR_MAGIC_CODE, 9, qot_sleeper_t*)
+
 
 /* QoT clock type (admin only) */
 typedef struct qot_clock {
@@ -479,7 +487,6 @@ typedef struct qot_binding {
 #define TIMELINE_CORE_TO_REMOTE    _IOWR(TIMELINE_MAGIC_CODE, 6, timepoint_t*)
 #define TIMELINE_REMOTE_TO_CORE    _IOWR(TIMELINE_MAGIC_CODE, 7, timepoint_t*)
 #define TIMELINE_GET_CORE_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 8, utimepoint_t*)
-#define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 9, utimepoint_t*)
-#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 10, utimepoint_t*)
+#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 9, utimepoint_t*)
 
 #endif

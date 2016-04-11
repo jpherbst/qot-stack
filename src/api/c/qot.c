@@ -48,7 +48,7 @@
 /* Timeline implementation */
 typedef struct timeline {
     qot_timeline_t info;    /* Basic timeline information               */
-    qot_binding_t binding;   /* Basic binding info                       */
+    qot_binding_t binding;  /* Basic binding info                       */
     int fd;                 /* File descriptor to /dev/timelineX ioctl  */
     int qotusr_fd;          /* File descriptor to /dev/qotusr ioctl     */
 } timeline_t;
@@ -154,12 +154,8 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
 
 qot_return_t timeline_unbind(timeline_t *timeline) 
 {
-    
-    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
-    
-    
 
     // Unbind from the timeline
     if(ioctl(timeline->fd, TIMELINE_BIND_LEAVE, &timeline->binding) < 0)
@@ -174,13 +170,13 @@ qot_return_t timeline_unbind(timeline_t *timeline)
     // Try to destroy the timeline if possible (will destroy if no other bindings exist)
     if(ioctl(timeline->qotusr_fd, QOTUSR_DESTROY_TIMELINE, &timeline->info) == 0)
     {
-       // if(DEBUG)
-            printf("Timeline %d destroyed\n", timeline->info.index);
+       if(DEBUG)
+          printf("Timeline %d destroyed\n", timeline->info.index);
     }
     else
     {
-       // if(DEBUG)
-            printf("Timeline %d not destroyed\n", timeline->info.index);
+       if(DEBUG)
+          printf("Timeline %d not destroyed\n", timeline->info.index);
     }
 
     if (timeline->qotusr_fd)
@@ -317,17 +313,20 @@ qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
 
 qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) 
 {
-
+    qot_sleeper_t sleeper;
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
+    sleeper.timeline = timeline->info;
+    sleeper.wait_until_time = *utp;
+
     if(DEBUG)
         printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
     
-    // Clocking wait on remote timeline time
-    if(ioctl(timeline->fd, TIMELINE_SLEEP_UNTIL, utp) < 0)
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
@@ -337,26 +336,30 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
 
 qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl) 
 {
-    
-    utimepoint_t utp;
+    qot_sleeper_t sleeper;
 
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
 
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, &sleeper.wait_until_time) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
     // Convert timelength to a timepoint
-    utp.interval =  utl->interval;
-    utp.estimate.sec = (s64) utl->estimate.sec;
-    utp.estimate.asec = utl->estimate.asec;
-    // Clocking wait on remote timeline time
-    if(ioctl(timeline->fd, TIMELINE_SLEEP_UNTIL, utp) < 0)
+    sleeper.wait_until_time.interval =  utl->interval;
+    timepoint_add(&sleeper.wait_until_time.estimate, &utl->estimate);
+    
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
     
     return QOT_RETURN_TYPE_OK;
-    return QOT_RETURN_TYPE_ERR;
 }
 
 qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,

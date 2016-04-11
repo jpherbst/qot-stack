@@ -38,6 +38,8 @@
 
 #include "qot_user.h"
 #include "qot_timeline.h"
+#include "qot_scheduler.h"
+#include "qot_clock.h"
 
 #define DEVICE_NAME "qotusr"
 
@@ -195,6 +197,9 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     qot_timeline_t msgt;
     qot_timeline_t *timeline = NULL;
 
+    qot_sleeper_t sleeper;
+    u64 coretime;
+    int wait_until_retval;
 
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (!con)
@@ -246,6 +251,29 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if(qot_timeline_remove(&msgt, 0))
             return QOT_RETURN_TYPE_ERR;
         break;
+    /* Wait until a time on a timeline reference */
+    case QOTUSR_WAIT_UNTIL:
+        if (copy_from_user(&sleeper, (qot_sleeper_t*)arg, sizeof(qot_sleeper_t)))
+            return -EACCES;
+        timeline = &sleeper.timeline;
+
+        // Check if the timeline exists
+        if (qot_timeline_get_info(&timeline))
+            return -EACCES;
+
+        // Wait until the required time
+        wait_until_retval = qot_attosleep(&sleeper.wait_until_time, timeline);
+        qot_clock_get_core_time(&sleeper.wait_until_time);
+
+        // convert from core time to timeline reference of time
+        coretime = TP_TO_nSEC(sleeper.wait_until_time.estimate);
+        qot_loc2rem(timeline->index, 0, &coretime);
+        TP_FROM_nSEC(sleeper.wait_until_time.estimate, coretime);
+
+        /* Send the time at which the node woke up back to user */
+        if (copy_to_user((qot_sleeper_t*)arg, &sleeper, sizeof(qot_sleeper_t)))
+            return -EACCES;
+        return wait_until_retval;
     default:
         return -EINVAL;
     }
