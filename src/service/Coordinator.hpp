@@ -37,7 +37,7 @@
 #include <msg/QoT_DCPS.hpp>
 
 // Synchronization engine
-//#include "Synchronization.hpp"
+//#include "PTP.hpp"
 #include "sync/Sync.hpp"
 
  // Include the QOT api
@@ -82,7 +82,7 @@ namespace qot
 		// Coordinator state
 		private: int phc;
 		private: int timelinefd;
-		//private: Synchronization sync;
+		//private: PTP sync;
 
 		// Join the DDS domain to exchange information about timelines
 		private: dds::domain::DomainParticipant dp;

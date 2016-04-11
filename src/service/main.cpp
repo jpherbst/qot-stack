@@ -79,6 +79,7 @@ int main(int argc, char **argv)
 		("iface,i",  	boost::program_options::value<std::string>()->default_value("eth0"), "PTP-compliant interface") 
 		("name,n", 		boost::program_options::value<std::string>()->default_value(RandomString(32)), "name of this node")
 		("addr,a", 		boost::program_options::value<std::string>()->default_value("192.168.2.33"), "ip address for this node")
+		("timelineid,d",boost::program_options::value<int>()->default_value(0), "timeline id")
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(
@@ -115,11 +116,12 @@ int main(int argc, char **argv)
 	// Some friendly debug
 	BOOST_LOG_TRIVIAL(info) << "My UNIQUE name is " << vm["name"].as<std::string>() 
 		<< " and I will perform synchronization over interface " << vm["iface"].as<std::string>()
-		<< " with an ip address " << vm["addr"].as<std::string>();
+		<< " with an ip address " << vm["addr"].as<std::string>() << " and timeline id " << vm["timelineid"].as<int>();
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
+	//qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
 
+	qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
 	// Run the io service
 	io.run();
 

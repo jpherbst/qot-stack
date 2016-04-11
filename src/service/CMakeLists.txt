@@ -88,6 +88,7 @@ ADD_LIBRARY(ptp SHARED
 	sync/ptp/linuxptp/ntpshm.c
 	sync/ptp/linuxptp/phc.c
 	sync/ptp/linuxptp/pi.c
+	sync/ptp/linuxptp/linregnew.c
 	sync/ptp/linuxptp/port.c
 	sync/ptp/linuxptp/print.c
 	sync/ptp/linuxptp/raw.c
@@ -124,8 +125,8 @@ ADD_EXECUTABLE(qotdaemon
 	sync/ntp/NTP.cpp
 	sync/Sync.hpp
 	sync/Sync.cpp
-#	Synchronization.hpp
-#	Synchronization.cpp
+#	PTP.hpp
+#	PTP.cpp
 	Coordinator.hpp
 	Coordinator.cpp
 	Timeline.cpp
