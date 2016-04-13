@@ -391,28 +391,6 @@ typedef enum {
     QOT_CLK_STATE_OFF,
 } qot_clk_state_t;
 
-/* QoT external input timestamping */
-typedef struct qot_extts {
-	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Edge to capture */
-	qot_return_t response;			/* Response */
-} qot_extts_t;
-
-/* QoT programmable periodic output */
-typedef struct qot_perout {
-	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Off, rising, falling, toggle */
-	timepoint_t start;					/* Start time */
-	timelength_t period;				/* Period */
-	qot_return_t response;			    /* Response */
-} qot_perout_t;
-
-/* QoT event */
-typedef struct qot_event {
-	qot_event_type_t type;				/* Event type */
-	utimepoint_t timestamp;				/* Uncertain time of event */
-	char data[QOT_MAX_NAMELEN];			/* Event data */
-} qot_event_t;
 
 /* QoT timeline type */
 typedef struct qot_timeline {
@@ -431,6 +409,30 @@ typedef struct qot_sleeper {
 	utimepoint_t wait_until_time;	    /* Uncertain time of event */
 } qot_sleeper_t;
 
+/* QoT external input timestamping */
+typedef struct qot_extts {
+	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
+	qot_trigger_t edge;					/* Edge to capture */
+	qot_return_t response;			    /* Response */
+} qot_extts_t;
+
+/* QoT programmable periodic output */
+typedef struct qot_perout {
+	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
+	qot_trigger_t edge;					/* Off, rising, falling, toggle */
+	timepoint_t start;					/* Start time */
+	timelength_t period;				/* Period */
+	qot_return_t response;			    /* Response */
+	qot_timeline_t timeline;			/* Timeline Data Structure */
+} qot_perout_t;
+
+/* QoT event */
+typedef struct qot_event {
+	qot_event_type_t type;				/* Event type */
+	utimepoint_t timestamp;				/* Uncertain time of event */
+	char data[QOT_MAX_NAMELEN];			/* Event data */
+} qot_event_t;
+
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
@@ -440,6 +442,8 @@ typedef struct qot_sleeper {
 #define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 #define QOTUSR_DESTROY_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 4, qot_timeline_t*)
 #define QOTUSR_WAIT_UNTIL       _IOWR(QOTUSR_MAGIC_CODE, 9, qot_sleeper_t*)
+#define QOTUSR_OUTPUT_COMPARE_ENABLE       _IOWR(QOTUSR_MAGIC_CODE, 10, qot_perout_t*)
+#define QOTUSR_OUTPUT_COMPARE_DISABLE       _IOWR(QOTUSR_MAGIC_CODE, 11, qot_perout_t*)
 
 
 /* QoT clock type (admin only) */

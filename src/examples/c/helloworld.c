@@ -1,6 +1,6 @@
 /*
  * @file helloworld.c
- * @brief Simple C example showing how to register to listen for capture events
+ * @brief Simple C example showing how to use wait_until 
  * @author Andrew Symington, Sandeep D'souza and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
@@ -47,12 +47,13 @@ int main(int argc, char *argv[])
 	// Variable declaration
 	timeline_t *my_timeline;
 	qot_return_t retval;
-	timelength_t resolution;
-	timeinterval_t accuracy;
 	utimepoint_t est_now;
 	utimepoint_t wake_now;
 	timepoint_t  wake;
 	timelength_t step_size;
+
+	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
+	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
 	// Allow this to go on for a while
 	int n = NUM_ITERATIONS;

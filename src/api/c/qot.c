@@ -219,16 +219,12 @@ qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid)
 
 qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc) 
 {
-    
-
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
 
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
     
-    
-
     timeline->binding.demand.accuracy = *acc;
     // Update the binding
     if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
@@ -241,15 +237,10 @@ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc)
 
 qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res) 
 {
-    
-
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-
-    
-    
 
     timeline->binding.demand.resolution = *res;
     // Update the binding
@@ -263,8 +254,6 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
 
 qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 {
-    //printf("/dev/timeline%d\n", timeline->info.index);
-
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
@@ -294,10 +283,40 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est)
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_config_pin_interrupt(timeline_t *timeline,
+qot_return_t timeline_enable_output_compare(timeline_t *timeline,
     qot_perout_t *request, qot_callback_t callback) {
 
-    return QOT_RETURN_TYPE_ERR;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    request->timeline = timeline->info;
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_OUTPUT_COMPARE_ENABLE, request) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_disable_output_compare(timeline_t *timeline,
+    qot_perout_t *request) {
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    request->timeline = timeline->info;
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_OUTPUT_COMPARE_DISABLE, request) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
 }
 
 qot_return_t timeline_config_pin_timestamp(timeline_t *timeline,
@@ -380,6 +399,22 @@ qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est)
     
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est) 
+{    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_REMOTE_TO_CORE, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }

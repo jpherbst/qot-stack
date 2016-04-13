@@ -131,6 +131,22 @@ qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, int force, lon
     return QOT_RETURN_TYPE_OK;
 }
 
+/* Program a PWM */
+qot_return_t qot_clock_program_output_compare(timepoint_t *core_start, timepoint_t *core_period, qot_perout_t *perout, int on, s64 (*callback)(qot_perout_t *perout_ret))
+{
+    long retval = 0;
+    if (!core)
+        return QOT_RETURN_TYPE_ERR;
+    /* Program an interrupt on core time */
+    retval = core->impl.enable_compare(core_start, core_period, perout, callback, on);
+    if(retval)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    /* Success */
+    return QOT_RETURN_TYPE_OK;
+}
+
 /* Add Interrupt Latency uncertainity to a measurement */
 qot_return_t qot_clock_add_core_interrupt_latency(utimepoint_t *utp)
 {
