@@ -44,6 +44,7 @@ typedef struct qot_clock_impl {
     timepoint_t (*read_time)(void);
     long (*program_interrupt)(timepoint_t expiry, int force, long (*callback)(void));
     long (*cancel_interrupt)(void);
+    long (*enable_compare)(timepoint_t *core_start, timepoint_t *core_period, qot_perout_t *perout, s64 (*callback)(qot_perout_t *perout_ret), int on);
     long (*sleep)(void);
     long (*wake)(void);
 } qot_clock_impl_t;

@@ -61,7 +61,7 @@ static spinlock_t qot_timelines_lock;
 
 /* Private data for a timeline, not visible outside this code      */
 typedef struct timeline_impl {
-    qot_timeline_t *info;        /* Timeline info                   */
+    qot_timeline_t *info;       /* Timeline info                   */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
@@ -327,6 +327,7 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
 
     return QOT_RETURN_TYPE_OK;
 }
+
 
 /* Discipline operations */
 

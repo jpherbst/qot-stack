@@ -145,9 +145,15 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est);
  * @param callback A function to call on each edge event
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_config_pin_interrupt(timeline_t *timeline,
-    qot_perout_t *request, qot_callback_t callback);
+qot_return_t timeline_enable_output_compare(timeline_t *timeline, qot_perout_t *request, qot_callback_t callback);
 
+/**
+ * @brief Disable interrupt be generated on a given pin
+ * @param timeline Pointer to a timeline struct
+ * @param request Pointer to interrupt configuration
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_disable_output_compare(timeline_t *timeline, qot_perout_t *request);
 /**
  * @brief Request an interrupt be generated on a given pin
  * @param timeline Pointer to a timeline struct
@@ -207,6 +213,20 @@ qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
  **/
 qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer);
 
+/**
+ * @brief Converts core time to remote timeline time
+ * @param timeline Pointer to a timeline struct
+ * @param est timepoint to be converted
+ * @return A status code indicating success (0) or other
+ **/
 qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est); 
+
+/**
+ * @brief Converts remote timeline time to core time
+ * @param timeline Pointer to a timeline struct
+ * @param est timepoint to be converted
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est); 
 
 #endif
