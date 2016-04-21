@@ -1307,7 +1307,7 @@ static int port_tx_sync(struct port *p)
 	msg->header.sourcePortIdentity = p->portIdentity;
 	msg->header.sequenceId         = p->seqnum.sync++;
 
-	if(p->seqnum.sync > 10){
+	if(p->seqnum.sync > 25){
 		pr_notice("Change sync interval");
 		p->logSyncInterval = p->laterlogSyncInterval; //QOT, just for testing
 	}

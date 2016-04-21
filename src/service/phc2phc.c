@@ -261,6 +261,7 @@ int main(int argc, char *argv[])
 
 	/* This will save the servo state */
 	enum servo_state state;
+	double dmax, dmin;
 
 	/* Keep checking for time stamps */
 	signal(SIGINT, exit_handler);
@@ -272,7 +273,7 @@ int main(int argc, char *argv[])
                         break;
                 }
 		/* Work out the predicted timestamp */
-		ptp_clock_addns(&perout_request.start, period);
+		ptp_clock_addns(&perout_request.start, (period)); //Fatima Test to reduce sync error
 
 		/* Local timestamp and offset */
 		local_ts = ptp_clock_u64(&perout_request.start);
@@ -281,11 +282,14 @@ int main(int argc, char *argv[])
 
 		/* Update the clock */
 		ppb = servo_sample(
+			CLOCK_SERVO_PI,
 			servo, 			/* Servo object */
 			offset,			/* T(slave) - T(master) */
 			local_ts, 		/* T(master) */
 			//weight,			/* Weighting */
-			&state 			/* Next state */
+			&state, 			/* Next state */
+			&dmax,
+			&dmin
 		);
 
 		if(ppb > 50 || ppb < -50) // Fatima: just a small hack
@@ -309,7 +313,7 @@ int main(int argc, char *argv[])
 			perout_request.start.sec, perout_request.start.nsec);
 		printf("- NIC PHC at %lld.%09u\n", 
 			event.t.sec, event.t.nsec);
-		fflush(stdout);
+		//fflush(stdout);
 	}
 
 	/* Destroy the servo */

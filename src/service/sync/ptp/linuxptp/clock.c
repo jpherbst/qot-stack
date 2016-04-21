@@ -184,6 +184,8 @@ struct clock {
 	LIST_HEAD(tmls_servo_head, servo) tmls_servos; /* QOT */
 	int *timelinesfd; /* QOT */
 	int timelines_size; /* QOT */
+	double off_stddev; /* QOT */
+	double freq_stddev; /* QOT */
 };
 
 struct clock the_clock;
@@ -842,9 +844,9 @@ static void clock_stats_update(struct clock_stats *s,
 			freq_stats.mean, freq_stats.stddev);
 	}
 
-	stats_reset(s->offset);
-	stats_reset(s->freq);
-	stats_reset(s->delay);
+	//stats_reset(s->offset);
+	//stats_reset(s->freq);
+	//stats_reset(s->delay);
 }
 
 static enum servo_state clock_no_adjust(struct clock *c)
@@ -1740,6 +1742,10 @@ enum servo_state clock_synchronize(struct clock *c,
 	struct servo *s;
 	struct timespec ingress_tml, ingress_tml_inv; //QOT
 	tmv_t tml_offset, tml_local; //QOT
+	double dmax, dmin;
+	qot_bounds_t bounds;
+	int fd;
+	struct stats_result offset_stats, freq_stats;
 
 	/* QOT, synchronize all the timelines */
 	LIST_FOREACH(s, &c->tmls_servos, list) {
@@ -1786,8 +1792,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		tmv_add(origin, tmv_add(c->path_delay, tmv_add(c->c1, c->c2))));
 
 	tml_local = timespec_to_tmv(ingress_tml); /* QOT */
-	tml_offset = tmv_sub(tml_local,
-		tmv_add(origin, tmv_add(c->path_delay, tmv_add(c->c1, c->c2)))); /* QOT */
+	tml_offset = tmv_sub(tml_local, tmv_add(origin, tmv_add(c->path_delay, tmv_add(c->c1, c->c2)))); /* QOT */
 
 	if (!c->path_delay)
 		return state;
@@ -1797,29 +1802,33 @@ enum servo_state clock_synchronize(struct clock *c,
 
 	c->cur.offsetFromMaster = tmv_to_TimeInterval(c->master_offset);
 
-	if (c->free_running)
-		return clock_no_adjust(c);
+	//if (c->free_running)
+		//return clock_no_adjust(c);
 
 	/*adj = servo_sample(c->servo, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state);*/
-	adj = servo_sample(s, tmv_to_nanoseconds(c->master_offset),
-			   tmv_to_nanoseconds(ingress), &state); /* QOT */
+	adj = servo_sample(CLOCK_SERVO_LINREGNEW, s, tmv_to_nanoseconds(c->master_offset),
+			   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
 
 	c->servo_state = state;
 
 	/* QOT, Stats maintained in QOT core */
 	/*if (c->stats.max_count > 1) {
 		clock_stats_update(&c->stats,
-				   tmv_to_nanoseconds(c->master_offset), adj);
-	} else {
-		*/
-		pr_info("tid: %i master offset %10" PRId64 " s%d freq %+7.0f "
-			"path delay %9" PRId64 "c1 %9" PRId64 "c2 %9" PRId64,
+				   tmv_to_nanoseconds(tml_offset), adj);
+	}*/
+	// else {
+
+		pr_info("tid: %i master offset %10" PRId64 " s%d freq %+7.0f dmax %+7.0f dmin %+7.0f "
+			"path delay %9" PRId64,
 			s->tml_clkid,
 			tmv_to_nanoseconds(tml_offset),
-			/*tmv_to_nanoseconds(c->master_offset),*/ state, adj,
-			tmv_to_nanoseconds(c->path_delay), tmv_to_nanoseconds(c->c1), tmv_to_nanoseconds(c->c2));
+			state, adj, dmax, dmin,
+			tmv_to_nanoseconds(c->path_delay));
+			
 	//}
+
+		//pr_info("%10"PRId64".%13"PRId64",\n", tmv_to_nanoseconds(tml_offset), tmv_to_nanoseconds(ingress));
 
 	switch (state) {
 	case SERVO_UNLOCKED:
@@ -1829,7 +1838,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
-		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1845,8 +1854,42 @@ enum servo_state clock_synchronize(struct clock *c,
 			sysclk_set_sync();
 		*/
 		// Adjust the timeline
+		if(tmv_to_nanoseconds(tml_offset) < 0)
+			clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
+		else
+			clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
 		//clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
-		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
+
+		/* SET UNCERTAINTY START */
+		// Find uncertainty in Offset (Variance)
+		clock_stats_update(&c->stats,
+				tmv_to_nanoseconds(tml_offset), adj);
+		stats_get_result(c->stats.offset, &offset_stats); //QOT
+		stats_get_result(c->stats.freq, &freq_stats); //QOT
+		if(offset_stats.stddev == 0)
+			offset_stats.stddev = c->off_stddev;
+		if(freq_stats.stddev == 0)
+			freq_stats.stddev = c->freq_stddev;
+		
+		//Invert max and min since we run the clock in opposite direction to compensate for drift
+		//bounds.u_drift = (s32) (-dmin);
+		//bounds.l_drift = (s32) (-dmax);
+		bounds.u_drift = (s32) -(freq_stats.mean - freq_stats.stddev);
+		bounds.l_drift = (s32) -(freq_stats.mean + freq_stats.stddev);
+		bounds.m_nsec = offset_stats.stddev;
+
+		//c->off_stddev = offset_stats.stddev;
+		//c->freq_stddev = freq_stats.stddev;
+
+		pr_info("Offset-stddev %lld Freq upp %lld Freq low %lld ", bounds.m_nsec, bounds.u_drift, bounds.l_drift);
+
+		fd = CLOCKID_TO_FD(s->tml_clkid);
+
+		if(ioctl(fd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){
+			pr_warning("Setting sync uncertainty failed for timeline ");
+		}
+		/* SET UNCERTAINTY END */
+
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
 
@@ -1999,16 +2042,16 @@ double clock_rate_ratio(struct clock *c)
 /* QoT_start */
 int clock_project_timeline(clockid_t clkid, struct timespec ts, struct timespec *tml_ts)
 {
-	timepoint_t tp;
-	timepoint_from_timespec(&tp, &ts); 
+	stimepoint_t utp;
+	timepoint_from_timespec(&utp.estimate, &ts); 
 
 	int fd = CLOCKID_TO_FD(clkid);
 
-	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
+	if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &utp)){
 		return -1;
 	}
-	tml_ts->tv_sec = tp.sec;
-    tml_ts->tv_nsec= tp.asec / NS_PER_SEC;
+	tml_ts->tv_sec = utp.estimate.sec;
+    tml_ts->tv_nsec= utp.estimate.asec / NS_PER_SEC;
 	return 0;
 }
 
