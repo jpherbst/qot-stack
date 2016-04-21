@@ -23,4 +23,11 @@
 
 struct servo *linregnew_servo_create();
 
+double linregnew_sample(struct servo *servo,
+			int64_t offset,
+			uint64_t local_ts,
+			enum servo_state *state,
+			double *max_drift,
+			double *min_drift);
+
 #endif

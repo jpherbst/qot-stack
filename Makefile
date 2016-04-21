@@ -10,12 +10,12 @@ all:
 	dtc -O dtb -o BBB-AM335X-00A0.dtbo -b 0 -@ targets/am335x/BBB-AM335X-00A0.dts
 
 clean:
-	rm targets/am335x/*.dtbo
+	rm *.dtbo
 
 install:
 	sudo cp -v src/modules/qot/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v src/modules/qot_am335x/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
-	sudo cp -v targets/am335x/*.dtbo /export/rootfs/lib/firmware
+	sudo cp -v *.dtbo /export/rootfs/lib/firmware
 	sudo cp targets/common/80-qot.rules /export/rootfs/etc/udev/rules.d/
 	sudo cp targets/am335x/capes /export/rootfs/usr/bin/
 	sudo chmod 755 /export/rootfs/usr/bin/capes

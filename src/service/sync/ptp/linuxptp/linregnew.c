@@ -42,14 +42,19 @@ static void linregnew_destroy(struct servo *servo)
 	free(s);
 }
 
-static double linregnew_sample(struct servo *servo,
+double linregnew_sample(struct servo *servo,
 			int64_t offset,
 			uint64_t local_ts,
-			enum servo_state *state)
+			enum servo_state *state,
+			double *max_drift,
+			double *min_drift)
 {
 	struct linregnew_servo *s = container_of(servo, struct linregnew_servo, servo);
 
-	double ppb = 0.0;
+	double ppb, ppbnow = 0.0;
+	double ppbmax = 0.0;
+	double ppbmin = 0.0;
+
 	// Map from a local time to an error
 	s->data[s->next][0] = (double) local_ts;
 	s->data[s->next][1] = (double) offset;
@@ -65,13 +70,14 @@ static double linregnew_sample(struct servo *servo,
 	double   sumxy = 0.0;                       /* sum of x * y                  */
 	double   sumy = 0.0;                        /* sum of y                      */
 	double   sumy2 = 0.0;                       /* sum of y**2                   */
-	double   x;                                 /* input x data                  */
-	double   y;                                 /* input y data                  */
 
 	// k = l_0
 	double k = s->data[0][0];
 
-	//
+	// uncertainty initialization
+	ppbnow = ((s->data[1][1] - s->data[0][1]) / (s->data[1][0] - s->data[0][0])) * 1e9;
+	ppbmax = ppbmin = ppbnow;
+
 	double c = 0;
 	for (int i = 0; i < s->n; i++)
 	{
@@ -81,7 +87,19 @@ static double linregnew_sample(struct servo *servo,
 		sumxy += (s->data[i][0] - k) * s->data[i][1];            	/* compute sum of x * y          */
 		sumy  += s->data[i][1];                           	   	/* compute sum of y              */
 		sumy2 += s->data[i][1] * s->data[i][1];                  	/* compute sum of y**2           */
+
+		// highest and lowest slope calculation (for uncertainty in sync)
+		if(i > 1){
+			ppbnow = ((s->data[i][1] - s->data[i-1][1]) / (s->data[i][0] - s->data[i-1][0])) * 1e9;
+			if (ppbnow > ppbmax)
+				ppbmax = ppbnow;
+			if (ppbnow < ppbmin)
+				ppbmin = ppbnow;
+		}
 	}                                        	/* loop again for more data      */
+
+	// mean and stddev of offset
+	
 
 	s->m = (c * sumxy  -  sumx * sumy) /        	/* compute slope                 */
 		(c * sumx2 - sumx*sumx);
@@ -103,6 +121,8 @@ static double linregnew_sample(struct servo *servo,
 		*state = SERVO_LOCKED;
 
 	ppb = s->m * 1e9;
+	*max_drift = ppbmax;
+	*min_drift = ppbmin;
 
 	//pr_info("n: %i, next: %i, m: %.9f, ppb: %.3f", s->n, s->next, s->m, ppb);
 	return ppb;
@@ -131,7 +151,7 @@ struct servo *linregnew_servo_create()
 		return NULL;
 
 	s->servo.destroy = linregnew_destroy;
-	s->servo.sample  = linregnew_sample;
+	//s->servo.sample  = linregnew_sample; //QoT
 	s->servo.sync_interval = linregnew_sync_interval;
 	s->servo.reset   = linregnew_reset;
 	s->next          = 0;

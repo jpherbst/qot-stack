@@ -45,7 +45,7 @@ struct servo *servo_create(enum servo_type type, int fadj, int max_ppb, int sw_t
 		servo = ntpshm_servo_create();
 		break;
 	case CLOCK_SERVO_LINREGNEW:
-		servo = linregnew_servo_create();
+		servo = linregnew_servo_create(); //QOT
 		break;
 	default:
 		return NULL;
@@ -79,14 +79,23 @@ void servo_destroy(struct servo *servo)
 	servo->destroy(servo);
 }
 
-double servo_sample(struct servo *servo,
+double servo_sample(enum servo_type type,
+			struct servo *servo,
 		    int64_t offset,
 		    uint64_t local_ts,
-		    enum servo_state *state)
+		    enum servo_state *state,
+		    double *max_drift,
+			double *min_drift) //QOT
 {
 	double r;
 
-	r = servo->sample(servo, offset, local_ts, state);
+	switch (type) {
+	case CLOCK_SERVO_LINREGNEW:
+		r = linregnew_sample(servo, offset, local_ts, state, max_drift, min_drift); //QOT
+		break;
+	default:
+		r = servo->sample(servo, offset, local_ts, state);
+	}
 
 	if (*state != SERVO_UNLOCKED)
 		servo->first_update = 0;
