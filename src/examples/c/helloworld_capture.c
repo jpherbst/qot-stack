@@ -50,6 +50,7 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
+#define DEBUG 0
 
 static int running = 1;
 
@@ -61,26 +62,85 @@ static void exit_handler(int s)
 
 int main(int argc, char *argv[])
 {
+    FILE *fp1, *fp2, *fp3, *fp4, *fp5, *fp6;
 	timeline_t *my_timeline1;
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
-	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
+	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e13, .above.sec = 0, .above.asec = 1e13 }; // 10usec
 
-	// Allow this to go on for a while
-	int n = 0;
-	int i;
-
+	// Grab the app name
+	const char *cosec = "coretime.log";
 	if (argc > 1)
-		n = atoi(argv[1]);
+		cosec = argv[1];
 
-	// Grab the timeline
-	const char *u = TIMELINE_UUID;
-	if (argc > 2)
-		u = argv[2];
+	const char *consec = "coretime_nsec.log";
+    if (argc > 2)
+        consec = argv[2];
 
-	// Grab the timeline
-	const char *m = APPLICATION_NAME;
-	if (argc > 3)
-		m = argv[3];
+    const char *u_sec = "u_errors_sec.log";
+    if (argc > 3)
+        u_sec = argv[3];
+
+    const char *u_nsec = "u_errors_nsec.log";
+    if (argc > 4)
+        u_nsec = argv[4];
+
+    const char *l_sec = "l_errors_sec.log";
+    if (argc > 5)
+        l_sec = argv[5];
+
+    const char *l_nsec = "l_errors_nsec.log";
+    if (argc > 6)
+        l_nsec = argv[6];
+
+    if (argc > 7)
+        accuracy.above.asec = atof(argv[7]);
+
+    // Grab the timeline
+    const char *t = TIMELINE_UUID;
+    if (argc > 8)
+        t = argv[8];
+
+    // Grab the app name
+    const char *m = APPLICATION_NAME;
+    if (argc > 9)
+        m = argv[9];
+
+    /* open the files to write Core time, and errors */
+      fp1 = fopen(cosec, "w");
+      if (fp1 == NULL) {
+         printf("Couldn't open coretime.log for writing.\n");
+         exit(0);
+      }
+          /* open the file to write Core time */
+      fp2 = fopen(consec, "w");
+      if (fp2 == NULL) {
+         printf("Couldn't open coretime_nsec.log for writing.\n");
+         exit(0);
+      }
+          /* open the file to write Core time */
+      fp3 = fopen(u_sec, "w");
+      if (fp3 == NULL) {
+         printf("Couldn't open u_errors_sec.log for writing.\n");
+         exit(0);
+      }
+
+	  fp4 = fopen(u_nsec, "w");
+      if (fp4 == NULL) {
+         printf("Couldn't open u_errors_nsec.log for writing.\n");
+         exit(0);
+      }
+
+      fp5 = fopen(l_sec, "w");
+      if (fp4 == NULL) {
+         printf("Couldn't open l_errors_sec.log for writing.\n");
+         exit(0);
+      }
+
+      fp6 = fopen(l_nsec, "w");
+      if (fp4 == NULL) {
+         printf("Couldn't open l_errors_nsec.log for writing.\n");
+         exit(0);
+      }
 
 /** CREATE TIMELINE ----------------------**/
 
@@ -92,10 +152,10 @@ int main(int argc, char *argv[])
 	}
 
 	// Bind to a timeline
-	printf("Binding to timeline 1 %s ........\n", u);
-	if(timeline_bind(my_timeline1, u, m, resolution, accuracy))
+	printf("Binding to timeline 1 %s ........\n", t);
+	if(timeline_bind(my_timeline1, t, m, resolution, accuracy))
 	{
-		printf("Failed to bind to timeline 1 %s\n", u);
+		printf("Failed to bind to timeline 1 %s\n", t);
 		timeline_t_destroy(my_timeline1);
 		return QOT_RETURN_TYPE_ERR;
 	}
@@ -109,7 +169,7 @@ int main(int argc, char *argv[])
     struct ptp_pin_desc desc;                   /* Pin configuration */
     struct ptp_extts_event event;               /* PTP event */
     struct ptp_extts_request extts_request;     /* External timestamp req */
-    timepoint_t tp;
+    stimepoint_t utp;
 
     /* Open the character device */
     fd_m = open(device_m, O_RDWR);
@@ -119,7 +179,7 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Device opened %d\n", fd_m);
-    memset(&desc, 0, sizeof(desc));
+    /*memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 1;              // '1' corresponds to external timestamp
     desc.chan = index_m;
@@ -140,39 +200,56 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Requesting timestamps success for %d\n", fd_m);
-    
+    */
     // Keep checking for time stamps
-    
+
     signal(SIGINT, exit_handler);
     while (running) {
         /* Read events coming in */
-        printf("Trying to read events %d\n", running);
+        if(DEBUG)
+            printf("Trying to read events %d\n", running++);
         cnt = read(fd_m, &event, sizeof(event));
         if (cnt != sizeof(event)) {
             //perror("cannot read event");
             printf("Cannot read event");
             break;
         }
-        printf("Core - %lld.%09u\n", event.t.sec, event.t.nsec);
+        if(DEBUG)
+            printf("Core - %lld.%09u\n", event.t.sec, event.t.nsec);
 
-        tp.sec  = event.t.sec;
-        tp.asec = event.t.nsec*nSEC_PER_SEC;
+        utp.estimate.sec  = event.t.sec;
+        utp.estimate.asec = event.t.nsec*nSEC_PER_SEC;
 
         // Get the core time
-        timeline_core2rem(my_timeline1, &tp);
+        timeline_core2rem(my_timeline1, &utp);
 
-        printf("TML -%lld.%llu\n", tp.sec, (tp.asec / nSEC_PER_SEC));
+        if(DEBUG){
+            printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
+            printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
+            printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
+        } else{
+            printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
+            printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
+            printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
+            fprintf(fp1, "%lld,\n", utp.estimate.sec);
+            fprintf(fp2, "%llu,\n", (utp.estimate.asec / nSEC_PER_SEC));
+            fprintf(fp3, "%llu,\n", utp.u_estimate.sec);
+            fprintf(fp4, "%llu,\n", (utp.u_estimate.asec / nSEC_PER_SEC));
+            fprintf(fp5, "%llu,\n", utp.l_estimate.sec);
+            fprintf(fp6, "%llu,\n", (utp.l_estimate.asec / nSEC_PER_SEC));
+            
+        }
     }
 
     /* Disable the pin */
-    memset(&desc, 0, sizeof(desc));
+    /*memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 0;              // '0' corresponds to no function 
     desc.chan = index_m;
     if (ioctl(fd_m, PTP_PIN_SETFUNC, &desc)) {
         perror("PTP_PIN_SETFUNC Disable");
     }
-    
+    */
     /* Close the character device */
     close(fd_m);
 
@@ -181,14 +258,22 @@ int main(int argc, char *argv[])
 	// Unbind from timeline
 	if(timeline_unbind(my_timeline1))
 	{
-		printf("Failed to unbind from timeline 1 %s\n", u);
+		printf("Failed to unbind from timeline 1 %s\n", t);
 		timeline_t_destroy(my_timeline1);
 		return QOT_RETURN_TYPE_ERR;
 	}
-	printf("Unbound from timeline 1 %s\n", u);
+	printf("Unbound from timeline 1 %s\n", t);
 
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline1);
+
+    /* close the files */
+      fclose(fp1);
+      fclose(fp2);
+      fclose(fp3);
+      fclose(fp4);
+      fclose(fp5);
+      fclose(fp6);
 
 	/* Success */
 	return 0;

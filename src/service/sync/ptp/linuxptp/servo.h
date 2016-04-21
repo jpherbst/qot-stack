@@ -108,10 +108,18 @@ void servo_destroy(struct servo *servo);
  * @param state     Returns the servo's state.
  * @return The clock adjustment in parts per billion.
  */
-double servo_sample(struct servo *servo,
+/*double servo_sample(struct servo *servo,
 		    int64_t offset,
 		    uint64_t local_ts,
-		    enum servo_state *state);
+		    enum servo_state *state);*/
+
+double servo_sample(enum servo_type type,
+			struct servo *servo,
+		    int64_t offset,
+		    uint64_t local_ts,
+		    enum servo_state *state,
+		    double *max_drift,
+			double *min_drift); //QOT
 
 /**
  * Inform a clock servo about the master's sync interval.

@@ -33,8 +33,7 @@
 #include "transport.h"
 
 // QoT base types
-//#include "../../../../qot_types.h"
-#include "qot_types.h"
+#include "../../../../qot_types.h"
 
 struct ptp_message; /*forward declaration*/
 

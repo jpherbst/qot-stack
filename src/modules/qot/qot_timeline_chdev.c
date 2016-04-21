@@ -71,6 +71,9 @@ typedef struct timeline_impl {
     s64 last;                   /* Discipline: last cycle count of */
     s64 mult;                   /* Discipline: ppb multiplier      */
     s64 nsec;                   /* Discipline: global time offset  */
+    s64 m_nsec;                 /* Discipline: global time for master  */
+    s64 u_mult;                 /* Discipline: upper bound on ppb  */
+    s64 l_mult;                 /* Discipline: lower bound on ppb  */
     spinlock_t lock;            /* Protects driver time registers  */
     struct idr idr_bindings;    /* IDR for trackng bindings        */
     struct list_head head_res;  /* Head pointing to resolution     */
@@ -457,7 +460,6 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
         err = qot_timeline_chdev_adj_adjtime(pc, delta);
     } else if (tx->modes & ADJ_FREQUENCY) {
         s32 ppb = qot_timeline_chdev_ppm_to_ppb(tx->freq);
-        pr_info("Fatima: adjfreq %d\n", ppb);
         //if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
             //return -ERANGE;
         err = qot_timeline_chdev_adj_adjfreq(pc, ppb);
@@ -484,13 +486,21 @@ static int qot_timeline_chdev_release(struct posix_clock *pc)
 
 static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 {    
+    qot_bounds_t bounds;
     utimepoint_t utp;
+    stimepoint_t stp;
     qot_binding_t msgb;
     timepoint_t tp;
     s64 coretime;
+    s64 timelinetime;
+    s64 u_timelinetime;
+    s64 l_timelinetime;
     s64 loctime;
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+
+    utimepoint_t wait_until_time;
+    int wait_until_retval;
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -581,17 +591,51 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         qot_insert_list_low(binding_impl, &timeline_impl->head_low);
         qot_insert_list_upp(binding_impl, &timeline_impl->head_upp);
         break;
+    /* Setting the upper and lower bound on timeline's drift */
+    case TIMELINE_SET_SYNC_UNCERTAINTY:
+        if (copy_from_user(&bounds, (qot_bounds_t*)arg, sizeof(qot_bounds_t)))
+            return -EACCES;
+        timeline_impl->u_mult = (s32) bounds.u_drift;
+        timeline_impl->l_mult = (s32) bounds.l_drift;
+        timeline_impl->m_nsec = (s64) bounds.m_nsec;
+        break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
-        if (copy_from_user(&tp, (timepoint_t*)arg, sizeof(timepoint_t)))
+        if (copy_from_user(&stp, (stimepoint_t*)arg, sizeof(stimepoint_t)))
             return -EACCES;
 
         // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(tp);
-        qot_loc2rem(timeline_impl->index, 0, &coretime);
-        TP_FROM_nSEC(tp, coretime);
+        coretime = TP_TO_nSEC(stp.estimate);
+        timelinetime = coretime;
+        qot_loc2rem(timeline_impl->index, 0, &timelinetime);
+        TP_FROM_nSEC(stp.estimate, timelinetime);
 
-        if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
+        // find upper bound on core time
+        if(timeline_impl->mult > 0){
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->m_nsec;
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-(7*timeline_impl->m_nsec);
+        }else{
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+(7*timeline_impl->m_nsec);
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->m_nsec;
+        }
+/*      if(u_timelinetime > timelinetime)
+            TL_FROM_nSEC(utp.interval.above, u_timelinetime - timelinetime);
+        else
+            TL_FROM_nSEC(utp.interval.above, 0);
+            //TL_FROM_nSEC(utp.interval.above, timelinetime - u_timelinetime);
+
+        // find lower bound on core time
+        //l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->m_nsec;
+        if(timelinetime > l_timelinetime)
+            TL_FROM_nSEC(utp.interval.below, timelinetime - l_timelinetime);
+        else
+            TL_FROM_nSEC(utp.interval.below, 0);
+            //TL_FROM_nSEC(utp.interval.below, l_timelinetime - timelinetime);
+*/
+        TP_FROM_nSEC(stp.u_estimate, u_timelinetime);
+        TP_FROM_nSEC(stp.l_estimate, l_timelinetime);
+
+        if (copy_to_user((stimepoint_t*)arg, &stp, sizeof(stimepoint_t)))
             return -EACCES;
         break;
     /* Convert timeline time to core time*/
@@ -734,10 +778,13 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 	}
     
     /* added by Fatima START */
-    // NEED TO INITIALIZE SYNC PARAMETERS
+    // INITIALIZE SYNC PARAMETERS
     timeline_impl->mult = 0;
     timeline_impl->last = 0;
     timeline_impl->nsec = 0;
+    timeline_impl->m_nsec = 0;
+    timeline_impl->u_mult = 0;
+    timeline_impl->l_mult = 0;
     timeline_impl->dialed_frequency = 0;
     timeline_impl->max_adj = 1000000;
     /* added by Fatima END */

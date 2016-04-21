@@ -202,7 +202,7 @@ void Coordinator::Start(int id, int fd, const char* uuid, timeinterval_t acc, ti
 	BOOST_LOG_TRIVIAL(info) << "Lower Accuracy of timeline is " << acc.below.sec << ", " << acc.below.asec;
 	BOOST_LOG_TRIVIAL(info) << "Higher Accuracy of timeline is " << acc.above.sec << ", " << acc.above.asec;
 	timelength_t max_acc_bound;
-	timelength_max(&max_acc_bound, &acc.above, &acc.below);
+	timelength_min(&max_acc_bound, &acc.above, &acc.below);
 	double scalar_acc = (double) max_acc_bound.sec * aSEC_PER_SEC + (double) max_acc_bound.asec;
 	timeline.accuracy() = scalar_acc;				// Our accuracy
 	BOOST_LOG_TRIVIAL(info) << "timeline accuracy is " << timeline.accuracy();

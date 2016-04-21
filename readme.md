@@ -189,6 +189,7 @@ $> /export/install_netboot.sh
 
 Now, you have a working kernel
 
+NOTE: All the steps below asume that the Local IP of the Host is set to 10.42.0.1
 
 ## STEP 2 : Configure DHCP  ##
 
