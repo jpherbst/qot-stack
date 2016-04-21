@@ -129,6 +129,7 @@ int main(int argc, char *argv[])
     {
         wake = wake_now.estimate;
         timepoint_add(&wake, &request.period);
+        wake.asec = 0;
     }    
 
     // Configure Periodic request

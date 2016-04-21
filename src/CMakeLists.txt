@@ -43,6 +43,12 @@ IF (BUILD_PROGAPI)
 	ADD_SUBDIRECTORY(api)
 ENDIF (BUILD_PROGAPI)
 
+# Build the qot latency daemon
+OPTION(BUILD_QOTLATD "Build qot latency daemon" ON)
+IF (BUILD_QOTLATD)
+	ADD_SUBDIRECTORY(qot-daemon)
+ENDIF (BUILD_QOTLATD)
+
 # Build the system service
 OPTION(BUILD_SERVICE "Build system service" OFF)
 IF (BUILD_SERVICE)

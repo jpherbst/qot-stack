@@ -155,6 +155,7 @@ int main(int argc, char *argv[])
     {
         wake = wake_now.estimate;
         timepoint_add(&wake, &stepsize);
+        wake.asec = 0;
     }    
 
     // Exit Handler on SIGINT

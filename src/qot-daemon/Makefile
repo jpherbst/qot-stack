@@ -4,7 +4,7 @@ DEP = /home/roseline/qot-stack/src/api/c/qot
 KERNELDIR ?= /export/bb-kernel/KERNEL
 KERNELVER ?= 4.1.6-bone-rt-r16
 
-CROSS_COMPILE=  /export/bb-kernel/dl/gcc-linaro-4.9-2015.02-3-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
+CROSS_COMPILE=  /export/bb-kernel/dl/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
 
 CC = $(CROSS_COMPILE)gcc
 
@@ -17,7 +17,9 @@ all:
 	$(CC) -o $(APP1)  $(APP1).c $(DEP).c $(CCFLAGS) 
 
 install:
-	sudo scp -v $(APP1) root@192.168.7.2:/home/apps 
+	#sudo scp -v $(APP1) root@192.168.7.2:/home/apps 
+	sudo cp $(APP1) /export/rootfs/home
+	sudo cp test.sh /export/rootfs/home
 	#sudo scp -v $(APP1) root@192.168.127.204:/home/apps 
 	#sudo scp -v $(APP1) root@192.168.127.202:/home/apps 
 

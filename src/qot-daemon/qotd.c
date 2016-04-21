@@ -31,19 +31,26 @@
 #include <stdlib.h>
 #include <math.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "../api/c/qot.h"
 
 #define DEBUG 0
+#define ANALYZE 1
 
 #define ONE_BILLION  1000000000ULL
 
-#define HISTOGRAM_BINS 400
-#define HISTOGRAM_RES 100ULL    // in ns
+#define HISTOGRAM_BINS 4000
+#define HISTOGRAM_RES 10ULL    // in ns
+#define MAX_FILENAME_LEN 100
+
+char filename[100] = "/home/qot_latency";
+
+FILE *fp;
 
 int histogram[HISTOGRAM_BINS];
 
-int buckets = 1000;         // how many samples to collect per iteration
+int buckets = 10000;         // how many samples to collect per iteration
 int iters = 50;           // how many iterations to run
 
 uint64_t *timestamp;
@@ -57,6 +64,13 @@ double median = 0;
 double stdev = 0;
 utimelength_t uncertainity;
 
+static int running = 1;
+
+static void exit_handler(int s)
+{
+   printf("Exit requested \n");
+   running = 0;
+}
 
 void deltaT(const char* name, uint64_t *x, int calc_hist) 
 {
@@ -128,6 +142,17 @@ void deltaT(const char* name, uint64_t *x, int calc_hist)
       }
       printf("Histogram Overflows: %d\n", hist_overflows);
    }
+   if(ANALYZE)
+   {
+      if(calc_hist == 1)
+      {
+         for(i=0; i < HISTOGRAM_BINS; i++)
+         {
+            if(histogram[i] != 0) 
+              fprintf(fp, "%llu\t%d\n", (i+1)*HISTOGRAM_RES, histogram[i]);
+         }
+      }
+   }
    return;
 }
 
@@ -143,6 +168,7 @@ int main(int argc, char** argv)
 {
    qot_return_t retval;
    timepoint_t *est_now;
+   char file_timestamp[20];
    struct timespec sleep_interval;
    int adm_file;
    int i, n;
@@ -162,6 +188,7 @@ int main(int argc, char** argv)
 
    if (argc > 2)
       buckets = atoi(argv[2]);
+
 
    // Allocate Memory
    timestamp = (uint64_t*)malloc(buckets*sizeof(uint64_t));
@@ -187,7 +214,21 @@ int main(int argc, char** argv)
       return QOT_RETURN_TYPE_ERR;
    }
 
-   while(1)
+   // Open Output file
+   if(ANALYZE)
+   {
+      if(ioctl(adm_file, QOTADM_GET_CORE_TIME_RAW, &est_now[0]) < 0)
+      {
+         return QOT_RETURN_TYPE_ERR;
+      }
+      sprintf(file_timestamp, "%lld", est_now[0].sec);
+      strcat(filename, file_timestamp);
+      fp = fopen(filename, "w");
+   }
+
+   signal(SIGINT, exit_handler);
+
+   while(running)
    {  
       // Polling Loop to read core time
       for (i = 0; i < iters * buckets; ++i) 
@@ -222,6 +263,10 @@ int main(int argc, char** argv)
    // Close the qot_adm file
    if (adm_file)
       close(adm_file);
+
+   // Close the output dump file
+   if(ANALYZE)
+      fclose(fp);
 
    // Free Memory
    free(timestamp);
