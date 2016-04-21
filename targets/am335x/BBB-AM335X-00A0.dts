@@ -43,7 +43,7 @@
                 core  = <&timer3 0>; /* 0 = SYS, 1 = RTC, 2 = TCLKIN */
                 sched = <&timer4 0>;
                 pin3 {
-                    label = "TIMER7";
+                    label = "TIMER7";      
                     timer = <&timer7>;
                     gpios = <&gpio2 3 0>;
                 };

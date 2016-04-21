@@ -38,6 +38,8 @@
 
 #include "qot_user.h"
 #include "qot_timeline.h"
+#include "qot_scheduler.h"
+#include "qot_clock.h"
 
 #define DEVICE_NAME "qotusr"
 
@@ -62,6 +64,14 @@ static int qot_major;
 
 /* Root of the red-black tree used to store parallel connections */
 static struct rb_root qot_user_chdev_con_root = RB_ROOT;
+
+// TIME PROJECTION FOR PERIODIC OUT REPROGRAMMING ///////////////////////////////////////
+static s64 qot_perout_convert(qot_perout_t *perout)
+{
+    s64 period = TL_TO_nSEC(perout->period);
+    qot_rem2loc(perout->timeline.index, 1, &period);
+    return period;
+}
 
 /* Free memory used by a connection */
 static void qot_user_chdev_con_free(qot_user_chdev_con_t *con)
@@ -195,6 +205,14 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
     qot_timeline_t msgt;
     qot_timeline_t *timeline = NULL;
 
+    qot_sleeper_t sleeper;
+    u64 coretime;
+    int wait_until_retval;
+
+    qot_perout_t perout;
+    timepoint_t core_start;
+    timepoint_t core_period;
+    s64 period, start;
 
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (!con)
@@ -245,6 +263,69 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return -EACCES;
         if(qot_timeline_remove(&msgt, 0))
             return QOT_RETURN_TYPE_ERR;
+        break;
+    /* Wait until a time on a timeline reference */
+    case QOTUSR_WAIT_UNTIL:
+        if (copy_from_user(&sleeper, (qot_sleeper_t*)arg, sizeof(qot_sleeper_t)))
+            return -EACCES;
+        timeline = &sleeper.timeline;
+
+        // Check if the timeline exists
+        if (qot_timeline_get_info(&timeline))
+            return -EACCES;
+
+        // Wait until the required time
+        wait_until_retval = qot_attosleep(&sleeper.wait_until_time, timeline);
+        qot_clock_get_core_time(&sleeper.wait_until_time);
+
+        // convert from core time to timeline reference of time
+        coretime = TP_TO_nSEC(sleeper.wait_until_time.estimate);
+        qot_loc2rem(timeline->index, 0, &coretime);
+        TP_FROM_nSEC(sleeper.wait_until_time.estimate, coretime);
+
+        /* Send the time at which the node woke up back to user */
+        if (copy_to_user((qot_sleeper_t*)arg, &sleeper, sizeof(qot_sleeper_t)))
+            return -EACCES;
+        return wait_until_retval;
+    case QOTUSR_OUTPUT_COMPARE_ENABLE:
+        if (copy_from_user(&perout, (qot_perout_t*)arg, sizeof(qot_perout_t)))
+            return -EACCES;
+
+        timeline = &perout.timeline;
+
+        // Check if the timeline exists
+        if (qot_timeline_get_info(&timeline))
+            return -EACCES;
+
+        perout.timeline = *timeline;
+        // Period Conversions
+        period = (s64)TL_TO_nSEC(perout.period);
+        qot_rem2loc(perout.timeline.index, 1, &period);
+        TP_FROM_nSEC(core_period, period);
+
+        // Start Conversions
+        start = (s64)TP_TO_nSEC(perout.start);
+        qot_rem2loc(perout.timeline.index, 1, &start);
+        TP_FROM_nSEC(core_start, start);
+        // Program the periodic output
+        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 1, qot_perout_convert))
+        {
+            return -EACCES;
+        }
+        break;
+    case QOTUSR_OUTPUT_COMPARE_DISABLE:
+        if (copy_from_user(&perout, (qot_perout_t*)arg, sizeof(qot_perout_t)))
+            return -EACCES;
+        timeline = &perout.timeline;
+
+        // Check if the timeline exists
+        if (qot_timeline_get_info(&timeline))
+            return -EACCES;
+
+        perout.timeline = *timeline;
+        // Disable the periodic output
+        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 0, qot_perout_convert))
+            return -EACCES;
         break;
     default:
         return -EINVAL;

@@ -36,9 +36,9 @@
 
 /* For ease of conversion */
 #define ASEC_PER_NSEC (u64)1000000000ULL
-#define ASEC_PER_USEC (u64)1000000000000ULL
-#define TIMEPOINT_MAX_SEC 9223372036854775807LL
-#define TIMEPOINT_MAX_ASEC 18446744073709551615ULL
+#define MAX_TIMEPOINT_SEC  9223372036LL
+#define MAX_LL  9223372036854775807LL
+#define MAX_ULL 18446744073709551615ULL
 
 /* Cater for different C compilation pipelines (ie. no floats / doubles) */
 #ifdef __KERNEL__
@@ -391,28 +391,6 @@ typedef enum {
     QOT_CLK_STATE_OFF,
 } qot_clk_state_t;
 
-/* QoT external input timestamping */
-typedef struct qot_extts {
-	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Edge to capture */
-	qot_return_t response;			/* Response */
-} qot_extts_t;
-
-/* QoT programmable periodic output */
-typedef struct qot_perout {
-	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Off, rising, falling, toggle */
-	timepoint_t start;					/* Start time */
-	timelength_t period;				/* Period */
-	qot_return_t response;			    /* Response */
-} qot_perout_t;
-
-/* QoT event */
-typedef struct qot_event {
-	qot_event_type_t type;				/* Event type */
-	utimepoint_t timestamp;				/* Uncertain time of event */
-	char data[QOT_MAX_NAMELEN];			/* Event data */
-} qot_event_t;
 
 /* QoT timeline type */
 typedef struct qot_timeline {
@@ -425,6 +403,36 @@ typedef struct qot_timeline {
     #endif
 } qot_timeline_t;
 
+/* QoT wait until */
+typedef struct qot_sleeper {
+	qot_timeline_t timeline;	        /* Timeline Information    */
+	utimepoint_t wait_until_time;	    /* Uncertain time of event */
+} qot_sleeper_t;
+
+/* QoT external input timestamping */
+typedef struct qot_extts {
+	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
+	qot_trigger_t edge;					/* Edge to capture */
+	qot_return_t response;			    /* Response */
+} qot_extts_t;
+
+/* QoT programmable periodic output */
+typedef struct qot_perout {
+	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
+	qot_trigger_t edge;					/* Off, rising, falling, toggle */
+	timepoint_t start;					/* Start time */
+	timelength_t period;				/* Period */
+	qot_return_t response;			    /* Response */
+	qot_timeline_t timeline;			/* Timeline Data Structure */
+} qot_perout_t;
+
+/* QoT event */
+typedef struct qot_event {
+	qot_event_type_t type;				/* Event type */
+	utimepoint_t timestamp;				/* Uncertain time of event */
+	char data[QOT_MAX_NAMELEN];			/* Event data */
+} qot_event_t;
+
 /**
  * @brief Ioctl messages supported by /dev/qotusr
  */
@@ -433,6 +441,10 @@ typedef struct qot_timeline {
 #define QOTUSR_GET_TIMELINE_INFO _IOWR(QOTUSR_MAGIC_CODE, 2, qot_timeline_t*)
 #define QOTUSR_CREATE_TIMELINE   _IOWR(QOTUSR_MAGIC_CODE, 3, qot_timeline_t*)
 #define QOTUSR_DESTROY_TIMELINE  _IOWR(QOTUSR_MAGIC_CODE, 4, qot_timeline_t*)
+#define QOTUSR_WAIT_UNTIL       _IOWR(QOTUSR_MAGIC_CODE, 9, qot_sleeper_t*)
+#define QOTUSR_OUTPUT_COMPARE_ENABLE       _IOWR(QOTUSR_MAGIC_CODE, 10, qot_perout_t*)
+#define QOTUSR_OUTPUT_COMPARE_DISABLE       _IOWR(QOTUSR_MAGIC_CODE, 11, qot_perout_t*)
+
 
 /* QoT clock type (admin only) */
 typedef struct qot_clock {
@@ -479,7 +491,6 @@ typedef struct qot_binding {
 #define TIMELINE_CORE_TO_REMOTE    _IOWR(TIMELINE_MAGIC_CODE, 6, timepoint_t*)
 #define TIMELINE_REMOTE_TO_CORE    _IOWR(TIMELINE_MAGIC_CODE, 7, timepoint_t*)
 #define TIMELINE_GET_CORE_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 8, utimepoint_t*)
-#define TIMELINE_SLEEP_UNTIL       _IOWR(TIMELINE_MAGIC_CODE, 9, utimepoint_t*)
-#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 10, utimepoint_t*)
+#define TIMELINE_GET_TIME_NOW       _IOR(TIMELINE_MAGIC_CODE, 9, utimepoint_t*)
 
 #endif

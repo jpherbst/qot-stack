@@ -61,7 +61,7 @@ static spinlock_t qot_timelines_lock;
 
 /* Private data for a timeline, not visible outside this code      */
 typedef struct timeline_impl {
-    qot_timeline_t *info;        /* Timeline info                   */
+    qot_timeline_t *info;       /* Timeline info                   */
     int index;                  /* IDR index for timeline          */
     dev_t devid;                /* Device ID                       */
     struct device *dev;         /* Device                          */
@@ -323,13 +323,11 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
         u64 diff = (u64)(*val - timeline_impl->nsec);
         u64 quot = div_u64_rem(diff, (timeline_impl->mult + 1000000000ULL), &rem);
         *val = timeline_impl->last + (quot * 1000000000ULL) + rem; 
-
-        /**val = timeline_impl->last 
-             + (div_u64((u64)(*val - timeline_impl->nsec), (u64) (timeline_impl->mult + 1000000000ULL)) * 1000000000ULL);*/
     }
 
     return QOT_RETURN_TYPE_OK;
 }
+
 
 /* Discipline operations */
 
@@ -494,10 +492,6 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
-    utimepoint_t wait_until_time;
-    int wait_until_retval;
-
-
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
         return -EACCES;
@@ -536,18 +530,19 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         break;
     /* Bind to this timeline */
     case TIMELINE_BIND_JOIN:
+        pr_info("qot_timeline_chdev: Binding to timeline\n");
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
         {
             pr_err("qot_timeline_chdev: error in copy from user\n");
             return -EACCES;
         }
-        pr_info("qot_timeline_chdev: Binding to timeline\n");
         binding_impl = qot_binding_add(timeline_impl, &msgb);
         if (!binding_impl)
         {
             pr_info("qot_timeline_chdev: Could not bind to timeline\n");
             return -EACCES;
         }
+        pr_info("qot_timeline_chdev: Bound to timeline\n");
         /* Copy the ID back to the user */
         if (copy_to_user((qot_binding_t*)arg, &binding_impl->info, sizeof(qot_binding_t)))
             return -EACCES;
@@ -642,22 +637,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
             return -EACCES;
         break;
-    /* Blocking sleep until a given point in time */
-    case TIMELINE_SLEEP_UNTIL:
-        // Get the parameters passed into the ioctl
-        if (copy_from_user(&wait_until_time, (utimepoint_t*)arg, sizeof(utimepoint_t)))
-            return -EACCES;
-        wait_until_retval = qot_attosleep(&wait_until_time, timeline_impl->info);
-        qot_clock_get_core_time(&wait_until_time);
-        // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(wait_until_time.estimate);
-        qot_loc2rem(timeline_impl->index, 0, &coretime);
-        TP_FROM_nSEC(wait_until_time.estimate, coretime);
-        /* Send the time at which the node woke up back to user */
-        if (copy_to_user((utimepoint_t*)arg, &wait_until_time, sizeof(utimepoint_t)))
-            return -EACCES;
-        return wait_until_retval;
-        break;
+    default:
+        return -EINVAL;
     }
     return 0;
 }
