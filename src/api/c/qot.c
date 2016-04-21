@@ -390,7 +390,7 @@ qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer) {
     return QOT_RETURN_TYPE_ERR;
 }
 
-qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est) 
+qot_return_t timeline_core2rem(timeline_t *timeline, stimepoint_t *est) 
 {    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
