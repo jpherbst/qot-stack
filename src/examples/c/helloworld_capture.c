@@ -63,9 +63,9 @@ static void exit_handler(int s)
 int main(int argc, char *argv[])
 {
     FILE *fp1, *fp2, *fp3, *fp4, *fp5, *fp6;
-	timeline_t *my_timeline1;
+	timeline_t *my_timeline1, *my_timeline2;
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
-	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e13, .above.sec = 0, .above.asec = 1e13 }; // 10usec
+	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
 	// Grab the app name
 	const char *cosec = "coretime.log";
@@ -95,8 +95,9 @@ int main(int argc, char *argv[])
     if (argc > 7)
         accuracy.above.asec = atof(argv[7]);
 
-    // Grab the timeline
+    // Grab the timelines
     const char *t = TIMELINE_UUID;
+    const char *t2 = "TML2";
     if (argc > 8)
         t = argv[8];
 
@@ -104,6 +105,11 @@ int main(int argc, char *argv[])
     const char *m = APPLICATION_NAME;
     if (argc > 9)
         m = argv[9];
+
+    // Grab the number of timelines to create
+    int i = 0;
+    if (argc > 10)
+        i = atoi(argv[10]);
 
     /* open the files to write Core time, and errors */
       fp1 = fopen(cosec, "w");
@@ -160,6 +166,25 @@ int main(int argc, char *argv[])
 		return QOT_RETURN_TYPE_ERR;
 	}
 
+    if(i > 0){
+        //Create 2nd timeline
+        my_timeline2 = timeline_t_create();
+        if(!my_timeline2)
+        {
+            printf("Unable to create the timeline2 data structure\n");
+            QOT_RETURN_TYPE_ERR;
+        }
+
+        // Bind to a timeline
+        printf("Binding to timeline 2 %s ........\n", t2);
+        if(timeline_bind(my_timeline2, t2, m, resolution, accuracy))
+        {
+            printf("Failed to bind to timeline 2 %s\n", t2);
+            timeline_t_destroy(my_timeline2);
+            return QOT_RETURN_TYPE_ERR;
+        }
+    }
+
 	char *device_m = "/dev/ptp1";               /* PTP device */
     int index_m = 1;                            /* Channel index, '1' corresponds to 'TIMER6' */
     int fd_m;                                   /* device file descriptor */
@@ -169,7 +194,7 @@ int main(int argc, char *argv[])
     struct ptp_pin_desc desc;                   /* Pin configuration */
     struct ptp_extts_event event;               /* PTP event */
     struct ptp_extts_request extts_request;     /* External timestamp req */
-    stimepoint_t utp;
+    stimepoint_t utp, utp2;
 
     /* Open the character device */
     fd_m = open(device_m, O_RDWR);
@@ -208,6 +233,7 @@ int main(int argc, char *argv[])
         /* Read events coming in */
         if(DEBUG)
             printf("Trying to read events %d\n", running++);
+
         cnt = read(fd_m, &event, sizeof(event));
         if (cnt != sizeof(event)) {
             //perror("cannot read event");
@@ -219,9 +245,14 @@ int main(int argc, char *argv[])
 
         utp.estimate.sec  = event.t.sec;
         utp.estimate.asec = event.t.nsec*nSEC_PER_SEC;
-
         // Get the core time
         timeline_core2rem(my_timeline1, &utp);
+        
+        if(i > 0){
+            utp2.estimate.sec  = event.t.sec;
+            utp2.estimate.asec = event.t.nsec*nSEC_PER_SEC;
+            timeline_core2rem(my_timeline2, &utp2);
+        }
 
         if(DEBUG){
             printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
@@ -237,6 +268,12 @@ int main(int argc, char *argv[])
             fprintf(fp4, "%llu,\n", (utp.u_estimate.asec / nSEC_PER_SEC));
             fprintf(fp5, "%llu,\n", utp.l_estimate.sec);
             fprintf(fp6, "%llu,\n", (utp.l_estimate.asec / nSEC_PER_SEC));
+
+            if(i > 0){
+                printf("TML2 - %lld.%llu\n", utp2.estimate.sec, (utp2.estimate.asec / nSEC_PER_SEC));
+                fprintf(fp3, "%lld,\n", utp2.estimate.sec);
+                fprintf(fp4, "%llu,\n", (utp2.estimate.asec / nSEC_PER_SEC));
+            }
             
         }
     }
@@ -258,14 +295,29 @@ int main(int argc, char *argv[])
 	// Unbind from timeline
 	if(timeline_unbind(my_timeline1))
 	{
-		printf("Failed to unbind from timeline 1 %s\n", t);
+		printf("Failed to unbind from timeline 1 %s\n", t2);
 		timeline_t_destroy(my_timeline1);
 		return QOT_RETURN_TYPE_ERR;
 	}
 	printf("Unbound from timeline 1 %s\n", t);
 
-	// Free the timeline data structure
-	timeline_t_destroy(my_timeline1);
+    // Free the timeline data structure
+    timeline_t_destroy(my_timeline1);
+
+    if(i > 0){
+        // Unbind from timeline 2
+        if(timeline_unbind(my_timeline2))
+        {
+          printf("Failed to unbind from timeline 2 %s\n", t2);
+          timeline_t_destroy(my_timeline2);
+           return QOT_RETURN_TYPE_ERR;
+        }
+        printf("Unbound from timeline 2 %s\n", t2);
+        // Free the timeline data structure
+        timeline_t_destroy(my_timeline2);
+    }
+
+
 
     /* close the files */
       fclose(fp1);

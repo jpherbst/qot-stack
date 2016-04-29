@@ -1838,7 +1838,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
-		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(c->master_offset)); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1874,14 +1874,18 @@ enum servo_state clock_synchronize(struct clock *c,
 		//Invert max and min since we run the clock in opposite direction to compensate for drift
 		//bounds.u_drift = (s32) (-dmin);
 		//bounds.l_drift = (s32) (-dmax);
-		bounds.u_drift = (s32) -(freq_stats.mean - freq_stats.stddev);
-		bounds.l_drift = (s32) -(freq_stats.mean + freq_stats.stddev);
-		bounds.m_nsec = offset_stats.stddev;
+		bounds.u_drift = (s32) -(freq_stats.mean - (0.5*freq_stats.stddev));
+		bounds.l_drift = (s32) -(freq_stats.mean + (0.5*freq_stats.stddev));
+		//bounds.u_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) - offset_stats.stddev);
+		//bounds.l_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) + offset_stats.stddev);
+		
+		bounds.u_nsec = -(offset_stats.rms - offset_stats.stddev);
+		bounds.l_nsec = -(offset_stats.rms + offset_stats.stddev);
 
 		//c->off_stddev = offset_stats.stddev;
 		//c->freq_stddev = freq_stats.stddev;
 
-		pr_info("Offset-stddev %lld Freq upp %lld Freq low %lld ", bounds.m_nsec, bounds.u_drift, bounds.l_drift);
+		pr_info("Offset upp %lld Offset low %lld Freq upp %lld Freq low %lld ", bounds.u_nsec, bounds.l_nsec, bounds.u_drift, bounds.l_drift);
 
 		fd = CLOCKID_TO_FD(s->tml_clkid);
 
