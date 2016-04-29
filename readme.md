@@ -94,6 +94,7 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 * Masashi Wakaiki
 * Kunihisa Okano
 * Joaquim Dias Garcia
+
 =======
 # Overview #
 
@@ -428,21 +429,7 @@ You now have a working OpenSplice distribution with C++11 support. This basicall
 
 Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs is configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
 
-## STEP 5 : Build and install the kernel module ##
-
-The kernel modules are built and installed in the following way:
-
-```
-$> pushd module
-$> ccmake ..
-$> make
-$> sudo make install
-$> popd
-```
-
-After installing the kernel module you might need to run ```depmod``` on the node.
-
-## STEP 6 : Build and install the user-space components ##
+## STEP 5 : Build and install ##
 
 The entire project is cmake-driven, and so the following should suffice:
 
@@ -464,6 +451,17 @@ This will install the QoT stack to your the NFS share located as ```/export/root
 
 After installing the user-space applications you might need to run ```ldconfig``` on the node.
 
+## STEP 6: Install kernel modules ##
+
+In the top most project directory run,
+
+```
+$> make
+$> sudo make install
+```
+
+After installing the kernel module you might need to run ```depmod``` on the nodes.
+
 # Running the QoT stack #
 
 Firstly, SSH into a node of choice:
@@ -481,7 +479,7 @@ root@arm:~# capes
 When you installed the kernel module a DTBO file was copied to  ```/export/rootfs/lib/firmware```. This is a device tree overlay file that tells the BeagleBone how to multiplex its I/O pins, and which kernel module to load after it has done so. To apply the overlay use the ```capes``` command.
 
 ```
-$> capes ROSELINE-QOT
+$> capes BBB-AM335X
 ```
 
 The output of the ```capes``` command should now be this:
@@ -504,7 +502,7 @@ qot_am335x              7121  0
 qot_core                7655  3 qot_am335x
 ```
 
-The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```ptpX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
+The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
 Here's how you launch the daemon:
 
@@ -526,4 +524,4 @@ This code is maintained by University of California Los Angeles (UCLA) on behalf
 
 # Support #
 
-Questions can be directed to Andrew Symington (asymingt@ucla.edu).
+Questions can be directed to Fatima Anwar (fatimanwar@ucla.edu).
