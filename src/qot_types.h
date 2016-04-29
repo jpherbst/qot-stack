@@ -36,6 +36,7 @@
 
 /* For ease of conversion */
 #define ASEC_PER_NSEC (u64)1000000000ULL
+#define ASEC_PER_USEC (u64)1000000000000ULL
 #define MAX_TIMEPOINT_SEC  9223372036LL
 #define MAX_LL  9223372036854775807LL
 #define MAX_ULL 18446744073709551615ULL
@@ -483,7 +484,8 @@ typedef struct qot_binding {
 typedef struct qot_bounds {
 	s64 u_drift; // Upper bound on drift
 	s64 l_drift; // Lower bound on drift
-	s64 m_nsec; //Master's time
+	s64 u_nsec; // Upper bound on offset
+	s64 l_nsec; // Lower bound on offset
 } qot_bounds_t;
 
 /* An point of time with an upper and lower bound time */
