@@ -71,7 +71,8 @@ typedef struct timeline_impl {
     s64 last;                   /* Discipline: last cycle count of */
     s64 mult;                   /* Discipline: ppb multiplier      */
     s64 nsec;                   /* Discipline: global time offset  */
-    s64 m_nsec;                 /* Discipline: global time for master  */
+    s64 u_nsec;                 /* Discipline: global time for master  */
+    s64 l_nsec;                 /* Discipline: global time for master  */
     s64 u_mult;                 /* Discipline: upper bound on ppb  */
     s64 l_mult;                 /* Discipline: lower bound on ppb  */
     spinlock_t lock;            /* Protects driver time registers  */
@@ -499,8 +500,9 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
-    utimepoint_t wait_until_time;
-    int wait_until_retval;
+    utimelength_t sync_uncertainty; //FAtima
+    //utimepoint_t wait_until_time;
+    //int wait_until_retval;
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -597,7 +599,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         timeline_impl->u_mult = (s32) bounds.u_drift;
         timeline_impl->l_mult = (s32) bounds.l_drift;
-        timeline_impl->m_nsec = (s64) bounds.m_nsec;
+        timeline_impl->u_nsec = (s64) bounds.u_nsec;
+        timeline_impl->l_nsec = (s64) bounds.l_nsec;
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
@@ -611,12 +614,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         TP_FROM_nSEC(stp.estimate, timelinetime);
 
         // find upper bound on core time
-        if(timeline_impl->mult > 0){
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->m_nsec;
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-(7*timeline_impl->m_nsec);
+        if(timeline_impl->u_nsec < 0){
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
         }else{
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+(7*timeline_impl->m_nsec);
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->m_nsec;
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
         }
 /*      if(u_timelinetime > timelinetime)
             TL_FROM_nSEC(utp.interval.above, u_timelinetime - timelinetime);
@@ -670,8 +673,39 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(utp.estimate);
-        qot_loc2rem(timeline_impl->index, 0, &coretime);
-        TP_FROM_nSEC(utp.estimate, coretime);
+        timelinetime = coretime; // Fatima
+        //qot_loc2rem(timeline_impl->index, 0, &coretime); //Fatima
+        qot_loc2rem(timeline_impl->index, 0, &timelinetime); //Fatima
+        //TP_FROM_nSEC(utp.estimate, coretime); //Fatima
+        TP_FROM_nSEC(stp.estimate, timelinetime); //Fatima
+        // find upper bound on core time
+
+        /* Calculate sync uncertainty _START */
+        if(timeline_impl->u_nsec < 0){
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
+        }else{
+            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
+            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
+        }
+
+        sync_uncertainty.estimate.sec = 0;
+        sync_uncertainty.estimate.asec = 0;
+
+        if(u_timelinetime > timelinetime)
+            TL_FROM_nSEC(sync_uncertainty.interval.above, u_timelinetime - timelinetime);
+        else
+            TL_FROM_nSEC(sync_uncertainty.interval.above, 0);
+
+        if(timelinetime > l_timelinetime)
+            TL_FROM_nSEC(sync_uncertainty.interval.below, timelinetime - l_timelinetime);
+        else
+            TL_FROM_nSEC(sync_uncertainty.interval.below, 0);
+
+        utimepoint_add(&utp, &sync_uncertainty);
+
+        /* Calculate sync uncertainty _END */
+
         // TODO: Latency estimates are not being added for now...
         /* Add the latency due to the OS query */
         //qot_admin_add_latency(&utp);
@@ -782,7 +816,8 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
     timeline_impl->mult = 0;
     timeline_impl->last = 0;
     timeline_impl->nsec = 0;
-    timeline_impl->m_nsec = 0;
+    timeline_impl->u_nsec = 0;
+    timeline_impl->l_nsec = 0;
     timeline_impl->u_mult = 0;
     timeline_impl->l_mult = 0;
     timeline_impl->dialed_frequency = 0;
