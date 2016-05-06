@@ -54,7 +54,7 @@
 #define APPLICATION_NAME "default"
 #define OFFSET_MSEC      1000
 
-#define DEBUG 0
+#define DEBUG 1
 
 static int running = 1;
 

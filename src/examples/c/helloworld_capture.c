@@ -68,11 +68,11 @@ int main(int argc, char *argv[])
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e13, .above.sec = 0, .above.asec = 1e13 }; // 10usec
 
 	// Grab the app name
-	const char *cosec = "coretime.log";
+	const char *cosec = "/mnt/capturetime.log";
 	if (argc > 1)
 		cosec = argv[1];
 
-	const char *consec = "coretime_nsec.log";
+	const char *consec = "capturetime_nsec.log";
     if (argc > 2)
         consec = argv[2];
 
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Device opened %d\n", fd_m);
-    /*memset(&desc, 0, sizeof(desc));
+    memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 1;              // '1' corresponds to external timestamp
     desc.chan = index_m;
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Requesting timestamps success for %d\n", fd_m);
-    */
+    
     // Keep checking for time stamps
 
     signal(SIGINT, exit_handler);
@@ -225,31 +225,31 @@ int main(int argc, char *argv[])
 
         if(DEBUG){
             printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
-            printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
-            printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
+            //printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
+            //printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
         } else{
             printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
-            printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
-            printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
-            fprintf(fp1, "%lld,\n", utp.estimate.sec);
-            fprintf(fp2, "%llu,\n", (utp.estimate.asec / nSEC_PER_SEC));
-            fprintf(fp3, "%llu,\n", utp.u_estimate.sec);
-            fprintf(fp4, "%llu,\n", (utp.u_estimate.asec / nSEC_PER_SEC));
-            fprintf(fp5, "%llu,\n", utp.l_estimate.sec);
-            fprintf(fp6, "%llu,\n", (utp.l_estimate.asec / nSEC_PER_SEC));
+            //printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
+            //printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
+            fprintf(fp1, "%lld\t%llu\n", utp.estimate.sec, utp.estimate.asec);
+            // fprintf(fp2, "%llu,\n", (utp.estimate.asec / nSEC_PER_SEC));
+            // fprintf(fp3, "%llu,\n", utp.u_estimate.sec);
+            // fprintf(fp4, "%llu,\n", (utp.u_estimate.asec / nSEC_PER_SEC));
+            // fprintf(fp5, "%llu,\n", utp.l_estimate.sec);
+            // fprintf(fp6, "%llu,\n", (utp.l_estimate.asec / nSEC_PER_SEC));
             
         }
     }
 
     /* Disable the pin */
-    /*memset(&desc, 0, sizeof(desc));
+    memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 0;              // '0' corresponds to no function 
     desc.chan = index_m;
     if (ioctl(fd_m, PTP_PIN_SETFUNC, &desc)) {
         perror("PTP_PIN_SETFUNC Disable");
     }
-    */
+    
     /* Close the character device */
     close(fd_m);
 

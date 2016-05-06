@@ -1,6 +1,6 @@
 /*
- * @file helloworld_compare.c
- * @brief Simple C example showing how to trigger output compare
+ * @file helloworld_gpio_vanilla.c
+ * @brief Pin Toggling Using Linux Clock Nanosleep
  * @author Sandeep D'souza
  * 
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -44,20 +44,10 @@
 
 #include <linux/ptp_clock.h>
 
-// Include the QoT API
-#include "../../api/c/qot.h"
-
 // Include the BBB GPIO MMIO Configuration
 #include "beaglebone_gpio.h"
 
-// Basic onfiguration
-#define TIMELINE_UUID    "my_test_timeline"
-#define APPLICATION_NAME "default"
 #define OFFSET_MSEC      1000
-
-#define ANALYZE 0
-char filename[100] = "/home/qot_gpio";
-FILE *fp;
 
 static int running = 1;
 
@@ -67,18 +57,32 @@ static void exit_handler(int s)
   	running = 0;
 }
 
+void time_add(struct timespec *t1, struct timespec *t2)
+{
+    long sec = t2->tv_sec + t1->tv_sec;
+    long nsec = t2->tv_nsec + t1->tv_nsec;
+    if (nsec >= 1000000000) {
+        nsec -= 1000000000;
+        sec++;
+    }
+    t1->tv_sec = sec;
+    t1->tv_nsec = nsec;
+    return;
+}
+
+void ms2ts(struct timespec *ts, int ms)
+{
+    ts->tv_sec = ms / 1000;
+    ts->tv_nsec = (ms % 1000) * 1000000;
+    return;
+}
+
+
 int main(int argc, char *argv[])
 {
-	char file_timestamp[20];
-    timeline_t *my_timeline;
-	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
-	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
-
-    utimepoint_t wake_now;
-    timepoint_t wake;
-    timelength_t stepsize;
-
     int step_size_ms = OFFSET_MSEC;
+    struct timespec time_now;
+    struct timespec step_size;
 
     // GPIO Registers
     volatile void *gpio_addr = NULL;
@@ -87,24 +91,11 @@ int main(int argc, char *argv[])
     volatile unsigned int *gpio_cleardataout_addr = NULL;
     unsigned int reg;
 
-	// Grab the timeline
-	const char *u = TIMELINE_UUID;
-	if (argc > 1)
-		u = argv[1];
-
-	// Grab the application name
-	const char *m = APPLICATION_NAME;
-	if (argc > 2)
-		m = argv[2];
-
     // Loop Interval
-    if (argc > 3)
-        step_size_ms = atoi(argv[3]);
+    if (argc > 1)
+        step_size_ms = atoi(argv[1]);
 
-
-    // Initialize stepsize
-    TL_FROM_mSEC(stepsize, (int64_t) step_size_ms);
-
+    ms2ts(&step_size, step_size_ms);
     // Configure GPIO using Memory Mapped IO
     int fd = open("/dev/mem", O_RDWR);
 
@@ -132,81 +123,24 @@ int main(int argc, char *argv[])
     *gpio_oe_addr = reg;
     printf("GPIO1 configuration: %X\n", reg);
 
-    /** CREATE TIMELINE **/
+    clock_gettime(CLOCK_REALTIME, &time_now);
+    time_now.tv_nsec = 0;
+    time_add(&time_now, &step_size);
 
-	my_timeline = timeline_t_create();
-	if(!my_timeline)
-	{
-		printf("Unable to create the timeline data structure\n");
-		QOT_RETURN_TYPE_ERR;
-	}
-
-	// Bind to a timeline
-	printf("Binding to timeline %s ........\n", u);
-	if(timeline_bind(my_timeline, u, m, resolution, accuracy))
-	{
-		printf("Failed to bind to timeline %s\n", u);
-		timeline_t_destroy(my_timeline);
-		return QOT_RETURN_TYPE_ERR;
-	}
-    
-    // Read Initial Time
-    if(timeline_gettime(my_timeline, &wake_now))
-    {
-        printf("Could not read timeline reference time\n");
-        goto exit_point;
-    }
-    else
-    {
-        if(ANALYZE)
-        {
-          sprintf(file_timestamp, "%lld", wake_now.estimate.sec);
-          strcat(filename, file_timestamp);
-          fp = fopen(filename, "w");
-        }
-        wake = wake_now.estimate;
-        timepoint_add(&wake, &stepsize);
-        wake.asec = 0;
-    }    
 
     // Exit Handler on SIGINT
     signal(SIGINT, exit_handler);
 
     printf("Start toggling PIN \n");
     while (running) {
-        timepoint_add(&wake, &stepsize);
-        wake_now.estimate = wake;
-        timeline_waituntil(my_timeline, &wake_now);
-        // Toggle Pins
-        if(wake.sec % 2 == 0)
+        time_add(&time_now, &step_size);
+        clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &time_now, NULL);
+        if(time_now.tv_sec % 2 == 0)
             *gpio_setdataout_addr= PIN;
         else
             *gpio_cleardataout_addr = PIN;
-        if(ANALYZE)
-            fprintf(fp, "%lld\t%llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
-
     }
 
-
-    /** DESTROY TIMELINE **/
-exit_point:
-	// Unbind from timeline
-	if(timeline_unbind(my_timeline))
-	{
-		printf("Failed to unbind from timeline  %s\n", u);
-		timeline_t_destroy(my_timeline);
-		return QOT_RETURN_TYPE_ERR;
-	}
-	printf("Unbound from timeline  %s\n", u);
-
-	// Free the timeline data structure
-	timeline_t_destroy(my_timeline);
-
-    if(ANALYZE)
-        fclose(fp);
-
-    // Close the MMIO file
-    close(fd);
 	/* Success */
 	return 0;
 }

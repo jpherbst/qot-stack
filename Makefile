@@ -16,6 +16,7 @@ install:
 	sudo cp -v src/modules/qot/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v src/modules/qot_am335x/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v *.dtbo /export/rootfs/lib/firmware
+	sudo cp -v ./src/qot-daemon/test.sh /export/rootfs/home
 	sudo cp targets/common/80-qot.rules /export/rootfs/etc/udev/rules.d/
 	sudo cp targets/am335x/capes /export/rootfs/usr/bin/
 	sudo chmod 755 /export/rootfs/usr/bin/capes

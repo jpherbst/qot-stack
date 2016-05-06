@@ -139,17 +139,20 @@ static timepoint_t qot_get_next_event(void)
 		raw_spin_lock_irqsave(&timeline->rb_lock, flags);
 		timeline_root = &timeline->event_head;
 		timeline_node = rb_first(timeline_root);
-		if(timeline_node != NULL)
+		while(timeline_node != NULL)
 		{
 			sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
 			if(sleeping_task->sleeper_active == 0)
 	        {
 	        	timeline_node = rb_next(timeline_node);
 	            sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
-
+	        }
+	        else
+	        {
+	        	break;
 	        }
 	    }
-		// Choose the second node as the first one has already expired
+		// Choose the n+1 th node as the first n ones have already expired
 		if(timeline_node != NULL)
 		{
 	        core_expires = qot_remote_to_core(sleeping_task->qot_expires, timeline);       
@@ -343,8 +346,11 @@ void qot_scheduler_update(qot_timeline_t *timeline)
 	struct timeline_sleeper *sleeping_task;	
 	unsigned long flags;
 	timepoint_t core_expires;
+	timepoint_t current_core_time;
 
 	timepoint_t expires_next = next_interrupt_callback;
+
+	qot_clock_get_core_time_raw(&current_core_time);
 
 	raw_spin_lock_irqsave(&timeline->rb_lock, flags);
 	timeline_root = &timeline->event_head;
@@ -354,7 +360,11 @@ void qot_scheduler_update(qot_timeline_t *timeline)
         sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
         core_expires = qot_remote_to_core(sleeping_task->qot_expires, timeline);       
         // Check if a task needs to be woken up
-        if(timepoint_cmp(&core_expires, &expires_next) > 0)
+        if(timepoint_cmp(&core_expires, &current_core_time) > 0)
+        {
+        	qot_sleeper_wakeup(sleeping_task);
+        }
+        else if(timepoint_cmp(&core_expires, &expires_next) > 0)
         {
         	expires_next = core_expires;
         }
@@ -365,9 +375,13 @@ void qot_scheduler_update(qot_timeline_t *timeline)
 		expires_next.sec = 0;
 	if(expires_next.asec < 0)
 		expires_next.asec = 0;
-	raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
-	qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt);
-	raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
+	qot_clock_get_core_time_raw(&current_core_time);
+	if(timepoint_cmp(&current_core_time, &expires_next) > 0 && timepoint_cmp(&expires_next, &next_interrupt_callback) > 0)
+	{
+		raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
+		qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt);
+		raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
+	}
 	return;
 }
 

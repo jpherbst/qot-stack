@@ -349,7 +349,7 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
     {
         return QOT_RETURN_TYPE_ERR;
     }
-
+    *utp = sleeper.wait_until_time;
     return QOT_RETURN_TYPE_OK;
 }
 
