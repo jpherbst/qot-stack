@@ -533,8 +533,8 @@ QoT Stack does synchronization in two steps. It first aligns the local core cloc
 We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
 
 ```
-$> testptp -d /dev/ptp0 -c
-$> testptp -d /dev/ptp1 -c
+$> testptp -d /dev/ptp0 -c % This is the ethernet controller driver exposed as ptp clock %
+$> testptp -d /dev/ptp1 -c % qot_am335x driver exposes the core as a ptp clock %
 ```
 
 In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
