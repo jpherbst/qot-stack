@@ -357,7 +357,7 @@ $> ssh-keygen -t rsa
 
 Assuming that you have successfully built and net-booted the kernel, you can now setup your host environment to cross-compile kernel modules and  applications for the BeagleBone.
 
-EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST
+EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST. IF YOU WANT, YOU CAN USE YOUR CONTROLLER TO BE THE HOST AS WELL (In this case, jump to Step 2).
 
 ## STEP 1 : Setup the /export share ##
 
