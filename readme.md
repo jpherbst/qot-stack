@@ -539,8 +539,8 @@ $> testptp -d /dev/ptp1 -c % qot_am335x driver exposes the core as a ptp clock %
 
 In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
 
-For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (Linux/drivers/net/ethernet/ti/cpts.c) to enable the pins.
-The new file can be found at, \... 
+For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c) to enable the pins.
+The new file can be found at (https://bitbucket.org/rose-line/qot-stack/downloads/cpts.c) 
 Simply replace the existing cpts.c file with the new one and rebuild the kernel,
 
 ```
