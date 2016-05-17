@@ -193,9 +193,9 @@ Now, you have a working kernel
 ## STEP 2 : Networking  ##
 
 In order to enable Network File Sharing (NFS) across the Controller and beaglebone devices, we need to setup a DHCP Server that will dynamically assign IP addresses to the controller and beaglebone devices.
-You can setup a DHCP server on a router or a server with your own desired networking details. The DHCP Server will assign static IP addresses to the controller and beaglebones using their unique MAC addresses.
+You can setup a DHCP server on a router or a server with your own desired networking details. The end goal is to make the DHCP Server assign static IP addresses to the controller and beaglebones using their unique MAC addresses.
 
-You can follow the steps below, if you do not have the means to setup your own DHCP Server, instead you can make the Controller behave as a DHCP Server.
+You can follow the two steps below, if you do not have the means to setup your own DHCP Server, instead you can make the Controller behave as a DHCP Server.
 However, these steps are complex and require proper configuration. Most likely, they will not work depending upon your Linux version or other reasons.
 
 ### STEP 2a : Configure DHCP  ###
@@ -326,7 +326,7 @@ $> sudo mount /dev/sd?1 /mnt
 $> cd /mnt
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/MLO
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/u-boot.img
-$> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt  % This file contains a field with the Controller's static IP address. Please replace it with your Controller's IP address%
 $> cd /
 $> umount /mnt
 ```
