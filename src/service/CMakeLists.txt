@@ -143,10 +143,10 @@ ADD_EXECUTABLE(phc2phc
 )
 TARGET_LINK_LIBRARIES(phc2phc ptp)
 
-#ADD_EXECUTABLE(testptp
-#	testptp.c
-#)
-#TARGET_LINK_LIBRARIES(testptp -lrt)
+ADD_EXECUTABLE(testptp
+	testptp.c
+)
+TARGET_LINK_LIBRARIES(testptp -lrt)
 #########################################################################################################
 
 # Install the PTP library
@@ -190,11 +190,11 @@ INSTALL(
 )
 
 # Install the testptp to the given prefix
-#INSTALL(
-#	TARGETS
-#		testptp
-#	DESTINATION
-#		bin
-#	COMPONENT
-#		applications
-#)
+INSTALL(
+	TARGETS
+		testptp
+	DESTINATION
+		bin
+	COMPONENT
+		applications
+)
