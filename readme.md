@@ -470,7 +470,7 @@ $> sudo make install
 
 After installing the kernel modules you might need to run ```depmod``` on the nodes.
 
-# Running the QoT stack #
+# Configuring the QoT stack #
 
 Firstly, SSH into a node of choice:
 
@@ -527,21 +527,51 @@ root@arm:~# insmod qot_am335x.ko
 
 If you still have issues, do "dmesg" and see the logs for issues.
 
-The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
+# Running PTP Synchronization on the QoT stack #
 
-Here's how you launch the daemon:
+QoT Stack does synchronization in two steps. It first aligns the local core clock to the network interface clock. 
+We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
 
 ```
-$> qotdaemon -v
+$> testptp -d /dev/ptp0 -c
+$> testptp -d /dev/ptp1 -c
 ```
 
-If you now launch the ```helloworld``` application in a different shell, you should see the daemon do its work. 
+In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
+
+For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (Linux/drivers/net/ethernet/ti/cpts.c) to enable the pins.
+The new file can be found at, \... 
+Simply replace the existing cpts.c file with the new one and rebuild the kernel,
+
+```
+$> cd /export/bb-kernel/tools
+$> ./rebuild.sh
+```
+
+After the kernel is rebuild, restart the beaglebone nodes, and run the following in one terminal,
+
+```
+$> phc2phc
+```
+
+Keep this running for the entire synchronization process.
+Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to see the error), we now need to synchronize clocks across different devices.
+
+The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
+
+In order to create a timeline first, run hellowrold application in a separate terminal,
 
 ```
 $> helloworld
 ```
 
-Run this command on multiple nodes and the time should be synchronized transparently in the background.
+And then launch the synchronization daemon in another terminal:
+
+```
+$> qotdaemon -v
+```
+
+Repeat the synchronization step for other nodes as well for the synchornization to work.
 
 # Development #
 
