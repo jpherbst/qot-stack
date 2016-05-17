@@ -190,8 +190,15 @@ $> /export/install_netboot.sh
 
 Now, you have a working kernel
 
+## STEP 2 : Networking  ##
 
-## STEP 2 : Configure DHCP  ##
+In order to enable Network File Sharing (NFS) across the Controller and beaglebone devices, we need to setup a DHCP Server that will dynamically assign IP addresses to the controller and beaglebone devices.
+You can setup a DHCP server on a router or a server with your own desired networking details. The DHCP Server will assign static IP addresses to the controller and beaglebones using their unique MAC addresses.
+
+You can follow the steps below, if you do not have the means to setup your own DHCP Server, instead you can make the Controller behave as a DHCP Server.
+However, these steps are complex and require proper configuration. Most likely, they will not work depending upon your Linux version or other reasons.
+
+### STEP 2a : Configure DHCP  ###
 
 The Ubuntu host needs to act as a DHCP server, assigning IPs to slaves as they boot. I personally prefer to define each of my slaves in the configuration file so that they are assigned a constant network address that is preserved across booting. Edit the ```/etc/default/isc-dhcp-server``` file to add the interface on which you wish to serve DHCP requests:
 
@@ -221,7 +228,7 @@ Then, restart the server:
 $> sudo service isc-dhcp-server restart
 ```
 
-## STEP 3 : Configure NAT ##
+### STEP 2b : Configure NAT ###
 
 In the file ```/etc/default/ufw``` change the parameter ```DEFAULT_FORWARD_POLICY```
 
@@ -267,7 +274,7 @@ Then, edit the ```/etc/default/tftpd-hpa``` file to the following:
 ```
 TFTP_USERNAME="tftp" 
 TFTP_DIRECTORY="/export/tftp" 
-TFTP_ADDRESS="10.42.0.1:69" 
+TFTP_ADDRESS="10.42.0.1:69"   % This is the IP Address of the Controller %
 TFTP_OPTIONS="-s -c -l"
 ```
 
@@ -282,7 +289,8 @@ $> sudo service tftpd-hpa restart
 Edit the NFS ```/etc/exports``` on the share the ```/export``` directory 
 
 ```
-/export 10.42.0.0/24(rw,sync,no_root_squash,no_subtree_check)
+/export 10.42.0.2(rw,sync,no_root_squash,no_subtree_check) % Enter IP Addresses of the beaglebone devices here %
+/export 10.42.0.3(rw,sync,no_root_squash,no_subtree_check)
 ```
 
 Then, restart the server:
