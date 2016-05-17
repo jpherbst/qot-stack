@@ -442,7 +442,7 @@ Note that whenever you run an OpenSplice-driven app you will need to set an envi
 The entire project is cmake-driven, and so the following should suffice:
 
 ```
-$> mkdir -p build
+$> mkdir -p build % Do this in the top most project directory /qot-stack %
 $> pushd build
 $> ccmake ..
 ```
@@ -461,14 +461,14 @@ After installing the user-space applications you might need to run ```ldconfig``
 
 ## STEP 6: Install kernel modules ##
 
-In the top most project directory run,
+In the top most project directory (\qot-stack) run,
 
 ```
 $> make
 $> sudo make install
 ```
 
-After installing the kernel module you might need to run ```depmod``` on the nodes.
+After installing the kernel modules you might need to run ```depmod``` on the nodes.
 
 # Running the QoT stack #
 
@@ -498,7 +498,7 @@ root@arm:~# capes
  1: PF----  -1 
  2: PF----  -1 
  3: PF----  -1 
- 4: P-O-L-   0 Override Board Name,00A0,Override Manuf,ROSELINE-QOT
+ 4: P-O-L-   0 Override Board Name,00A0,Override Manuf,BBB-AM335X
 ```
 
 And the ```lsmod``` command should list two new kernel modules:
@@ -507,8 +507,25 @@ And the ```lsmod``` command should list two new kernel modules:
 root@arm:~# lsmod
 Module                  Size  Used by
 qot_am335x              7121  0 
-qot_core                7655  3 qot_am335x
+qot                     7655  3 qot_am335x
 ```
+
+Normally modules are automatically loaded from the capes command. However, it is not always the case. You can manually load the modules using the commands,
+
+```
+root@arm:~# insmod qot
+root@arm:~# insmod qot_am335x
+```
+
+If these commands, give you path error, do the following,
+
+```
+root@arm:~# cd /lib/modules/4.1.12-bone-rt-r16/kernel/drivers/misc
+root@arm:~# insmod qot.ko
+root@arm:~# insmod qot_am335x.ko
+```
+
+If you still have issues, do "dmesg" and see the logs for issues.
 
 The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
