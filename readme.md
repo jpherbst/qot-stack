@@ -555,7 +555,7 @@ $> phc2phc
 ```
 
 Keep this running for the entire synchronization process.
-Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to see the error), we now need to synchronize clocks across different devices.
+Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to verify), we now need to synchronize clocks across different devices.
 
 The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
@@ -571,11 +571,11 @@ And then launch the synchronization daemon in another terminal:
 $> qotdaemon -v
 ```
 
-Repeat the synchronization step for other nodes as well for the synchornization to work.
+Repeat the synchronization step for other nodes as well, and then you will see multiple nodes -- bound to same timeline -- synchronize to each other.
 
 # Development #
 
-This code is maintained by University of California Los Angeles (UCLA) on behalf of the RoseLine project. If you wish to contribute to development, please fork the repository, submit your changes to a new branch, and submit the updated code by means of a pull request against origin/master.
+This code is maintained by University of California Los Angeles (UCLA) on behalf of the RoseLine project. If you wish to contribute to development, please fork the repository, submit your changes to a new branch, and submit the updated code by means of a pull request against origin/thorn16_refactor.
 
 # Support #
 
