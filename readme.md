@@ -408,6 +408,8 @@ Switch to the OpenSplice directory and pull the third party repo for the C++ bin
 ```
 $> pushd thirdparty/opensplice
 $> git checkout -b v64 OSPL_V6_4_OSS_RELEASE
+$> git submodule init
+$> git submodule update
 ```
 
 Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
