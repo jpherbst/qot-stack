@@ -190,9 +190,17 @@ $> /export/install_netboot.sh
 
 Now, you have a working kernel
 
-NOTE: All the steps below asume that the Local IP of the Host is set to 10.42.0.1
 
-## STEP 2 : Configure DHCP  ##
+## STEP 2 : Networking  ##
+
+
+In order to enable Network File Sharing (NFS) across the Controller and beaglebone devices, we need to setup a DHCP Server that will dynamically assign IP addresses to the controller and beaglebone devices.
+You can setup a DHCP server on a router or a server with your own desired networking details. The end goal is to make the DHCP Server assign static IP addresses to the controller and beaglebones using their unique MAC addresses.
+
+You can follow the two steps below, if you do not have the means to setup your own DHCP Server, instead you can make the Controller behave as a DHCP Server.
+However, these steps are complex and require proper configuration. Most likely, they will not work depending upon your Linux version or other reasons.
+
+### STEP 2a : Configure DHCP  ###
 
 The Ubuntu host needs to act as a DHCP server, assigning IPs to slaves as they boot. I personally prefer to define each of my slaves in the configuration file so that they are assigned a constant network address that is preserved across booting. Edit the ```/etc/default/isc-dhcp-server``` file to add the interface on which you wish to serve DHCP requests:
 
@@ -222,7 +230,7 @@ Then, restart the server:
 $> sudo service isc-dhcp-server restart
 ```
 
-## STEP 3 : Configure NAT ##
+### STEP 2b : Configure NAT ###
 
 In the file ```/etc/default/ufw``` change the parameter ```DEFAULT_FORWARD_POLICY```
 
@@ -268,7 +276,7 @@ Then, edit the ```/etc/default/tftpd-hpa``` file to the following:
 ```
 TFTP_USERNAME="tftp" 
 TFTP_DIRECTORY="/export/tftp" 
-TFTP_ADDRESS="10.42.0.1:69" 
+TFTP_ADDRESS="10.42.0.1:69"   % This is the IP Address of the Controller %
 TFTP_OPTIONS="-s -c -l"
 ```
 
@@ -283,7 +291,8 @@ $> sudo service tftpd-hpa restart
 Edit the NFS ```/etc/exports``` on the share the ```/export``` directory 
 
 ```
-/export 10.42.0.0/24(rw,sync,no_root_squash,no_subtree_check)
+/export 10.42.0.2(rw,sync,no_root_squash,no_subtree_check) % Enter IP Addresses of the beaglebone devices here %
+/export 10.42.0.3(rw,sync,no_root_squash,no_subtree_check)
 ```
 
 Then, restart the server:
@@ -319,7 +328,7 @@ $> sudo mount /dev/sd?1 /mnt
 $> cd /mnt
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/MLO
 $> wget https://bitbucket.org/rose-line/qot-stack/downloads/u-boot.img
-$> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt
+$> wget https://bitbucket.org/rose-line/qot-stack/downloads/uEnv.txt  % This file contains a field with the Controller's static IP address. Please replace it with your Controller's IP address%
 $> cd /
 $> umount /mnt
 ```
@@ -350,7 +359,7 @@ $> ssh-keygen -t rsa
 
 Assuming that you have successfully built and net-booted the kernel, you can now setup your host environment to cross-compile kernel modules and  applications for the BeagleBone.
 
-EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST
+EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST. IF YOU WANT, YOU CAN USE YOUR CONTROLLER TO BE THE HOST AS WELL (In this case, jump to Step 2).
 
 ## STEP 1 : Setup the /export share ##
 
@@ -401,6 +410,8 @@ Switch to the OpenSplice directory and pull the third party repo for the C++ bin
 ```
 $> pushd thirdparty/opensplice
 $> git checkout -b v64 OSPL_V6_4_OSS_RELEASE
+$> git submodule init
+$> git submodule update
 ```
 
 Configure and build the OpenSplice DDS library. The configure script searches for third party dependencies. The third party libraries ACE and TAO are only required for Corba, and in my experience introduce compilation errors. So, I would advise that you do not install them. 
@@ -435,7 +446,7 @@ Note that whenever you run an OpenSplice-driven app you will need to set an envi
 The entire project is cmake-driven, and so the following should suffice:
 
 ```
-$> mkdir -p build
+$> mkdir -p build % Do this in the top most project directory /qot-stack %
 $> pushd build
 $> ccmake ..
 ```
@@ -454,16 +465,16 @@ After installing the user-space applications you might need to run ```ldconfig``
 
 ## STEP 6: Install kernel modules ##
 
-In the top most project directory run,
+In the top most project directory (\qot-stack) run,
 
 ```
 $> make
 $> sudo make install
 ```
 
-After installing the kernel module you might need to run ```depmod``` on the nodes.
+After installing the kernel modules you might need to run ```depmod``` on the nodes.
 
-# Running the QoT stack #
+# Configuring the QoT stack #
 
 Firstly, SSH into a node of choice:
 
@@ -491,7 +502,7 @@ root@arm:~# capes
  1: PF----  -1 
  2: PF----  -1 
  3: PF----  -1 
- 4: P-O-L-   0 Override Board Name,00A0,Override Manuf,ROSELINE-QOT
+ 4: P-O-L-   0 Override Board Name,00A0,Override Manuf,BBB-AM335X
 ```
 
 And the ```lsmod``` command should list two new kernel modules:
@@ -500,28 +511,75 @@ And the ```lsmod``` command should list two new kernel modules:
 root@arm:~# lsmod
 Module                  Size  Used by
 qot_am335x              7121  0 
-qot_core                7655  3 qot_am335x
+qot                     7655  3 qot_am335x
 ```
 
-The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot_core kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot_core module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects forces the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
-
-Here's how you launch the daemon:
+Normally modules are automatically loaded from the capes command. However, it is not always the case. You can manually load the modules using the commands,
 
 ```
-$> qotdaemon -v
+root@arm:~# insmod qot
+root@arm:~# insmod qot_am335x
 ```
 
-If you now launch the ```helloworld``` application in a different shell, you should see the daemon do its work. 
+If these commands, give you path error, do the following,
+
+```
+root@arm:~# cd /lib/modules/4.1.12-bone-rt-r16/kernel/drivers/misc
+root@arm:~# insmod qot.ko
+root@arm:~# insmod qot_am335x.ko
+```
+
+If you still have issues, do "dmesg" and see the logs for issues.
+
+# Running PTP Synchronization on the QoT stack #
+
+QoT Stack does synchronization in two steps. It first aligns the local core clock to the network interface clock. 
+We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
+
+```
+$> testptp -d /dev/ptp0 -c % This is the ethernet controller driver exposed as ptp clock %
+$> testptp -d /dev/ptp1 -c % qot_am335x driver exposes the core as a ptp clock %
+```
+
+In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
+
+For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c) to enable the pins.
+The new file can be found at (https://bitbucket.org/rose-line/qot-stack/downloads/cpts.c) 
+Simply replace the existing cpts.c file with the new one and rebuild the kernel,
+
+```
+$> cd /export/bb-kernel/tools
+$> ./rebuild.sh
+```
+
+After the kernel is rebuild, restart the beaglebone nodes, and run the following in one terminal,
+
+```
+$> phc2phc
+```
+
+Keep this running for the entire synchronization process.
+Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to verify), we now need to synchronize clocks across different devices.
+
+The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
+
+In order to create a timeline first, run hellowrold application in a separate terminal,
 
 ```
 $> helloworld
 ```
 
-Run this command on multiple nodes and the time should be synchronized transparently in the background.
+And then launch the synchronization daemon in another terminal:
+
+```
+$> qotdaemon -v
+```
+
+Repeat the synchronization step for other nodes as well, and then you will see multiple nodes -- bound to same timeline -- synchronize to each other.
 
 # Development #
 
-This code is maintained by University of California Los Angeles (UCLA) on behalf of the RoseLine project. If you wish to contribute to development, please fork the repository, submit your changes to a new branch, and submit the updated code by means of a pull request against origin/master.
+This code is maintained by University of California Los Angeles (UCLA) on behalf of the RoseLine project. If you wish to contribute to development, please fork the repository, submit your changes to a new branch, and submit the updated code by means of a pull request against origin/thorn16_refactor.
 
 # Support #
 
