@@ -190,7 +190,9 @@ $> /export/install_netboot.sh
 
 Now, you have a working kernel
 
+
 ## STEP 2 : Networking  ##
+
 
 In order to enable Network File Sharing (NFS) across the Controller and beaglebone devices, we need to setup a DHCP Server that will dynamically assign IP addresses to the controller and beaglebone devices.
 You can setup a DHCP server on a router or a server with your own desired networking details. The end goal is to make the DHCP Server assign static IP addresses to the controller and beaglebones using their unique MAC addresses.

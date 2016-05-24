@@ -47,13 +47,14 @@ typedef struct event {
     struct list_head list;       /* The list of events head             */
 } event_t;
 
-/* Information that allows us to maintain parallel cchardev connections */
+/* Information that allows us to maintain parallel chardev connections */
 typedef struct qot_admin_chdev_con {
     struct rb_node node;                /* Red-black tree node */
     struct file *fileobject;            /* File object         */
     wait_queue_head_t wq;               /* Wait queue          */
     int event_flag;                     /* Data ready flag     */
     struct list_head event_list;        /* Event list          */
+    struct semaphore list_sem;          /* List Sempahore      */
 } qot_admin_chdev_con_t;
 
 /* Information required to open a character device */
@@ -129,6 +130,34 @@ static int qot_admin_chdev_con_remove(qot_admin_chdev_con_t *con)
     return 0;
 }
 
+/* Notify all connections about a newly registered */
+int qot_admin_clock_register_notify(qot_clock_t *clk)
+{
+    struct rb_node *con_node = NULL;
+    struct qot_admin_chdev_con *con;
+    event_t *event;
+    con_node = rb_first(&qot_admin_chdev_con_root);
+    while(con_node != NULL)
+    {
+        con = container_of(con_node, struct qot_admin_chdev_con, node);   
+        event = kzalloc(sizeof(event_t), GFP_KERNEL);
+        if (!event) {
+            pr_warn("qot_user_chdev: failed to allocate event\n");
+            continue;
+        }
+        event->info.type = QOT_EVENT_CLOCK_CREATE;
+        strncpy(event->info.data, clk->name, QOT_MAX_NAMELEN);
+        if(down_interruptible(&con->list_sem))
+            return -ERESTARTSYS;
+        list_add_tail(&event->list, &con->event_list);
+        con->event_flag = 1;
+        up(&con->list_sem);
+        wake_up_interruptible(&con->wq);
+        con_node = rb_next(con_node);
+    }
+    return 0;
+}
+
 /* chardev ioctl open callback implementation */
 static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
 {
@@ -150,7 +179,7 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
     /* Insert the connection into the red-black tree */
     qot_admin_chdev_con_insert(con);
 
-    /* Notify the connection (by polling) of all existing timelines */
+    /* Notify the connection (by polling) of all existing clocks */
     if (qot_clock_first(&clk)==QOT_RETURN_TYPE_OK) {
         do {
             event = kzalloc(sizeof(event_t), GFP_KERNEL);
@@ -160,7 +189,10 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
             }
             event->info.type = QOT_EVENT_CLOCK_CREATE;
             strncpy(event->info.data,clk.name,QOT_MAX_NAMELEN);
+            if(down_interruptible(&con->list_sem))
+                return -ERESTARTSYS;
             list_add_tail(&event->list, &con->event_list);
+            up(&con->list_sem);
         } while (qot_clock_next(&clk)==QOT_RETURN_TYPE_OK);
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
@@ -196,6 +228,8 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
     switch (cmd) {
     /* Get the next event in the queue for this connection */
     case QOTADM_GET_NEXT_EVENT:
+        if (! capable (CAP_SYS_ADMIN))
+            return -EPERM;
         if (list_empty(&con->event_list)) {
             con->event_flag = 0;
             return -EACCES;
@@ -218,6 +252,8 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         break;
     /* Tell a clock to sleep */
     case QOTADM_SET_CLOCK_SLEEP:
+        if (! capable (CAP_SYS_ADMIN))
+            return -EPERM;
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
         if (qot_clock_sleep(&msgc))
@@ -225,6 +261,8 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         break;
     /* Tell a clock to wake up */
     case QOTADM_SET_CLOCK_WAKE:
+        if (! capable (CAP_SYS_ADMIN))
+            return -EPERM;
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
         if (qot_clock_wake(&msgc))
@@ -232,6 +270,8 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         break;
     /* Switch core to a specific clock */
     case QOTADM_SET_CLOCK_ACTIVE:
+        if (! capable (CAP_SYS_ADMIN))
+            return -EPERM;
         if (copy_from_user(&msgc, (qot_clock_t*)arg, sizeof(qot_clock_t)))
             return -EACCES;
         if (qot_clock_switch(&msgc))
@@ -239,6 +279,8 @@ static long qot_admin_chdev_ioctl_access(struct file *f, unsigned int cmd,
         break;
     /* Set OS Clock Read Latency */
     case QOTADM_SET_OS_LATENCY:
+        if (! capable (CAP_SYS_ADMIN))
+            return -EPERM;
         if (copy_from_user(&msgt, (utimelength_t*)arg, sizeof(utimelength_t)))
             return -EACCES;
         if (qot_admin_set_latency(&msgt))

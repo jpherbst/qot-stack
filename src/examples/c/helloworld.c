@@ -28,8 +28,23 @@
 
 
 // C includes
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <math.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/timex.h>
+#include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
+
 
 // Include the QoT API
 #include "../../api/c/qot.h"
@@ -37,9 +52,17 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define WAIT_TIME_SECS   1
-#define NUM_ITERATIONS   10
-#define OFFSET_MSEC      1000LL
+#define OFFSET_MSEC      1000
+
+#define DEBUG 1
+
+static int running = 1;
+
+static void exit_handler(int s)
+{
+	printf("Exit requested \n");
+  	running = 0;
+}
 
 // Main entry point of application
 int main(int argc, char *argv[])
@@ -55,27 +78,29 @@ int main(int argc, char *argv[])
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
-	// Allow this to go on for a while
-	int n = NUM_ITERATIONS;
 	int i;
 
-	if (argc > 1)
-		n = atoi(argv[1]);
+	int step_size_ms = OFFSET_MSEC;
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
-	if (argc > 2)
-		u = argv[2];
+	if (argc > 1)
+		u = argv[1];
 
-	// Grab the timeline
+	// Grab the application name
 	const char *m = APPLICATION_NAME;
-	if (argc > 3)
-		m = argv[3];
+	if (argc > 2)
+		m = argv[2];
+
+    // Loop Interval
+    if (argc > 3)
+        step_size_ms = atoi(argv[3]);
 
 	// Initialize stepsize
-	TL_FROM_mSEC(step_size, OFFSET_MSEC);
-	printf("Helloworld starting.... process id %i\n", getpid());
-	//usleep(5000000);
+	TL_FROM_mSEC(step_size, step_size_ms);
+
+	if(DEBUG)
+		printf("Helloworld starting.... process id %i\n", getpid());
 
 	my_timeline = timeline_t_create();
 	if(!my_timeline)
@@ -85,7 +110,8 @@ int main(int argc, char *argv[])
 	}
 
 	// Bind to a timeline
-	printf("Binding to timeline %s ........\n", u);
+	if(DEBUG)
+		printf("Binding to timeline %s ........\n", u);
 	if(timeline_bind(my_timeline, u, m, resolution, accuracy))
 	{
 		printf("Failed to bind to timeline %s\n", u);
@@ -112,7 +138,10 @@ int main(int argc, char *argv[])
 		timepoint_add(&wake, &step_size);
 	}
 
-	for (i = 0; i < n; i++)
+	signal(SIGINT, exit_handler);
+
+
+	while(running)
 	{
 		if(timeline_gettime(my_timeline, &est_now))
 		{
@@ -127,17 +156,17 @@ int main(int argc, char *argv[])
 			timeline_t_destroy(my_timeline);
 			return QOT_RETURN_TYPE_ERR;
 		}
-		else
+		else if (DEBUG)
 		{
-			printf("[Iteration %d ]: core time =>\n", i+1);
+			printf("[Iteration %d ]: core time =>\n", i++);
 			printf("Actual wake up          %lld %llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
 			printf("Time Estimate @ wake up %lld %llu\n", est_now.estimate.sec, est_now.estimate.asec);
 			printf("Uncertainity below %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
 			printf("Uncertainity above %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
 
 		}
-
-		printf("WAITING FOR %lld ms\n", OFFSET_MSEC);
+		if(DEBUG)
+			printf("WAITING FOR %d ms\n", step_size_ms);
 		timepoint_add(&wake, &step_size);
 		wake_now.estimate = wake;
 		timeline_waituntil(my_timeline, &wake_now);
@@ -151,7 +180,8 @@ int main(int argc, char *argv[])
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
-	printf("Unbound from timeline %s\n", u);
+	if(DEBUG)
+		printf("Unbound from timeline %s\n", u);
 
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline);

@@ -60,9 +60,7 @@ qot_return_t timeline_check_fd(timeline_t *timeline) {
     return QOT_RETURN_TYPE_OK;
 }
 
-
 /* Exported methods */
-
 timeline_t *timeline_t_create()
 {
     timeline_t *timeline;
@@ -132,6 +130,8 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     strcpy(timeline->binding.name, name);
     timeline->binding.demand.resolution = res;
     timeline->binding.demand.accuracy = acc;
+    TL_FROM_SEC(timeline->binding.period, 0);
+    TP_FROM_SEC(timeline->binding.start_offset, 0);
     
     if (DEBUG) 
         printf("Binding to timeline %s\n", uuid);
@@ -252,6 +252,23 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
     return QOT_RETURN_TYPE_OK;
 }
 
+qot_return_t timeline_set_schedparams(timeline_t *timeline, timelength_t *period, timepoint_t *start_offset) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    timeline->binding.start_offset = *start_offset;
+    timeline->binding.period = *period;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
 qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 {
     if(!timeline)
@@ -349,7 +366,56 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    *utp = sleeper.wait_until_time;
+    return QOT_RETURN_TYPE_OK;
+}
 
+qot_return_t timeline_waituntil_nextperiod(timeline_t *timeline, utimepoint_t *utp) 
+{
+    qot_sleeper_t sleeper;
+    timelength_t elapsed_time;
+    timepoint_t wakeup_time;
+    u64 elapsed_ns = 0;
+    u64 period_ns = 0;
+    u64 num_periods = 0;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    sleeper.timeline = timeline->info;
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, &sleeper.wait_until_time) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    // Check Start Offset
+    if(timepoint_cmp(&timeline->binding.start_offset, &sleeper.wait_until_time.estimate) < 0)
+    {
+        sleeper.wait_until_time.estimate = timeline->binding.start_offset;
+    }
+    else 
+    {
+        // Calculate Next Wakeup Time
+        timepoint_diff(&elapsed_time, &sleeper.wait_until_time.estimate, &timeline->binding.start_offset);
+        elapsed_ns = TL_TO_nSEC(elapsed_time);
+        period_ns = TL_TO_nSEC(timeline->binding.period);
+        num_periods = (elapsed_ns/period_ns);
+        if(elapsed_ns % period_ns != 0)
+            num_periods++;
+        elapsed_ns = period_ns*num_periods;
+        TL_FROM_nSEC(elapsed_time, elapsed_ns);
+        wakeup_time = timeline->binding.start_offset;
+        timepoint_add(&wakeup_time, &elapsed_time);
+        sleeper.wait_until_time.estimate = wakeup_time;
+     }
+
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *utp = sleeper.wait_until_time;
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -381,16 +447,55 @@ qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl)
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
-    utimelength_t *period, int cnt, qot_callback_t callback, timer_t *timer) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_callback_t callback) 
+{
+    struct sigaction act;
+
+    if(!timeline || !timer)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Create a timer
+    if(ioctl(timeline->fd, TIMELINE_CREATE_TIMER, timer) < 0)
+    {
+        printf("Failed To Create Timer\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+
+    act.sa_sigaction = callback;
+    act.sa_flags = SA_SIGINFO;
+
+    if (sigaction(SIGALRM, &act, NULL) == -1)
+    {
+        printf("sigaction failed !\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+    
 }
 
-qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer) {
-    return QOT_RETURN_TYPE_ERR;
+qot_return_t timeline_timer_cancel(timeline_t *timeline, qot_timer_t *timer) 
+{
+    if(!timeline || !timer)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Create a timer
+    if(ioctl(timeline->fd, TIMELINE_DESTROY_TIMER, timer) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_core2rem(timeline_t *timeline, stimepoint_t *est) 
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est) 
 {    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;

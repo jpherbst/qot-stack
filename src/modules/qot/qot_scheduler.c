@@ -44,6 +44,8 @@
 #include <linux/sched.h>
 #include <linux/poll.h>
 #include <linux/spinlock.h>
+#include <linux/signal.h>
+#include <linux/sched.h>
 
 #include "qot_core.h"
 #include "qot_timeline.h"
@@ -60,9 +62,14 @@ struct timeline_sleeper {
     struct rb_node tl_node;               // RB tree node for timeline event 
     struct qot_timeline *timeline;        // timeline this belongs to
     struct task_struct *task;             // task this belongs to
+    pid_t pid;                            // task pid
     bool sleeper_active;				  // flag to show if the timeline sleeper is active and enqueued
     timepoint_t qot_expires;			  // Expiry time as per the timeline notion of time
     timeinterval_t qot_expires_interval;  // Uncertainity interval in the time estimate
+    bool periodic_timer_flag;			  // flag to indicate it the timer should be periodically enqueued
+    qot_timer_t timer;                    // Periodic Timer 
+    int timer_counts;                     // Number of Periodic Timer callbacks completed
+
 };
 
 // add timeline_sleeper node to specified rb tree. tree nodes are ordered on expiry time
@@ -105,14 +112,64 @@ static timepoint_t qot_remote_to_core(timepoint_t remote_time, struct qot_timeli
 	return core_time;
 }
 
-// Function which wakes up tasks
-static int qot_sleeper_wakeup(struct timeline_sleeper *sleeper) 
+// Function which wakes up (for blocking waits) /signals (for timers) tasks -> Called with spinlock held
+static int qot_sleeper_wakeup(struct timeline_sleeper *sleeper, struct rb_node **timeline_node) 
 {    
-    if(sleeper->task)
-        wake_up_process(sleeper->task);
+    *timeline_node = rb_next(*timeline_node);
+    if(sleeper->periodic_timer_flag == 1)
+    {
+    	utimepoint_t time_now;
+    	utimepoint_t *time_now_ptr;
+    	struct task_struct *task;
+    	struct siginfo info;
+    	union sigval sv;
+		memset(&info, 0, sizeof(struct siginfo));
+		info.si_signo = SIGALRM;
+		info.si_code = SI_QUEUE;
 
-    sleeper->task = NULL;
-    sleeper->sleeper_active = 0;
+		sv.sival_ptr = (void*) time_now_ptr;
+
+		//send signal to user process
+		//sigqueue(sleeper->task->pid, SIGALRM, sv);
+		task = pid_task(find_vpid(sleeper->pid), PIDTYPE_PID); //find_task_by_pid(sleeper->pid);
+		if(task != NULL)
+		{
+			send_sig_info(SIGALRM, &info, sleeper->task);
+			// Remove Existing Sleeper from the RB-Tree
+			rb_erase(&sleeper->tl_node, &sleeper->timeline->event_head);
+	    	// Add New Sleeper with new expiry information
+	    	if(sleeper->timer_counts < sleeper->timer.count || sleeper->timer.count == 0)
+	    	{
+	    		sleeper->timer_counts++;
+	    		timepoint_add(&sleeper->qot_expires, &sleeper->timer.period);
+	    		qot_timeline_event_add(&sleeper->timeline->event_head, sleeper);
+	    	}
+	    	else
+	    	{
+	    		sleeper->sleeper_active = 0;
+				sleeper->periodic_timer_flag = 0;
+				qot_remove_binding_timer(sleeper->pid, sleeper->timeline);
+			    kfree(sleeper);
+	    	}
+	    }
+	    else
+	    {
+	    	rb_erase(&sleeper->tl_node, &sleeper->timeline->event_head);
+	    	sleeper->sleeper_active = 0;
+			sleeper->periodic_timer_flag = 0;
+			qot_remove_binding_timer(sleeper->pid, sleeper->timeline);
+		    kfree(sleeper);
+
+	    }
+    	
+    }
+    else if(sleeper->sleeper_active == 1)
+    {
+	    if(sleeper->task)
+	        wake_up_process(sleeper->task);
+	    sleeper->task = NULL;
+	    sleeper->sleeper_active = 0;
+	}
     return 0;
 }
 
@@ -139,17 +196,20 @@ static timepoint_t qot_get_next_event(void)
 		raw_spin_lock_irqsave(&timeline->rb_lock, flags);
 		timeline_root = &timeline->event_head;
 		timeline_node = rb_first(timeline_root);
-		if(timeline_node != NULL)
+		while(timeline_node != NULL)
 		{
 			sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
 			if(sleeping_task->sleeper_active == 0)
 	        {
 	        	timeline_node = rb_next(timeline_node);
 	            sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
-
+	        }
+	        else
+	        {
+	        	break;
 	        }
 	    }
-		// Choose the second node as the first one has already expired
+		// Choose the n+1 th node as the first n ones have already expired
 		if(timeline_node != NULL)
 		{
 	        core_expires = qot_remote_to_core(sleeping_task->qot_expires, timeline);       
@@ -214,13 +274,13 @@ retry:
 	        if(timepoint_cmp(&sleeping_task->qot_expires, &current_timeline_time) > 0)
 	        { 
 	        	// Move task to runqueue
-	        	qot_sleeper_wakeup(sleeping_task);
+	        	qot_sleeper_wakeup(sleeping_task, &timeline_node);
 	        }
 	        else
 	        {
 	        	break;
 	        }
-	        timeline_node = rb_next(timeline_node);
+	        //timeline_node = rb_next(timeline_node);
 		}
 		raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
 		retval = qot_timeline_next(&timeline);
@@ -289,15 +349,70 @@ static int qot_sleeper_start_expires(struct timeline_sleeper *sleeper, timepoint
 	return retval;
 }
 
-// initializes the qot timeline sleeper structure grab a spinlock before initializing
+// initializes the qot timeline sleeper structure -> grab a spinlock before initializing
 static void qot_init_sleeper(struct timeline_sleeper *sl, struct task_struct *task, struct qot_timeline *timeline, utimepoint_t *expires)
 {
     sl->task = task;
+    sl->pid  = task->pid;
     sl->timeline = timeline;
-    sl->qot_expires = expires->estimate;
-    sl->qot_expires_interval = expires->interval;
-    sl->sleeper_active = 1;
+    sl->sleeper_active = 1; 
+    sl->periodic_timer_flag = 0;
+	sl->qot_expires = expires->estimate;
+	sl->qot_expires_interval = expires->interval;
     qot_timeline_event_add(&timeline->event_head, sl);
+}
+
+// initializes the qot timeline sleeper structure -> grab a spinlock before initializing
+static void qot_init_timer_sleeper(struct timeline_sleeper *sl, struct task_struct *task, struct qot_timeline *timeline, timelength_t *period, timepoint_t *start_offset, int count)
+{
+    timelength_t elapsed_time;
+    timepoint_t core_time;
+    timepoint_t current_timeline_time;
+
+    u64 elapsed_ns = 0;
+    u64 period_ns = 0;
+    u64 num_periods = 0;
+    u64 p_remainder = 0;
+
+    // Populate essential variables
+    sl->task = task;
+    sl->pid  = task->pid;
+    sl->timeline = timeline;
+    sl->sleeper_active = 1;
+    sl->periodic_timer_flag = 1;
+    sl->timer.period = *period;
+    sl->timer.start_offset = *start_offset;
+    sl->timer.count = count;
+
+    // Current Core Time
+    qot_clock_get_core_time_raw(&core_time);
+
+    // Current Timeline Time
+    current_timeline_time = qot_core_to_remote(core_time, timeline);
+
+    // Check Start Offset
+    if(timepoint_cmp(start_offset, &current_timeline_time) < 0)
+    {
+        sl->qot_expires = *start_offset;
+    }
+    else 
+    {
+        // Calculate Next Wakeup Time
+        timepoint_diff(&elapsed_time, &current_timeline_time, start_offset);
+        elapsed_ns = TL_TO_nSEC(elapsed_time);
+        period_ns = TL_TO_nSEC(sl->timer.period);
+        num_periods = div64_u64_rem(elapsed_ns, period_ns, &p_remainder);
+        if(p_remainder != 0)
+            num_periods++;
+        elapsed_ns = period_ns*num_periods;
+        TL_FROM_nSEC(elapsed_time, elapsed_ns);
+        timepoint_add(start_offset, &elapsed_time);
+        sl->qot_expires = *start_offset;
+     }
+     // Start Offset Contains the Value when the timer must Start
+     sl->timer_counts = 1;
+     qot_timeline_event_add(&timeline->event_head, sl);
+     return;
 }
 
 // Puts the task to sleep on a timeline 
@@ -335,6 +450,66 @@ int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline)
     return 0;
 }
 
+// Creates a periodic timer on a timeline 
+int qot_timer_create(timelength_t *period, timepoint_t *start_offset, int count, qot_timer_t **timer, struct qot_timeline *timeline) 
+{
+    int retval = 0;
+    struct timeline_sleeper *sleep_timer;
+    unsigned long flags;
+
+    timepoint_t core_time_expiry;
+
+    sleep_timer = (struct timeline_sleeper*) kzalloc(sizeof(struct timeline_sleeper), GFP_KERNEL);
+    if(sleep_timer == NULL)
+    {
+    	return QOT_RETURN_TYPE_ERR;
+    }
+    pr_info("Sleep Timer Created\n");
+    // Initialize the SLEEPER structure 
+    raw_spin_lock_irqsave(&timeline->rb_lock, flags);
+    qot_init_timer_sleeper(sleep_timer, current, timeline, period, start_offset, count);
+    raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
+
+    core_time_expiry = qot_remote_to_core(*start_offset, timeline);
+    retval = qot_sleeper_start_expires(sleep_timer, core_time_expiry);
+    if (retval != 0)
+    {
+        pr_info("Wrong Retval\n");
+        raw_spin_lock_irqsave(&timeline->rb_lock, flags);
+	    rb_erase(&sleep_timer->tl_node, &sleep_timer->timeline->event_head);
+	    kfree(sleep_timer);
+	    raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
+	    return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+    	*timer = &sleep_timer->timer;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+// destroys a Timer 
+int qot_timer_destroy(qot_timer_t *timer, struct qot_timeline *timeline) 
+{
+	struct timeline_sleeper *sleep_timer;
+	unsigned long flags;
+	if(timer == NULL)
+	{
+		return QOT_RETURN_TYPE_ERR;
+	}
+	raw_spin_lock_irqsave(&timeline->rb_lock, flags);
+	sleep_timer = container_of(timer, struct timeline_sleeper, timer);	
+	if(sleep_timer)
+	{
+		sleep_timer->sleeper_active = 0;
+		sleep_timer->periodic_timer_flag = 0;
+	    rb_erase(&sleep_timer->tl_node, &sleep_timer->timeline->event_head);
+	    kfree(sleep_timer);
+	}
+	raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
+    return QOT_RETURN_TYPE_OK;
+}
+
 /* Updates timeline nodes waiting on a queue when a time change happens, called by the set_time adj_time functions*/
 void qot_scheduler_update(qot_timeline_t *timeline)
 {
@@ -343,20 +518,28 @@ void qot_scheduler_update(qot_timeline_t *timeline)
 	struct timeline_sleeper *sleeping_task;	
 	unsigned long flags;
 	timepoint_t core_expires;
+	timepoint_t current_core_time;
 
 	timepoint_t expires_next = next_interrupt_callback;
+
+	qot_clock_get_core_time_raw(&current_core_time);
 
 	raw_spin_lock_irqsave(&timeline->rb_lock, flags);
 	timeline_root = &timeline->event_head;
 	timeline_node = rb_first(timeline_root);
-	if(timeline_node != NULL)
+	while (timeline_node != NULL)
 	{
         sleeping_task = container_of(timeline_node, struct timeline_sleeper, tl_node);	 
         core_expires = qot_remote_to_core(sleeping_task->qot_expires, timeline);       
         // Check if a task needs to be woken up
-        if(timepoint_cmp(&core_expires, &expires_next) > 0)
+        if(timepoint_cmp(&core_expires, &current_core_time) > 0)
+        {
+        	qot_sleeper_wakeup(sleeping_task, &timeline_node);
+        }
+        else if(timepoint_cmp(&core_expires, &expires_next) > 0)
         {
         	expires_next = core_expires;
+        	break;
         }
 	}
 	raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
@@ -365,9 +548,13 @@ void qot_scheduler_update(qot_timeline_t *timeline)
 		expires_next.sec = 0;
 	if(expires_next.asec < 0)
 		expires_next.asec = 0;
-	raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
-	qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt);
-	raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
+	qot_clock_get_core_time_raw(&current_core_time);
+	if(timepoint_cmp(&current_core_time, &expires_next) > 0 && timepoint_cmp(&expires_next, &next_interrupt_callback) > 0)
+	{
+		raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
+		qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt);
+		raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
+	}
 	return;
 }
 

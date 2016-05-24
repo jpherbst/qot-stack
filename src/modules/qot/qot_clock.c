@@ -50,6 +50,15 @@ static struct rb_root qot_clock_root = RB_ROOT;
 /* Root of the red-black tree used to store clocks */
 static clk_t *core = NULL;
 
+/* Get the presiding core clock */
+qot_return_t qot_get_core_clock(qot_clock_t *clk)
+{   
+    if(core == NULL)
+        return QOT_RETURN_TYPE_ERR;
+    *clk = core->impl.info;
+    return QOT_RETURN_TYPE_OK;
+}
+
 /* Search for a clock given by a name */
 static clk_t *qot_clock_find(char *name) {
     int result;
@@ -176,6 +185,7 @@ qot_return_t qot_clock_register(qot_clock_impl_t *impl)
     /* If no other clock is acting as the core select this clock as the core */
     if(!core)
         core = clk_priv;   
+    qot_admin_clock_register_notify(&clk_priv->impl.info);
     return QOT_RETURN_TYPE_OK;
 }
 

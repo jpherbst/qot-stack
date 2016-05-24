@@ -54,6 +54,11 @@
 
 static int running = 1;
 
+static void timer_handler(int sig, siginfo_t *si, void *ucontext)
+{
+    printf("Timer Triggered\n");
+}
+
 static void exit_handler(int s)
 {
 	printf("Exit requested \n");
@@ -69,8 +74,8 @@ int main(int argc, char *argv[])
     utimepoint_t wake_now;
     timepoint_t wake;
 
-    qot_perout_t request;
-    qot_callback_t callback;
+    qot_timer_t timer;
+    //qot_callback_t callback;
 
     int step_size_ms = OFFSET_MSEC;
 
@@ -91,7 +96,7 @@ int main(int argc, char *argv[])
 
 
     // Initialize stepsize
-    TL_FROM_mSEC(request.period, (int64_t) step_size_ms);
+    TL_FROM_mSEC(timer.period, (int64_t) step_size_ms);
 
     /** CREATE TIMELINE **/
 
@@ -128,37 +133,40 @@ int main(int argc, char *argv[])
     else
     {
         wake = wake_now.estimate;
-        timepoint_add(&wake, &request.period);
+        timepoint_add(&wake, &timer.period);
         wake.asec = 0;
     }    
 
-    // Configure Periodic request
-    request.start.sec = wake.sec + 1;
-    request.start.asec = wake.asec;
+    // Configure Periodic Timer request
+    timer.start_offset.sec = wake.sec + 1;
+    timer.start_offset.asec = wake.asec;
+    timer.count = 10;
 
     signal(SIGINT, exit_handler);
 
-    if(timeline_enable_output_compare(my_timeline, &request, callback))
+    if(timeline_timer_create(my_timeline, &timer, timer_handler))
     {
-        printf("Cannot request periodic output\n");
+        printf("Cannot request periodic timer\n");
         goto exit_point;
     }
     else
     {
-        printf("Output Compare Succesful\n");
+        printf("Timer Creation Succesful\n");
     }
 
     while (running) {
-        timepoint_add(&wake, &request.period);
+        timepoint_add(&wake, &timer.period);
         wake_now.estimate = wake;
+        printf("Wakey Wakey...\n");
         timeline_waituntil(my_timeline, &wake_now);
     }
+    printf("Exiting....\n");
 
-    if(timeline_disable_output_compare(my_timeline, &request))
+    if(timeline_timer_cancel(my_timeline, &timer))
     {
-        printf("Cannot disable periodic output\n");
+        printf("Cannot cancel timer or timer already self destructed :)\n");
     }
-    printf("Output Compare disabled\n");
+    printf("Timer Cancelled\n");
 
     /** DESTROY TIMELINE **/
 exit_point:

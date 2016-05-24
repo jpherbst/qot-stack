@@ -47,10 +47,17 @@
 // Include the QoT API
 #include "../../api/c/qot.h"
 
+// Include the BBB GPIO MMIO Configuration
+#include "beaglebone_gpio.h"
+
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define OFFSET_MSEC      2000
+#define OFFSET_MSEC      1000
+
+#define ANALYZE 1
+char filename[100] = "/mnt/qot_gpio";
+FILE *fp;
 
 static int running = 1;
 
@@ -62,18 +69,26 @@ static void exit_handler(int s)
 
 int main(int argc, char *argv[])
 {
+	char file_timestamp[20];
     timeline_t *my_timeline;
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
     utimepoint_t wake_now;
     timepoint_t wake;
+    timelength_t stepsize;
 
     qot_perout_t request;
     qot_callback_t callback;
 
     int step_size_ms = OFFSET_MSEC;
 
+    // GPIO Registers
+    volatile void *gpio_addr = NULL;
+    volatile unsigned int *gpio_oe_addr = NULL;
+    volatile unsigned int *gpio_setdataout_addr = NULL;
+    volatile unsigned int *gpio_cleardataout_addr = NULL;
+    unsigned int reg;
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
@@ -91,7 +106,34 @@ int main(int argc, char *argv[])
 
 
     // Initialize stepsize
-    TL_FROM_mSEC(request.period, (int64_t) step_size_ms);
+    TL_FROM_mSEC(stepsize, (int64_t) step_size_ms);
+
+    // Configure GPIO using Memory Mapped IO
+    int fd = open("/dev/mem", O_RDWR);
+
+    printf("Mapping %X - %X (size: %X)\n", GPIO1_START_ADDR,  GPIO1_END_ADDR, GPIO1_SIZE);
+
+    gpio_addr = mmap(0, GPIO1_SIZE, PROT_READ | PROT_WRITE,  MAP_SHARED, fd, GPIO1_START_ADDR);
+
+    gpio_oe_addr = gpio_addr + GPIO_OE;
+    gpio_setdataout_addr = gpio_addr + GPIO_SETDATAOUT;
+    gpio_cleardataout_addr = gpio_addr + GPIO_CLEARDATAOUT;
+
+    if(gpio_addr == MAP_FAILED) {
+        printf("Unable to map GPIO\n");
+        exit(1);
+    }
+
+    printf("GPIO mapped to %p\n", gpio_addr);
+    printf("GPIO OE mapped to %p\n", gpio_oe_addr);
+    printf("GPIO SETDATAOUTADDR mapped to %p\n", gpio_setdataout_addr);
+    printf("GPIO CLEARDATAOUT mapped to %p\n", gpio_cleardataout_addr);
+
+    reg = *gpio_oe_addr;
+    printf("GPIO1 configuration: %X\n", reg);
+    reg = reg & (0xFFFFFFFF - PIN);
+    *gpio_oe_addr = reg;
+    printf("GPIO1 configuration: %X\n", reg);
 
     /** CREATE TIMELINE **/
 
@@ -115,27 +157,31 @@ int main(int argc, char *argv[])
     if(timeline_gettime(my_timeline, &wake_now))
     {
         printf("Could not read timeline reference time\n");
-        // Unbind from timeline
-        if(timeline_unbind(my_timeline))
-        {
-            printf("Failed to unbind from timeline %s\n", u);
-            timeline_t_destroy(my_timeline);
-            return QOT_RETURN_TYPE_ERR;
-        }
-        timeline_t_destroy(my_timeline);
-        return QOT_RETURN_TYPE_ERR;
+        goto exit_point;
     }
     else
     {
+        if(ANALYZE)
+        {
+          sprintf(file_timestamp, "%lld", wake_now.estimate.sec);
+          strcat(filename, file_timestamp);
+          fp = fopen(filename, "w");
+        }
         wake = wake_now.estimate;
-        timepoint_add(&wake, &request.period);
+        timepoint_add(&wake, &stepsize);
+        if(wake.sec % 2 != 0)
+            wake.sec += 1;
         wake.asec = 0;
     }    
 
-    // Configure Periodic request
+     // Configure Periodic request
     request.start.sec = wake.sec + 1;
     request.start.asec = wake.asec;
 
+    // Initialize stepsize
+    TL_FROM_mSEC(request.period, (int64_t) 2*step_size_ms);
+
+    // Exit Handler on SIGINT
     signal(SIGINT, exit_handler);
 
     if(timeline_enable_output_compare(my_timeline, &request, callback))
@@ -148,12 +194,22 @@ int main(int argc, char *argv[])
         printf("Output Compare Succesful\n");
     }
 
+    printf("Start toggling GPIO PIN \n");
     while (running) {
-        timepoint_add(&wake, &request.period);
+        timepoint_add(&wake, &stepsize);
         wake_now.estimate = wake;
         timeline_waituntil(my_timeline, &wake_now);
+        // Toggle Pins
+        if(wake.sec % 2 == 0)
+            *gpio_setdataout_addr= PIN;
+        else
+            *gpio_cleardataout_addr = PIN;
+        if(ANALYZE)
+            fprintf(fp, "%lld\t%llu\t%lld\t%llu\n", wake.sec, wake.asec, wake_now.estimate.sec, wake_now.estimate.asec);
+
     }
 
+    // Disable Output compare
     if(timeline_disable_output_compare(my_timeline, &request))
     {
         printf("Cannot disable periodic output\n");
@@ -174,6 +230,11 @@ exit_point:
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline);
 
+    if(ANALYZE)
+        fclose(fp);
+
+    // Close the MMIO file
+    close(fd);
 	/* Success */
 	return 0;
 }

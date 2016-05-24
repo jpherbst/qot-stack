@@ -51,11 +51,12 @@ typedef struct event {
 
 /* Information that allows us to maintain parallel cchardev connections */
 typedef struct qot_user_chdev_con {
-    struct rb_node node;                /* Red-black tree node */
-    struct file *fileobject;            /* File object         */
-    wait_queue_head_t wq;               /* Wait queue          */
-    int event_flag;                     /* Data ready flag     */
-    struct list_head event_list;        /* Event list          */
+    struct rb_node node;                /* Red-black tree node  */
+    struct file *fileobject;            /* File object          */
+    wait_queue_head_t wq;               /* Wait queue           */
+    int event_flag;                     /* Data ready flag      */
+    struct list_head event_list;        /* Event list           */
+    struct semaphore list_sem;           /* Event list semaphore */
 } qot_user_chdev_con_t;
 
 /* Information required to open a character device */
@@ -139,6 +140,34 @@ static int qot_user_chdev_con_remove(qot_user_chdev_con_t *con)
     return 0;
 }
 
+/* Notify all connections about a newly created timeline */
+static int qot_user_timeline_create_notify(qot_timeline_t *timeline)
+{
+    struct rb_node *con_node = NULL;
+    struct qot_user_chdev_con *con;
+    event_t *event;
+    con_node = rb_first(&qot_user_chdev_con_root);
+    while(con_node != NULL)
+    {
+        con = container_of(con_node, struct qot_user_chdev_con, node);   
+        event = kzalloc(sizeof(event_t), GFP_KERNEL);
+        if (!event) {
+            pr_warn("qot_user_chdev: failed to allocate event\n");
+            continue;
+        }
+        event->info.type = QOT_EVENT_TIMELINE_CREATE;
+        strncpy(event->info.data,timeline->name, QOT_MAX_NAMELEN);
+        if(down_interruptible(&con->list_sem))
+            return -ERESTARTSYS;
+        list_add_tail(&event->list, &con->event_list);
+        con->event_flag = 1;
+        up(&con->list_sem);
+        wake_up_interruptible(&con->wq);
+        con_node = rb_next(con_node);
+    }
+    return 0;
+}
+
 /* chardev ioctl open callback implementation */
 static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 {
@@ -156,6 +185,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
     init_waitqueue_head(&con->wq);
     con->fileobject = f;
     con->event_flag = 0;
+    sema_init(&con->list_sem, 1);
 
     /* Insert the connection into the red-black tree */
     qot_user_chdev_con_insert(con);
@@ -170,9 +200,12 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
                 pr_warn("qot_user_chdev: failed to allocate event\n");
                 continue;
             }
-            event->info.type = QOT_EVENT_CLOCK_CREATE;
+            event->info.type = QOT_EVENT_TIMELINE_CREATE;
             strncpy(event->info.data,timeline->name,QOT_MAX_NAMELEN);
+            if(down_interruptible(&con->list_sem))
+                return -ERESTARTSYS;
             list_add_tail(&event->list, &con->event_list);
+            up(&con->list_sem);
         } while (qot_timeline_next(&timeline)==QOT_RETURN_TYPE_OK);
         raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
         con->event_flag = 1;
@@ -253,6 +286,8 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return QOT_RETURN_TYPE_ERR;     // Timeline Exists 
         else if (retval)
             return -EACCES;
+        // Notify all connections of the newly created "local" timeline
+        qot_user_timeline_create_notify(&msgt);
         pr_info("qot_usr_chdev: Timeline %d created name is %s\n", msgt.index, msgt.name);
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
             return -EACCES;

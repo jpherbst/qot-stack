@@ -124,6 +124,24 @@ void qot_timeline_chdev_cleanup(struct class *qot_class);
  **/
 qot_return_t qot_timeline_chdev_init(struct class *qot_class);
 
+/**
+ * @brief Find a timeline's name based on an index
+ * @param timeline index and pointer to a name character string
+ **/
+qot_return_t qot_get_timeline_name(int index, char *name);
+
+/**
+ * @brief Find a timeline's resolution based on an index
+ * @param timeline index and pointer to a resolution timelength
+ **/
+qot_return_t qot_get_timeline_resolution(int index, timelength_t *resolution);
+
+/**
+ * @brief Find a timeline's accuracy based on an index
+ * @param timeline index and pointer to a accuracy timeinterval
+ **/
+qot_return_t qot_get_timeline_accuracy(int index, timeinterval_t *accuracy);
+
 /* qot_timeline_sysfs.h */
 
 /**
@@ -159,6 +177,12 @@ qot_return_t qot_loc2rem(int index, int period, s64 *val);
  **/
 qot_return_t qot_rem2loc(int index, int period, s64 *val);
 
-
+/**
+ * @brief Helper Function for qot_scheduler to make the timer field of a binding NULL
+ * @param task pointer to a task struct
+ * @param timeline pointer to a timeline
+ * @return A status code indicating success (0) or failure (!0)
+ **/
+qot_return_t qot_remove_binding_timer(int pid, qot_timeline_t *timeline);
 
 #endif

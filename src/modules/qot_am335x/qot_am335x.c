@@ -485,8 +485,8 @@ static int qot_am335x_enable(struct ptp_clock_info *ptp,
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
 		/* Check if the correct timer is requested -> This timer pin is set to INPUT in the Device Tree*/
-		if(rq->extts.index != CAPTURE_PIN)
-			return -EACCES;
+		// if(rq->extts.index != CAPTURE_PIN)
+		// 	return -EACCES;
 
 		memcpy(&pdata->pins[rq->extts.index].state, rq,
 			sizeof(struct ptp_clock_request));
@@ -494,8 +494,8 @@ static int qot_am335x_enable(struct ptp_clock_info *ptp,
 			(on ? EVENT_START : EVENT_STOP));
 	case PTP_CLK_REQ_PEROUT:
 		/* Check if the correct timer is requested -> This timer pin is set to OUTPUT in the Device Tree*/
-		if(rq->perout.index != PHC2PHC_PIN)
-			return -EACCES;
+		// if(rq->perout.index != PHC2PHC_PIN)
+		// 	return -EACCES;
 
 		memcpy(&pdata->pins[rq->perout.index].state, rq,
 			sizeof(struct ptp_clock_request));

@@ -35,6 +35,12 @@
 /* Puts task into a blocking sleep */
 int qot_attosleep(utimepoint_t *expiry_time, struct qot_timeline *timeline);
 
+/* Create a Periodic Timer on a timeline */
+int qot_timer_create(timelength_t *period, timepoint_t *start_offset, int count, qot_timer_t **timer, struct qot_timeline *timeline);
+
+/* Destroy a Periodic Timer */
+int qot_timer_destroy(qot_timer_t *timer, struct qot_timeline *timeline); 
+
 /* Update tasks that are blocking when the notion of time changes */
 void qot_scheduler_update(qot_timeline_t *timeline);
 

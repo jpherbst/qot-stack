@@ -76,7 +76,7 @@ typedef struct timeline_impl {
     s64 u_mult;                 /* Discipline: upper bound on ppb  */
     s64 l_mult;                 /* Discipline: lower bound on ppb  */
     spinlock_t lock;            /* Protects driver time registers  */
-    struct idr idr_bindings;    /* IDR for trackng bindings        */
+    //struct idr idr_bindings;    /* IDR for trackng bindings        */
     struct list_head head_res;  /* Head pointing to resolution     */
     struct list_head head_low;  /* Head pointing to accuracy (low) */
     struct list_head head_upp;  /* Head pointing to accuracy (upp) */
@@ -92,6 +92,7 @@ typedef struct binding_impl {
     struct list_head list_upp;  /* Head pointing to accuracy (upp)                */
     int pid;                    /* Tracks the thread which created the binding    */
     struct rb_node node;        /* Node on the RB Tree of bindings for a timeline */
+    qot_timer_t *timer;         /* Periodic Timer which a task can create         */  
 } binding_impl_t;
 
 /* Binding structure management */
@@ -229,6 +230,7 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
 
     /* Store the context (pid of the task) from which this binding has been invoked -> Sandeep*/
     binding_impl->pid = current->pid;
+    binding_impl->timer = NULL;
 
     /* Add the binding to the RB-Tree corresponding to the timeline using the pid of the task as id */
     spin_lock_irqsave(&timeline_impl->lock, flags);
@@ -270,6 +272,20 @@ static void qot_binding_del(binding_impl_t *binding_impl)
     }
     /* Free the memory */
     kfree(binding_impl);
+}
+
+/* Helper Function for qot_scheduler to make the timer field of a binding NULL */
+qot_return_t qot_remove_binding_timer(int pid, qot_timeline_t *timeline)
+{
+    binding_impl_t *binding_impl = NULL;
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, timeline->index);
+    if(!timeline_impl)
+        return QOT_RETURN_TYPE_ERR;
+    binding_impl = find_binding(&timeline_impl->root, pid);
+    if (!binding_impl)
+        return QOT_RETURN_TYPE_ERR;
+    binding_impl->timer = NULL;
+    return QOT_RETURN_TYPE_OK;
 }
 
 // CLOCK OPERATIONS //////////////////////////////////////////////////////////////////
@@ -500,9 +516,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
-    utimelength_t sync_uncertainty; //FAtima
-    //utimepoint_t wait_until_time;
-    //int wait_until_retval;
+    utimelength_t sync_uncertainty; //Fatima
+    qot_timer_t timer;
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -542,7 +557,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         break;
     /* Bind to this timeline */
     case TIMELINE_BIND_JOIN:
-        pr_info("qot_timeline_chdev: Binding to timeline\n");
+        pr_info("qot_timeline_chdev: Binding to timeline blah\n");
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
         {
             pr_err("qot_timeline_chdev: error in copy from user\n");
@@ -715,6 +730,31 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_to_user((utimepoint_t*)arg, &utp, sizeof(utimepoint_t)))
             return -EACCES;
         break;
+    case TIMELINE_CREATE_TIMER:
+        if (copy_from_user(&timer, (qot_timer_t*)arg, sizeof(qot_timer_t)))
+            return -EACCES;
+        // Find the Binding
+        binding_impl = find_binding(&timeline_impl->root, current->pid);
+        if (!binding_impl)
+            return -EACCES;
+        // Create the Timer
+        if (qot_timer_create(&timer.period, &timer.start_offset, timer.count, &binding_impl->timer, timeline_impl->info))
+            return -EACCES;
+        // Copy Info back to user
+        if (copy_to_user((qot_timer_t*)arg, binding_impl->timer, sizeof(qot_timer_t)))
+            return -EACCES;
+        break;
+    case TIMELINE_DESTROY_TIMER:
+        if (copy_from_user(&timer, (qot_timer_t*)arg, sizeof(qot_timer_t)))
+            return -EACCES;
+        // Find the Binding
+        binding_impl = find_binding(&timeline_impl->root, current->pid);
+        if (!binding_impl)
+            return -EACCES;
+        // Create the Timer
+        if (qot_timer_destroy(binding_impl->timer, timeline_impl->info))
+            return -EACCES;
+        break;   
     default:
         return -EINVAL;
     }
@@ -863,6 +903,46 @@ qot_return_t qot_timeline_chdev_unregister(int index, bool admin_flag)
     device_destroy(timeline_class,timeline_impl->devid);
     /* Remove the posix clock */
     posix_clock_unregister(&timeline_impl->clock);
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Find a timeline's name based on an index */
+qot_return_t qot_get_timeline_name(int index, char *name)
+{
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
+    if (!timeline_impl)
+        return QOT_RETURN_TYPE_ERR;
+    sprintf(name, "%s\n", timeline_impl->info->name);
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Find a timeline's resolution based on an index */
+qot_return_t qot_get_timeline_resolution(int index, timelength_t *resolution)
+{
+    binding_impl_t *bind_obj;
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
+    if (!timeline_impl)
+        return QOT_RETURN_TYPE_ERR;
+    list_for_each_entry(bind_obj, &timeline_impl->head_res, list_res) 
+    {
+        *resolution = bind_obj->info.demand.resolution;
+        return QOT_RETURN_TYPE_OK; 
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+/* Find a timeline's accuracy based on an index */
+qot_return_t qot_get_timeline_accuracy(int index, timeinterval_t *accuracy)
+{
+    binding_impl_t *bind_obj;
+    timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
+    if (!timeline_impl)
+        return QOT_RETURN_TYPE_ERR;
+    list_for_each_entry(bind_obj, &timeline_impl->head_upp, list_res) 
+    {
+        *accuracy = bind_obj->info.demand.accuracy;
+        return QOT_RETURN_TYPE_OK;   
+    }
     return QOT_RETURN_TYPE_OK;
 }
 

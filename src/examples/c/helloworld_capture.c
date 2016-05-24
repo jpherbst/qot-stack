@@ -68,11 +68,11 @@ int main(int argc, char *argv[])
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
 	// Grab the app name
-	const char *cosec = "coretime.log";
+	const char *cosec = "/mnt/capturetime.log";
 	if (argc > 1)
 		cosec = argv[1];
 
-	const char *consec = "coretime_nsec.log";
+	const char *consec = "capturetime_nsec.log";
     if (argc > 2)
         consec = argv[2];
 
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Device opened %d\n", fd_m);
-    /*memset(&desc, 0, sizeof(desc));
+    memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 1;              // '1' corresponds to external timestamp
     desc.chan = index_m;
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
         return QOT_RETURN_TYPE_ERR;
     }
     printf("Requesting timestamps success for %d\n", fd_m);
-    */
+    
     // Keep checking for time stamps
 
     signal(SIGINT, exit_handler);
@@ -246,18 +246,18 @@ int main(int argc, char *argv[])
         utp.estimate.sec  = event.t.sec;
         utp.estimate.asec = event.t.nsec*nSEC_PER_SEC;
         // Get the core time
-        timeline_core2rem(my_timeline1, &utp);
+        timeline_core2rem(my_timeline1, &utp.estimate);
         
         if(i > 0){
             utp2.estimate.sec  = event.t.sec;
             utp2.estimate.asec = event.t.nsec*nSEC_PER_SEC;
-            timeline_core2rem(my_timeline2, &utp2);
+            timeline_core2rem(my_timeline2, &utp2.estimate);
         }
 
         if(DEBUG){
             printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
-            printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
-            printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
+            //printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
+            //printf("LERR - %llu.%llu\n", utp.l_estimate.sec, (utp.l_estimate.asec / nSEC_PER_SEC));
         } else{
             printf("TML1 - %lld.%llu\n", utp.estimate.sec, (utp.estimate.asec / nSEC_PER_SEC));
             printf("UERR - %llu.%llu\n", utp.u_estimate.sec, (utp.u_estimate.asec / nSEC_PER_SEC));
@@ -279,14 +279,14 @@ int main(int argc, char *argv[])
     }
 
     /* Disable the pin */
-    /*memset(&desc, 0, sizeof(desc));
+    memset(&desc, 0, sizeof(desc));
     desc.index = index_m;
     desc.func = 0;              // '0' corresponds to no function 
     desc.chan = index_m;
     if (ioctl(fd_m, PTP_PIN_SETFUNC, &desc)) {
         perror("PTP_PIN_SETFUNC Disable");
     }
-    */
+    
     /* Close the character device */
     close(fd_m);
 
