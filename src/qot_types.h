@@ -250,7 +250,7 @@ static inline void timepoint_sub(timepoint_t *t, timelength_t *v)
 	}
 }
 
-/* Compare two timelengths: l1 < l2 => -1, l1 > l2 => 1, else 0 */
+/* Compare two timepoints: t1 > t2 => -1, t1 < t2 => 1, else 0 */
 static inline int timepoint_cmp(timepoint_t *t1, timepoint_t *t2)
 {
 	if (!t1 || !t2)
@@ -396,8 +396,8 @@ typedef enum {
 
 /* QoT timeline type */
 typedef struct qot_timeline {
-    char name[QOT_MAX_NAMELEN];          /* Timeline name */
-    int index;                           /* The integer Y in /dev/timelineY */
+    char name[QOT_MAX_NAMELEN];          /* Timeline name                     */
+    int index;                           /* The integer Y in /dev/timelineY   */
     #ifdef __KERNEL__
     // Changes added by Sandeep -> Scheduler Specific Stuff
     struct rb_root event_head;           /* RB tree head for events on this timeline */
@@ -410,6 +410,14 @@ typedef struct qot_sleeper {
 	qot_timeline_t timeline;	        /* Timeline Information    */
 	utimepoint_t wait_until_time;	    /* Uncertain time of event */
 } qot_sleeper_t;
+
+/* QoT Periodic Timer */
+typedef struct qot_timer {
+	qot_timeline_t timeline;	        /* Timeline Information    */
+	timepoint_t start_offset;			/* Timer Start Offset      */
+	timelength_t period;				/* Timer Period            */
+	int count;                          /* Timer Iterations        */
+} qot_timer_t;
 
 /* QoT external input timestamping */
 typedef struct qot_extts {
@@ -474,11 +482,14 @@ typedef struct qot_clock {
 #define QOTADM_GET_CORE_TIME_RAW  _IOR(QOTADM_MAGIC_CODE, 8, timepoint_t*)
 
 
-/* QoT timeline type */
+/* QoT Binding type */
 typedef struct qot_binding {
     char name[QOT_MAX_NAMELEN];          /* Application name */
     timequality_t demand;                /* Requested QoT */
     int id;                              /* Binding ID */
+    /* Scheduling Parameters */
+	timepoint_t start_offset;			 /* Start offset for periodic scheduling */
+	timelength_t period;                 /* Scheduling Period */
 } qot_binding_t;
 
 /* Upper and lower bound on current time */
@@ -511,5 +522,7 @@ typedef struct stimepoint {
 #define TIMELINE_GET_CORE_TIME_NOW      _IOR(TIMELINE_MAGIC_CODE, 8, utimepoint_t*)
 #define TIMELINE_GET_TIME_NOW       	_IOR(TIMELINE_MAGIC_CODE, 9, utimepoint_t*)
 #define TIMELINE_SET_SYNC_UNCERTAINTY   _IOR(TIMELINE_MAGIC_CODE, 10, qot_bounds_t*)
+#define TIMELINE_CREATE_TIMER    		_IOWR(TIMELINE_MAGIC_CODE, 11, qot_timer_t*)
+#define TIMELINE_DESTROY_TIMER    		_IOWR(TIMELINE_MAGIC_CODE, 12, qot_timer_t*)
 
 #endif

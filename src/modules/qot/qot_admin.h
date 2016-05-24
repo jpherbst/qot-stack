@@ -56,6 +56,12 @@ qot_return_t qot_admin_get_latency(utimelength_t *utl);
 qot_return_t qot_admin_add_latency(utimepoint_t *utp);
 
 /**
+ * @brief Notify the Admin Daemon about newly created clocks
+ * @param qot_clock QoT clock type
+ **/
+int qot_admin_clock_register_notify(qot_clock_t *clk);
+
+/**
  * @brief Clean up the admin device subsystem
  * @param qot_class Device class for all QoT devices
  **/

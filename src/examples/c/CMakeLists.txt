@@ -49,6 +49,11 @@ ADD_EXECUTABLE(helloworld_tdma2
 )
 TARGET_LINK_LIBRARIES(helloworld_tdma2 qot)
 
+ADD_EXECUTABLE(helloworld_timer
+	helloworld_timer.c
+)
+TARGET_LINK_LIBRARIES(helloworld_timer qot)
+
 # Install the executables to the given prefix
 INSTALL(
 	TARGETS 
@@ -134,6 +139,15 @@ INSTALL(
 INSTALL(
 	TARGETS 
 		helloworld_tdma2
+	DESTINATION 
+		bin 
+	COMPONENT 
+		applications
+)
+
+INSTALL(
+	TARGETS 
+		helloworld_timer
 	DESTINATION 
 		bin 
 	COMPONENT 

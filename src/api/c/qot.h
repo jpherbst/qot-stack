@@ -37,10 +37,9 @@
 typedef struct timeline timeline_t;
 
 /* Function callbacks */
-typedef void (*qot_callback_t)(const qot_event_t *evt);
+//typedef void (*qot_callback_t)(const qot_event_t *evt);
 
-/* Timer ids */
-typedef int qot_timer_t;
+typedef void (*qot_callback_t)(int sig, siginfo_t *si, void *ucontext);
 
 /**
  * @brief Constructor for the timeline_t data structure
@@ -123,6 +122,15 @@ qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid);
 qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res);
 
 /**
+ * @brief Set the periodic scheduling parameters requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param start_offset First wakeup time
+ * @param period wakeup period
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_set_schedparams(timeline_t *timeline, timelength_t *period, timepoint_t *start_offset); 
+
+/**
  * @brief Query the time according to the core
  * @param timeline Pointer to a timeline struct
  * @param core_now Estimated time
@@ -184,6 +192,14 @@ qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
 qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp);
 
 /**
+ * @brief Block wait until next period
+ * @param timeline Pointer to a timeline struct
+ * @param utp Returns the actual uncertain wakeup time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_waituntil_nextperiod(timeline_t *timeline, utimepoint_t *utp);
+
+/**
  * @brief Block for a specified length of uncertain time
  * @param timeline Pointer to a timeline struct
  * @param utl The period for blocking. This will be modified by the
@@ -195,15 +211,11 @@ qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl);
 /**
  * @brief Non-blocking call to create a timer
  * @param timeline Pointer to a timeline struct
- * @param start The start time for the timer
- * @param period The period between calls
- * @param cnt The number of iterations called back
- * @param callback The function that will be called
  * @param timer A pointer to a timer object
+ * @param callback The function that will be called
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
-    utimelength_t *period, int cnt, qot_callback_t callback, timer_t *timer);
+qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_callback_t callback);
 
 /**
  * @brief Non-blocking call to cancel a timer
@@ -211,7 +223,7 @@ qot_return_t timeline_timer_create(timeline_t *timeline, utimepoint_t *start,
  * @param timer A pointer to a timer object
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer);
+qot_return_t timeline_timer_cancel(timeline_t *timeline, qot_timer_t *timer);
 
 /**
  * @brief Converts core time to remote timeline time
@@ -219,7 +231,7 @@ qot_return_t timeline_timer_cancel(timeline_t *timeline, timer_t *timer);
  * @param est timepoint to be converted
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_core2rem(timeline_t *timeline, stimepoint_t *est); 
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est); 
 
 /**
  * @brief Converts remote timeline time to core time

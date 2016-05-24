@@ -246,12 +246,12 @@ int main(int argc, char *argv[])
         utp.estimate.sec  = event.t.sec;
         utp.estimate.asec = event.t.nsec*nSEC_PER_SEC;
         // Get the core time
-        timeline_core2rem(my_timeline1, &utp);
+        timeline_core2rem(my_timeline1, &utp.estimate);
         
         if(i > 0){
             utp2.estimate.sec  = event.t.sec;
             utp2.estimate.asec = event.t.nsec*nSEC_PER_SEC;
-            timeline_core2rem(my_timeline2, &utp2);
+            timeline_core2rem(my_timeline2, &utp2.estimate);
         }
 
         if(DEBUG){

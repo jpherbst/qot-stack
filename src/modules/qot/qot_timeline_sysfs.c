@@ -33,15 +33,46 @@
 
 #include "qot_timeline.h"
 
+static ssize_t resolution_show(struct device *dev, struct device_attribute *attr,
+    char *buf)
+{
+    int devid;
+    timelength_t resolution;
+    devid = MINOR(dev->devt);
+    qot_get_timeline_resolution(devid, &resolution);
+    return scnprintf(buf, PAGE_SIZE, "%llu %llu\n", resolution.sec, resolution.asec);
+}
+DEVICE_ATTR(resolution, 0444, resolution_show, NULL);
+
+static ssize_t accuracy_show(struct device *dev, struct device_attribute *attr,
+    char *buf)
+{
+    int devid;
+    timeinterval_t accuracy;
+    devid = MINOR(dev->devt);
+    qot_get_timeline_accuracy(devid, &accuracy);
+    return scnprintf(buf, PAGE_SIZE, "below: %llu %llu\nabove: %llu %llu\n", accuracy.below.sec, accuracy.below.asec, accuracy.above.sec, accuracy.above.asec);
+}
+DEVICE_ATTR(accuracy, 0444, accuracy_show, NULL);
+
 static ssize_t name_show(struct device *dev, struct device_attribute *attr,
 	char *buf)
 {
- 	return scnprintf(buf, PAGE_SIZE, "%s\n", "default");
+ 	int devid;
+    char *name;
+    name = kzalloc(QOT_MAX_NAMELEN*sizeof(char), GFP_KERNEL);
+    if(!name)
+        return -EINVAL;
+    devid = MINOR(dev->devt);
+    qot_get_timeline_name(devid, name);
+    return scnprintf(buf, PAGE_SIZE, "%s\n", name);
 }
 DEVICE_ATTR(name, 0444, name_show, NULL);
 
 static struct attribute *qot_timeline_attrs[] = {
     &dev_attr_name.attr,
+    &dev_attr_accuracy.attr,
+    &dev_attr_resolution.attr,
     NULL,
 };
 

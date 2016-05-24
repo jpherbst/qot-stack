@@ -87,18 +87,71 @@ static ssize_t timeline_remove_all_store(struct device *dev,
 }
 DEVICE_ATTR(timeline_remove_all, 0600, NULL, timeline_remove_all_store);
 
-/* List all timelines */
+/* List different core clocks */
 static ssize_t clock_core_show(struct device *dev,
     struct device_attribute *attr, char *buf)
 {
-    return 0;
+    qot_clock_t clk;
+    int retval = 0;
+    char *temp_buf = kzalloc(1000*sizeof(char), GFP_KERNEL);
+    if(temp_buf == NULL)
+        return -EINVAL;
+    if (qot_clock_first(&clk)==QOT_RETURN_TYPE_OK) {
+        do {
+            sprintf(temp_buf, "%s\n", clk.name);
+        } while (qot_clock_next(&clk)==QOT_RETURN_TYPE_OK);
+    }
+    retval = scnprintf(buf, PAGE_SIZE, "%s", temp_buf);
+    kfree(temp_buf);
+    return retval;
 }
-static ssize_t clock_core_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
+DEVICE_ATTR(core_clocks, 0600, clock_core_show, NULL);
+
+/* Show Current Core Clock */
+static ssize_t current_clock_core_show(struct device *dev,
+    struct device_attribute *attr, char *buf)
 {
+    qot_clock_t clk;
+    int retval = 0;
+    if(qot_get_core_clock(&clk))
+    {
+        retval = scnprintf(buf, PAGE_SIZE, "No Presiding Core Clock\n");
+    }   
+    else
+    {
+        retval = scnprintf(buf, PAGE_SIZE, "%s\n", clk.name);
+    }
+    return retval;
+}
+
+/* Change current Core Clock */
+static ssize_t current_clock_core_store(struct device *dev,
+    struct device_attribute *attr, const char *buf, size_t count)
+{
+    qot_clock_t clk;
+    int cnt = 0;
+    char *name = kzalloc(100*sizeof(char), GFP_KERNEL);
+    if(name == NULL)
+        return -EINVAL;
+    cnt = sscanf(buf, "%s", name);
+    // Return if more than one argument is given
+    if(cnt != 1)
+    {
+        return count;
+    }
+    if (qot_clock_first(&clk)==QOT_RETURN_TYPE_OK) {
+        do {
+            if(strcmp(name, clk.name) == 0)
+            {
+                qot_clock_switch(&clk);
+                break;
+            }
+        } while (qot_clock_next(&clk)==QOT_RETURN_TYPE_OK);
+    }
+    kfree(name);
     return count;
 }
-DEVICE_ATTR(clock_core, 0600, clock_core_show, clock_core_store);
+DEVICE_ATTR(current_core_clock, 0600, current_clock_core_show, current_clock_core_store);
 
 /* List all timelines */
 static ssize_t os_latency_usec_show(struct device *dev,
@@ -145,7 +198,8 @@ static struct attribute *qot_admin_attrs[] = {
     &dev_attr_timeline_remove_all.attr,
     &dev_attr_timeline_remove.attr,
     &dev_attr_timeline_create.attr,
-    &dev_attr_clock_core.attr,
+    &dev_attr_core_clocks.attr,
+    &dev_attr_current_core_clock.attr,
     &dev_attr_os_latency_usec.attr,
     NULL,
 };
