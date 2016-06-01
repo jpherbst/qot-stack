@@ -37,9 +37,9 @@
 typedef struct timeline timeline_t;
 
 /* Function callbacks */
-//typedef void (*qot_callback_t)(const qot_event_t *evt);
+typedef void (*qot_callback_t)(const qot_event_t *evt);
 
-typedef void (*qot_callback_t)(int sig, siginfo_t *si, void *ucontext);
+typedef void (*qot_timer_callback_t)(int sig, siginfo_t *si, void *ucontext);
 
 /**
  * @brief Constructor for the timeline_t data structure
@@ -153,7 +153,7 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est);
  * @param callback A function to call on each edge event
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_enable_output_compare(timeline_t *timeline, qot_perout_t *request, qot_callback_t callback);
+qot_return_t timeline_enable_output_compare(timeline_t *timeline, qot_perout_t *request);
 
 /**
  * @brief Disable interrupt be generated on a given pin
@@ -162,6 +162,7 @@ qot_return_t timeline_enable_output_compare(timeline_t *timeline, qot_perout_t *
  * @return A status code indicating success (0) or other
  **/
 qot_return_t timeline_disable_output_compare(timeline_t *timeline, qot_perout_t *request);
+
 /**
  * @brief Request an interrupt be generated on a given pin
  * @param timeline Pointer to a timeline struct
@@ -169,8 +170,15 @@ qot_return_t timeline_disable_output_compare(timeline_t *timeline, qot_perout_t 
  * @param callback A function to call on each edge event
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_config_pin_timestamp(timeline_t *timeline,
-    qot_extts_t *request, qot_callback_t callback);
+qot_return_t timeline_config_pin_timestamp(timeline_t *timeline, qot_extts_t *request, int enable);
+
+/**
+ * @brief Perform a blocking read to get timestamp events
+ * @param timeline Pointer to a timeline struct
+ * @param event Pointer to event structure
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_read_pin_timestamps(timeline_t *timeline, qot_event_t *event);
 
 /**
  * @brief Request to be informed of timeline events
@@ -179,8 +187,15 @@ qot_return_t timeline_config_pin_timestamp(timeline_t *timeline,
  * @param callback The function that will be called
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
-    qot_callback_t callback);
+qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable, qot_callback_t callback);
+
+/**
+ * @brief Read events on a timeline
+ * @param timeline Pointer to a timeline struct
+ * @param event Pointer to event structure
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_read_events(timeline_t *timeline, qot_event_t *event);
 
 /**
  * @brief Block wait until a specified uncertain point
@@ -215,7 +230,7 @@ qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl);
  * @param callback The function that will be called
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_callback_t callback);
+qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_timer_callback_t callback);
 
 /**
  * @brief Non-blocking call to cancel a timer

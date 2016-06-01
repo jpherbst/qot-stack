@@ -56,7 +56,7 @@ typedef struct qot_user_chdev_con {
     wait_queue_head_t wq;               /* Wait queue           */
     int event_flag;                     /* Data ready flag      */
     struct list_head event_list;        /* Event list           */
-    struct semaphore list_sem;           /* Event list semaphore */
+    raw_spinlock_t list_lock;           /* Event list Lock      */
 } qot_user_chdev_con_t;
 
 /* Information required to open a character device */
@@ -65,14 +65,6 @@ static int qot_major;
 
 /* Root of the red-black tree used to store parallel connections */
 static struct rb_root qot_user_chdev_con_root = RB_ROOT;
-
-// TIME PROJECTION FOR PERIODIC OUT REPROGRAMMING ///////////////////////////////////////
-static s64 qot_perout_convert(qot_perout_t *perout)
-{
-    s64 period = TL_TO_nSEC(perout->period);
-    qot_rem2loc(perout->timeline.index, 1, &period);
-    return period;
-}
 
 /* Free memory used by a connection */
 static void qot_user_chdev_con_free(qot_user_chdev_con_t *con)
@@ -146,6 +138,7 @@ static int qot_user_timeline_create_notify(qot_timeline_t *timeline)
     struct rb_node *con_node = NULL;
     struct qot_user_chdev_con *con;
     event_t *event;
+    unsigned long flags;
     con_node = rb_first(&qot_user_chdev_con_root);
     while(con_node != NULL)
     {
@@ -157,15 +150,108 @@ static int qot_user_timeline_create_notify(qot_timeline_t *timeline)
         }
         event->info.type = QOT_EVENT_TIMELINE_CREATE;
         strncpy(event->info.data,timeline->name, QOT_MAX_NAMELEN);
-        if(down_interruptible(&con->list_sem))
-            return -ERESTARTSYS;
+        raw_spin_lock_irqsave(&con->list_lock, flags);
+        // if(down_interruptible(&con->list_sem))
+        //     return -ERESTARTSYS;
         list_add_tail(&event->list, &con->event_list);
         con->event_flag = 1;
-        up(&con->list_sem);
+        //up(&con->list_sem);
+        raw_spin_unlock_irqrestore(&con->list_lock, flags);
         wake_up_interruptible(&con->wq);
         con_node = rb_next(con_node);
     }
     return 0;
+}
+
+qot_return_t qot_user_chdev_add_event(struct file *fileobject, qot_event_t *event)
+{
+    qot_user_chdev_con_t *con = qot_user_chdev_con_search(fileobject);
+    unsigned long flags;
+
+    // Local Event Type
+    event_t *event_type;
+    event_type = kzalloc(sizeof(event_t), GFP_KERNEL);
+    if (!event_type) {
+        pr_warn("qot_user_chdev: failed to allocate event\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    event_type->info = *event;
+
+    // Add event to the queue
+    raw_spin_lock_irqsave(&con->list_lock, flags);
+    list_add_tail(&event_type->list, &con->event_list);
+    con->event_flag = 1;
+    raw_spin_unlock_irqrestore(&con->list_lock, flags);
+    wake_up_interruptible(&con->wq);
+    return QOT_RETURN_TYPE_OK;
+     
+}
+
+
+// TIME PROJECTION FOR PERIODIC OUT REPROGRAMMING ///////////////////////////////////////
+static qot_return_t qot_perout_notify(qot_perout_t *perout, timepoint_t *event_core_timestamp, timepoint_t *next_event)
+{
+    utimepoint_t event_timestamp;
+    s64 period, start, event_timestamp_ns, num_periods; 
+    unsigned long flags;
+
+    event_t *event;
+    qot_user_chdev_con_t *con = qot_user_chdev_con_search(perout->owner_file);
+    if (!con) {
+        pr_err("qot_user_chdev: could not find user chdev connection\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Notify the connection of the start of a periodic event
+    event = kzalloc(sizeof(event_t), GFP_KERNEL);
+    if (!event) {
+        pr_warn("qot_user_chdev: failed to allocate event\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    event_timestamp.estimate = *event_core_timestamp;
+    event_timestamp_ns = TP_TO_nSEC(event_timestamp.estimate);
+    qot_loc2rem(perout->timeline.index, 0, &event_timestamp_ns);
+    TP_FROM_nSEC(event_timestamp.estimate, event_timestamp_ns);
+    // TODO -> Still need to add sync uncertainty
+    
+    // Populate event information
+    event->info.type = QOT_EVENT_PWM_START;
+    event->info.timestamp.estimate =  event_timestamp.estimate;
+    strncpy(event->info.data, perout->timeline.name, QOT_MAX_NAMELEN);
+
+    // Add event to the event list corresponding to the connection
+    raw_spin_lock_irqsave(&con->list_lock, flags);
+    list_add_tail(&event->list, &con->event_list);
+    con->event_flag = 1;
+    raw_spin_unlock_irqrestore(&con->list_lock, flags);
+    wake_up_interruptible(&con->wq);
+
+    // period = TL_TO_nSEC(perout->period);
+    // start = TP_TO_nSEC(perout->start);
+
+    // qot_clock_get_core_time_raw(&current_core_time);
+    // current_time = TP_TO_nSEC(current_core_time);
+    // qot_loc2rem(perout->timeline.index, 0, &current_time);
+
+    // if(current_time > start)
+    // {
+    //     num_periods = div64_s64(current_time - start, period);
+    //     start = (num_periods+1)*period - current_time;
+
+    //     qot_rem2loc(perout->timeline.index, 1, &start);
+    //     *core_start = start;
+    //     //*core_period = period;
+    //     return QOT_RETURN_TYPE_OK;
+    // }
+    // else
+    // {
+    //     qot_rem2loc(perout->timeline.index, 1, &start);
+    //     *core_start = start;
+    //     return QOT_RETURN_TYPE_ERR;
+    // }
+    
+    return QOT_RETURN_TYPE_OK;
 }
 
 /* chardev ioctl open callback implementation */
@@ -173,7 +259,7 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 {
     qot_timeline_t *timeline;
     event_t *event;
-    unsigned long flags;
+    unsigned long flags, flags1;
     /* Create a new connection */
     qot_user_chdev_con_t *con =
         kzalloc(sizeof(qot_user_chdev_con_t), GFP_KERNEL);
@@ -185,7 +271,8 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
     init_waitqueue_head(&con->wq);
     con->fileobject = f;
     con->event_flag = 0;
-    sema_init(&con->list_sem, 1);
+    raw_spin_lock_init(&con->list_lock);
+    //sema_init(&con->list_sem, 1);
 
     /* Insert the connection into the red-black tree */
     qot_user_chdev_con_insert(con);
@@ -202,10 +289,12 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
             }
             event->info.type = QOT_EVENT_TIMELINE_CREATE;
             strncpy(event->info.data,timeline->name,QOT_MAX_NAMELEN);
-            if(down_interruptible(&con->list_sem))
-                return -ERESTARTSYS;
+            raw_spin_lock_irqsave(&con->list_lock, flags1);
+            // if(down_interruptible(&con->list_sem))
+            //     return -ERESTARTSYS;
             list_add_tail(&event->list, &con->event_list);
-            up(&con->list_sem);
+            //up(&con->list_sem);
+            raw_spin_unlock_irqrestore(&con->list_lock, flags1);
         } while (qot_timeline_next(&timeline)==QOT_RETURN_TYPE_OK);
         raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
         con->event_flag = 1;
@@ -244,8 +333,10 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
 
     qot_perout_t perout;
     timepoint_t core_start;
-    timepoint_t core_period;
+    timelength_t core_period;
     s64 period, start;
+
+    qot_clock_t msgc;
 
     qot_user_chdev_con_t *con = qot_user_chdev_con_search(f);
     if (!con)
@@ -274,6 +365,13 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return -EACCES;
         msgt = *timeline;
         if (copy_to_user((qot_timeline_t*)arg, &msgt, sizeof(qot_timeline_t)))
+            return -EACCES;
+        break;
+    /* Get information about a timeline */
+    case QOTUSR_GET_CORE_CLOCK_INFO:
+        if (qot_get_core_clock(&msgc))
+            return -EACCES;
+        if (copy_to_user((qot_clock_t*)arg, &msgc, sizeof(qot_clock_t)))
             return -EACCES;
         break;
     /* Create a timeline */
@@ -327,7 +425,7 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return -EACCES;
 
         timeline = &perout.timeline;
-
+        perout.owner_file = f;
         // Check if the timeline exists
         if (qot_timeline_get_info(&timeline))
             return -EACCES;
@@ -336,14 +434,14 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         // Period Conversions
         period = (s64)TL_TO_nSEC(perout.period);
         qot_rem2loc(perout.timeline.index, 1, &period);
-        TP_FROM_nSEC(core_period, period);
+        TL_FROM_nSEC(core_period, (u64) period);
 
         // Start Conversions
         start = (s64)TP_TO_nSEC(perout.start);
-        qot_rem2loc(perout.timeline.index, 1, &start);
+        qot_rem2loc(perout.timeline.index, 0, &start);
         TP_FROM_nSEC(core_start, start);
         // Program the periodic output
-        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 1, qot_perout_convert))
+        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 1, qot_perout_notify))
         {
             return -EACCES;
         }
@@ -359,7 +457,7 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
 
         perout.timeline = *timeline;
         // Disable the periodic output
-        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 0, qot_perout_convert))
+        if(qot_clock_program_output_compare(&core_start, &core_period, &perout, 0, qot_perout_notify))
             return -EACCES;
         break;
     default:
@@ -427,5 +525,4 @@ void qot_user_chdev_cleanup(struct class *qot_class)
         qot_user_chdev_con_free(con);      /* Free memory */
     }
 }
-
 MODULE_LICENSE("GPL");

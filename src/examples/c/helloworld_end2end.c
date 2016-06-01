@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
     // Exit Handler on SIGINT
     signal(SIGINT, exit_handler);
 
-    if(timeline_enable_output_compare(my_timeline, &request, callback))
+    if(timeline_enable_output_compare(my_timeline, &request))
     {
         printf("Cannot request periodic output\n");
         goto exit_point;

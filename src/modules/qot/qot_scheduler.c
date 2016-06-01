@@ -119,18 +119,13 @@ static int qot_sleeper_wakeup(struct timeline_sleeper *sleeper, struct rb_node *
     if(sleeper->periodic_timer_flag == 1)
     {
     	utimepoint_t time_now;
-    	utimepoint_t *time_now_ptr;
     	struct task_struct *task;
     	struct siginfo info;
-    	union sigval sv;
 		memset(&info, 0, sizeof(struct siginfo));
 		info.si_signo = SIGALRM;
 		info.si_code = SI_QUEUE;
 
-		sv.sival_ptr = (void*) time_now_ptr;
-
 		//send signal to user process
-		//sigqueue(sleeper->task->pid, SIGALRM, sv);
 		task = pid_task(find_vpid(sleeper->pid), PIDTYPE_PID); //find_task_by_pid(sleeper->pid);
 		if(task != NULL)
 		{

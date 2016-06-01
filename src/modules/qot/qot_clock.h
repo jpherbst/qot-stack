@@ -69,7 +69,7 @@ qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, int force, lon
  * @param callback Function which must be called when the interrupt expires
  * @return A status code indicating success (0) or other (no more clocks)
  **/
-qot_return_t qot_clock_program_output_compare(timepoint_t *core_start, timepoint_t *core_period, qot_perout_t *perout, int on, s64 (*callback)(qot_perout_t *perout_ret));
+qot_return_t qot_clock_program_output_compare(timepoint_t *core_start, timelength_t *core_period, qot_perout_t *perout, int on, qot_return_t (*callback)(qot_perout_t *perout_ret, timepoint_t *event_core_timestamp, timepoint_t *next_event));
 
 /**
  * @brief Add the uncertainity in interrupt latency to the callback

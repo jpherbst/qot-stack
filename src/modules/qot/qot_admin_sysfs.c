@@ -1,5 +1,5 @@
 /*
- * @file qot_clock_sysfs.c
+ * @file qot_admin_sysfs.c
  * @brief Admin sysfs interface to the QoT core
  * @author Andrew Symington
  *
