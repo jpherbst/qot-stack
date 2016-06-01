@@ -319,11 +319,11 @@ qot_return_t qot_loc2rem(int index, int period, s64 *val)
         return QOT_RETURN_TYPE_ERR;
 
     if (period)
-        *val += div_s64(timeline_impl->mult * (*val),1000000000ULL);
+        *val += div_s64(timeline_impl->mult * (*val), 1000000000L);
     else
     {
         *val -= (s64) timeline_impl->last;
-        *val  = timeline_impl->nsec + (*val) + div_s64(timeline_impl->mult * (*val),1000000000ULL);
+        *val  = timeline_impl->nsec + (*val) + div_s64(timeline_impl->mult * (*val), 1000000000L);
     }
     return QOT_RETURN_TYPE_OK;
 }
@@ -331,15 +331,18 @@ qot_return_t qot_loc2rem(int index, int period, s64 *val)
 qot_return_t qot_rem2loc(int index, int period, s64 *val)
 {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
-    
+    u32 rem;
     if(timeline_impl == NULL)
         return QOT_RETURN_TYPE_ERR;
 
     if (period)
-        *val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
+    {
+        //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
+        *val = div_u64_rem((u64)(*val), (u64) (timeline_impl->mult + 1000000000LL), &rem)*1000000000LL ;
+        *val += rem;
+    }
     else
     {
-        u32 rem;
         u64 diff = (u64)(*val - timeline_impl->nsec);
         u64 quot = div_u64_rem(diff, (timeline_impl->mult + 1000000000ULL), &rem);
         *val = timeline_impl->last + (quot * 1000000000ULL) + rem; 

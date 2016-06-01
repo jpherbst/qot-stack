@@ -1,6 +1,6 @@
 /*
  * @file helloworld_compare.c
- * @brief Simple C example showing how to trigger output compare
+ * @brief Simple C example showing how to trigger periodic timers
  * @author Sandeep D'souza
  * 
  * Copyright (c) Carnegie Mellon University, 2016.

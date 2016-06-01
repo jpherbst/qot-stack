@@ -47,6 +47,7 @@
 	#include <linux/ioctl.h>
  	#include <linux/math64.h>
     #include <linux/kernel.h>
+    #include <linux/fs.h>
  	#define llabs abs
 #else
 	#include <time.h>
@@ -372,8 +373,11 @@ typedef enum {
  * @brief Timeline events
  */
 typedef enum {
-	QOT_EVENT_TIMELINE_CREATE   = (0),	/* Timeline created 			 */
-	QOT_EVENT_CLOCK_CREATE      = (1),	/* Clock created 				 */
+	QOT_EVENT_TIMELINE_CREATE    = (0),	   /* Timeline created 		*/
+	QOT_EVENT_CLOCK_CREATE       = (1),	   /* Clock created 		*/
+	QOT_EVENT_EXTERNAL_TIMESTAMP = (2),	   /* External Timestamp    */
+	QOT_EVENT_PWM_START          = (3),    /* PWM Started           */
+	QOT_EVENT_TIMER_CALLBACK     = (4),    /* Timer Callback        */
 } qot_event_type_t;
 
 /**
@@ -421,9 +425,12 @@ typedef struct qot_timer {
 
 /* QoT external input timestamping */
 typedef struct qot_extts {
-	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Edge to capture */
+	int pin_index;          			/* Pin (according to testptp -l) */
+	qot_trigger_t edge;					/* Edge to capture -> Not supported now*/
 	qot_return_t response;			    /* Response */
+	#ifdef __KERNEL__
+	struct file *owner_file;            /* Owning File Descriptor  */
+	#endif
 } qot_extts_t;
 
 /* QoT programmable periodic output */
@@ -434,6 +441,9 @@ typedef struct qot_perout {
 	timelength_t period;				/* Period */
 	qot_return_t response;			    /* Response */
 	qot_timeline_t timeline;			/* Timeline Data Structure */
+	#ifdef __KERNEL__
+	struct file *owner_file;            /* Owning File Descriptor  */
+	#endif
 } qot_perout_t;
 
 /* QoT event */
@@ -454,7 +464,7 @@ typedef struct qot_event {
 #define QOTUSR_WAIT_UNTIL       _IOWR(QOTUSR_MAGIC_CODE, 9, qot_sleeper_t*)
 #define QOTUSR_OUTPUT_COMPARE_ENABLE       _IOWR(QOTUSR_MAGIC_CODE, 10, qot_perout_t*)
 #define QOTUSR_OUTPUT_COMPARE_DISABLE       _IOWR(QOTUSR_MAGIC_CODE, 11, qot_perout_t*)
-
+#define QOTUSR_GET_CORE_CLOCK_INFO     _IOR(QOTUSR_MAGIC_CODE, 12, qot_clock_t*)
 
 /* QoT clock type (admin only) */
 typedef struct qot_clock {

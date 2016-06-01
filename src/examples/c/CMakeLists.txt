@@ -54,6 +54,11 @@ ADD_EXECUTABLE(helloworld_timer
 )
 TARGET_LINK_LIBRARIES(helloworld_timer qot)
 
+ADD_EXECUTABLE(helloworld_capture_simple
+	helloworld_capture_simple.c
+)
+TARGET_LINK_LIBRARIES(helloworld_capture_simple qot)
+
 # Install the executables to the given prefix
 INSTALL(
 	TARGETS 
@@ -148,6 +153,15 @@ INSTALL(
 INSTALL(
 	TARGETS 
 		helloworld_timer
+	DESTINATION 
+		bin 
+	COMPONENT 
+		applications
+)
+
+INSTALL(
+	TARGETS 
+		helloworld_capture_simple
 	DESTINATION 
 		bin 
 	COMPONENT 

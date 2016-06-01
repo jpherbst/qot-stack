@@ -1,7 +1,7 @@
 /*
  * @file qot_timeline_sysfs.c
- * @brief Admin sysfs interface to a given timeline
- * @author Andrew Symington
+ * @brief Timeline sysfs interface to a given timeline
+ * @author Andrew Symington 
  *
  * Copyright (c) Regents of the University of California, 2015.
  * All rights reserved.

@@ -141,7 +141,7 @@ qot_return_t qot_clock_program_core_interrupt(timepoint_t expiry, int force, lon
 }
 
 /* Program a PWM */
-qot_return_t qot_clock_program_output_compare(timepoint_t *core_start, timepoint_t *core_period, qot_perout_t *perout, int on, s64 (*callback)(qot_perout_t *perout_ret))
+qot_return_t qot_clock_program_output_compare(timepoint_t *core_start, timelength_t *core_period, qot_perout_t *perout, int on, qot_return_t (*callback)(qot_perout_t *perout_ret, timepoint_t *event_core_timestamp, timepoint_t *next_event))
 {
     long retval = 0;
     if (!core)
