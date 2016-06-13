@@ -443,7 +443,7 @@ Note that whenever you run an OpenSplice-driven app you will need to set an envi
 
 ## STEP 5 : Build and install ##
 
-Before building, make sure that you have followed the steps here,
+Before building, make sure that you have followed the steps [here](https://bitbucket.org/rose-line/qot-stack/src/e856dbca2ddb1ecc83c0a14b743aa69d4b30bd93/src/test/?at=thorn16_refactor) for unit tests.
 
 The entire project is cmake-driven, and so the following should suffice:
 
