@@ -443,6 +443,8 @@ Note that whenever you run an OpenSplice-driven app you will need to set an envi
 
 ## STEP 5 : Build and install ##
 
+Before building, make sure that you have followed the steps here,
+
 The entire project is cmake-driven, and so the following should suffice:
 
 ```
