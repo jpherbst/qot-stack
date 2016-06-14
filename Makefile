@@ -6,6 +6,8 @@ obj-m += qot_am335x.o
 KERNELDIR ?= /export/bb-kernel/KERNEL
 KERNELVER ?= 4.1.12-bone-rt-r16
 
+IPADDR ?= 192.168.1.110
+
 all:
 	dtc -O dtb -o BBB-AM335X-00A0.dtbo -b 0 -@ targets/am335x/BBB-AM335X-00A0.dts
 
@@ -20,6 +22,32 @@ install:
 	sudo cp targets/common/80-qot.rules /export/rootfs/etc/udev/rules.d/
 	sudo cp targets/am335x/capes /export/rootfs/usr/bin/
 	sudo chmod 755 /export/rootfs/usr/bin/capes
+
+install_sd:
+	sudo scp -v src/modules/qot/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	sudo scp -v src/modules/qot_am335x/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	sudo scp -v *.dtbo root@$(IPADDR):/lib/firmware
+	sudo scp -v ./src/qot-daemon/test.sh root@$(IPADDR):/home
+	sudo scp targets/common/80-qot.rules root@$(IPADDR):/etc/udev/rules.d/
+	sudo scp targets/am335x/capes root@$(IPADDR):/usr/bin/
+	sudo scp /export/rootfs/usr/local/lib/*.so root@$(IPADDR):/usr/local/lib/
+	sudo scp src/api/c/qot.h root@$(IPADDR):/usr/local/include/ 
+	sudo scp src/api/cpp/qot.hpp root@$(IPADDR):/usr/local/include/
+	sudo scp build/src/qot-daemon/qotd root@$(IPADDR):/usr/local/bin/
+	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotd
+	sudo scp build/src/service/qotdaemon root@$(IPADDR):/usr/local/bin/
+	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotdaemon
+	sudo scp build/src/service/testptp root@$(IPADDR):/usr/local/bin/
+	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/testptp
+	sudo scp build/src/service/phc2phc root@$(IPADDR):/usr/local/bin/
+	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/phc2phc
+	# Install Apps using this template
+	sudo scp build/src/examples/c/helloworld root@$(IPADDR):/usr/local/bin/
+	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/helloworld
+	# Install Apps Ends
+	sudo ssh root@$(IPADDR) chmod 755 /usr/bin/capes
+	sudo ssh root@$(IPADDR) depmod
+	sudo ssh root@$(IPADDR) ldconfig
 
 reload:
 	ssh root@172.17.11.0 depmod
