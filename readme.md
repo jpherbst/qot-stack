@@ -127,6 +127,8 @@ And, you will NFS mount this on each host. When you compile the kernel you shoul
 # Table of contents #
 
 [TOC]
+
+# Standalone SD Card Setup #
   
 # Controller preparation #
 
