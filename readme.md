@@ -99,6 +99,7 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 # Overview #
 
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
+In case, a more simpler version of the setup is desired, please directly refer to Section 
 
 ![qot-setup.png](https://bitbucket.org/repo/5Eg8za/images/2069891140-qot-setup.png)
 
