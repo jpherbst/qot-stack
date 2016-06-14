@@ -99,6 +99,7 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 # Overview #
 
 This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
+In case, a more simpler version of the setup is desired, please refer to the section on the controller setup and then directly refer to the section on the Standalone SD card setup. For the NFS based setup, please skip the section on the standalone setup.
 
 ![qot-setup.png](https://bitbucket.org/repo/5Eg8za/images/2069891140-qot-setup.png)
 
@@ -126,6 +127,7 @@ And, you will NFS mount this on each host. When you compile the kernel you shoul
 # Table of contents #
 
 [TOC]
+
   
 # Controller preparation #
 
@@ -189,6 +191,21 @@ $> /export/install_netboot.sh
 ```
 
 Now, you have a working kernel
+
+# Standalone SD Card Setup #
+
+Skip this section, if you are setting up an NFS based setup.
+
+1. Download the SD card image from this [link](https://drive.google.com/file/d/0B5sYz4zKsYSaQk1MWTlicGdFcU0/view?usp=sharing).
+2. The SD card image contains all the relevant modules and libraries, required for the Linux QoT-Stack. Install the SD card image onto an SD card (minimum size 8 GB), using available free software (needs to be elaborated). 
+3. Insert the SD card into the beaglebone black, and boot the node. 
+4. Figure out the IP address assigned to the node by: (i) Connect the beaglebone to the host using the supplied USB cable (ii) SSH into the beaglebone using ssh root@192.168.7.2 (iii) Figure out the IP address by using ifconfig -eth0 (iv) Add the public key of your host account (available at ~/.ssh/id-rsa.pub) to the the following file on the node ```~/.ssh/authorized_keys``` (v) Exit the ssh connection and disconnect the USB cable. You should now be able to ssh into the node using ethernet and the IP address of the node (ssh root@ip-addr)
+5. Copy the lates versions of the stack components to the node: (i) Navigate to the directory with the qot-stack. Edit the Makefile in the directory. (ii) Replace the field IPADDR with the ip-address of the node (obtained from the previous step) (iii) do a ```make``` followed by a ```make install_sd```. All the latest versions of the stack componenets and libraries are now on the node.
+6. ssh into the node (ssh root@ip-addr)
+7. Enter the following commands in the remote terminal on the node: ```ldconfig```, ```depmod -a```
+8. Load the modules: ```capes BBB-AM335X```
+
+Skip the networking steps, and proceed to the section on configuring the QoT-Stack
 
 
 ## STEP 2 : Networking  ##
@@ -442,6 +459,8 @@ You now have a working OpenSplice distribution with C++11 support. This basicall
 Note that whenever you run an OpenSplice-driven app you will need to set an environment variable ```OSPL_URI``` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. The slave rootfs is configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different```<NetworkInterfaceAddress>``` tag values.
 
 ## STEP 5 : Build and install ##
+
+Before building, make sure that you have followed the steps [here](https://bitbucket.org/rose-line/qot-stack/src/e856dbca2ddb1ecc83c0a14b743aa69d4b30bd93/src/test/?at=thorn16_refactor) for unit tests.
 
 The entire project is cmake-driven, and so the following should suffice:
 
