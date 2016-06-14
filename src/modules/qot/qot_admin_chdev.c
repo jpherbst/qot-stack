@@ -175,6 +175,7 @@ static int qot_admin_chdev_ioctl_open(struct inode *i, struct file *f)
     init_waitqueue_head(&con->wq);
     con->fileobject = f;
     con->event_flag = 0;
+    sema_init(&con->list_sem, 1);
 
     /* Insert the connection into the red-black tree */
     qot_admin_chdev_con_insert(con);
