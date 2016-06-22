@@ -437,16 +437,16 @@ Configure and build the OpenSplice DDS library. The configure script searches fo
 $> ./configure
 ```
 
-Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```envs-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. 
+Assuming that you chose the build type to be armv7l-dev, then you will see that a new script ```envs-armv7l-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. 
 
 ```
-$> . envs-x86_64.linux-dev.sh
+$> . envs-armv7l-dev.sh
 $> make
 $> make install
 $> popd
 ```
 
-Then, add C++11 support by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```./install/HDE/x86_64.linux-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will now need to recompile the C++ interface:
+Then, add C++11 support by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```./install/HDE/armv7l-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will now need to recompile the C++ interface:
 
 ```
 $> pushd thirdparty/opensplice/install/HDE/%build%/custom_lib
