@@ -333,9 +333,9 @@ Then run the following:
 1. Type ```n```, then ```p``` for primary, ```2``` for the second partition on the drive, and ```+2GB``` to set the size to 2GB.
 1. Type ```n```, then ```p``` for primary, ```3``` for the third partition on the drive, and ```enter``` to select the remaining bytes on the drive.
 1. Write the partition table and exit by typing ```w```.
-1. Initialise the filesystem for partition 1: ```mkfs.vfat -F 16 /dev/sd?1 -l boot```
-1. Initialise the filesystem for partition 2: ```mkfs.ext4 /dev/sd?2 -l rootfs```
-1. Initialise the filesystem for partition 3: ```mkfs.ext4 /dev/sd?3 -l user```
+1. Initialise the filesystem for partition 1: ```mkfs.vfat -F 16 /dev/sd?1 -n boot```
+1. Initialise the filesystem for partition 2: ```mkfs.ext4 /dev/sd?2 -L rootfs```
+1. Initialise the filesystem for partition 3: ```mkfs.ext4 /dev/sd?3 -L user```
 
 Now, install the bootloader:
 
@@ -363,7 +363,7 @@ If you can't find anything useful there, use a FTDI cable to inspect the u-boot 
 At this point you should be able to SSH into the slave device as root. However, he root password for this account is randomized by default. So, in order to SSH into the device you will need to add your RSA public key to ```/export/rootfs/root/.ssh/authorized_keys```. To find your public key type:
 
 ```
-$> cat  ~/.ssh/id_rsa.pub```
+$> cat  ~/.ssh/id_rsa.pub
 ```
 
 If you get a 'No such file or directory found' error, then you need to first create your key pair with:
@@ -582,7 +582,7 @@ Once the on-board Core clock and NIC are properly aligned (follow the logs of ph
 
 The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
-In order to create a timeline first, run hellowrold application in a separate terminal,
+In order to create a timeline first, run helloworld application in a separate terminal,
 
 ```
 $> helloworld
