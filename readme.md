@@ -350,6 +350,20 @@ $> cd /
 $> umount /mnt
 ```
 
+Because multiple BeagleBone nodes will be mounting the same filesystem on the controller, the ```/etc/ssh``` folder in the provided root file system has been replaced with a sym-link to ```/mnt/ssh```. The second partition of the sd card will be mounted on ```/mnt```, so create the ssh directory in that partition.
+
+```
+sudo mount /dev/sd?2 /mnt
+cd /mnt/
+mkdir ssh/
+cd ssh/
+ssh-keygen -q -N '' -f ssh_host_rsa_key -t rsa
+cd ~
+sudo umount /mnt
+```
+
+For now (until we can mount an sd card partition for the rootfs), this sym-link mechanism will be used to allow different nodes to have individual copies of files/directories.
+
 Using this card you you should be able to net-boot a Rev C BeagleBone that is plugged into the same LAN as the controller. The four blue LEDs will light up sequentially until all are lit, and you should see the green LED on the Ethernet jack flicker as the kernel / device tree are downloaded from the controller. All four blue LEDS will then turn off for a few seconds while the kernel begins the boot process. They should then rapidly flick for a few more seconds before the classic heartbeat led begins. 
 
 To determine the IP address that the controller offered, or debug any errors check the system log:
