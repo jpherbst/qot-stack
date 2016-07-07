@@ -333,9 +333,9 @@ Then run the following:
 1. Type ```n```, then ```p``` for primary, ```2``` for the second partition on the drive, and ```+2GB``` to set the size to 2GB.
 1. Type ```n```, then ```p``` for primary, ```3``` for the third partition on the drive, and ```enter``` to select the remaining bytes on the drive.
 1. Write the partition table and exit by typing ```w```.
-1. Initialise the filesystem for partition 1: ```mkfs.vfat -F 16 /dev/sd?1 -l boot```
-1. Initialise the filesystem for partition 2: ```mkfs.ext4 /dev/sd?2 -l rootfs```
-1. Initialise the filesystem for partition 3: ```mkfs.ext4 /dev/sd?3 -l user```
+1. Initialise the filesystem for partition 1: ```mkfs.vfat -F 16 /dev/sd?1 -n boot```
+1. Initialise the filesystem for partition 2: ```mkfs.ext4 /dev/sd?2 -L rootfs```
+1. Initialise the filesystem for partition 3: ```mkfs.ext4 /dev/sd?3 -L user```
 
 Now, install the bootloader:
 
@@ -350,6 +350,20 @@ $> cd /
 $> umount /mnt
 ```
 
+Because multiple BeagleBone nodes will be mounting the same filesystem on the controller, the ```/etc/ssh``` folder in the provided root file system has been replaced with a sym-link to ```/mnt/ssh```. The second partition of the sd card will be mounted on ```/mnt```, so create the ssh directory in that partition.
+
+```
+sudo mount /dev/sd?2 /mnt
+cd /mnt/
+mkdir ssh/
+cd ssh/
+ssh-keygen -q -N '' -f ssh_host_rsa_key -t rsa
+cd ~
+sudo umount /mnt
+```
+
+For now (until we can mount an sd card partition for the rootfs), this sym-link mechanism will be used to allow different nodes to have individual copies of files/directories.
+
 Using this card you you should be able to net-boot a Rev C BeagleBone that is plugged into the same LAN as the controller. The four blue LEDs will light up sequentially until all are lit, and you should see the green LED on the Ethernet jack flicker as the kernel / device tree are downloaded from the controller. All four blue LEDS will then turn off for a few seconds while the kernel begins the boot process. They should then rapidly flick for a few more seconds before the classic heartbeat led begins. 
 
 To determine the IP address that the controller offered, or debug any errors check the system log:
@@ -363,7 +377,7 @@ If you can't find anything useful there, use a FTDI cable to inspect the u-boot 
 At this point you should be able to SSH into the slave device as root. However, he root password for this account is randomized by default. So, in order to SSH into the device you will need to add your RSA public key to ```/export/rootfs/root/.ssh/authorized_keys```. To find your public key type:
 
 ```
-$> cat  ~/.ssh/id_rsa.pub```
+$> cat  ~/.ssh/id_rsa.pub
 ```
 
 If you get a 'No such file or directory found' error, then you need to first create your key pair with:
@@ -437,16 +451,16 @@ Configure and build the OpenSplice DDS library. The configure script searches fo
 $> ./configure
 ```
 
-Assuming that you chose the build type to be x86_64.linux-dev, then you will see that a new script ```envs-x86_64.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. 
+Assuming that you chose the build type to be armv7l.linux-dev, then you will see that a new script ```envs-armv7l.linux-dev.sh``` was created in the root of the OpenSplice directory. You need to first source that script and then build. The build products will be put in the ./install directory. 
 
 ```
-$> . envs-x86_64.linux-dev.sh
+$> . envs-armv7l.linux-dev.sh
 $> make
 $> make install
 $> popd
 ```
 
-Then, add C++11 support by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```./install/HDE/x86_64.linux-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will now need to recompile the C++ interface:
+Then, add C++11 support by inserting the ```-std=c++11``` argument to the ```CPPFLAGS``` variable in ```./install/HDE/armv7l.linux-dev/custom_lib/Makefile.Build_DCPS_ISO_Cpp_Lib``` file. You will now need to recompile the C++ interface:
 
 ```
 $> pushd thirdparty/opensplice/install/HDE/%build%/custom_lib
@@ -582,7 +596,7 @@ Once the on-board Core clock and NIC are properly aligned (follow the logs of ph
 
 The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
-In order to create a timeline first, run hellowrold application in a separate terminal,
+In order to create a timeline first, run helloworld application in a separate terminal,
 
 ```
 $> helloworld
