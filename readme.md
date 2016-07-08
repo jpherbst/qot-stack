@@ -353,13 +353,22 @@ $> umount /mnt
 Because multiple BeagleBone nodes will be mounting the same filesystem on the controller, the ```/etc/ssh``` folder in the provided root file system has been replaced with a sym-link to ```/mnt/ssh```. The second partition of the sd card will be mounted on ```/mnt```, so create the ssh directory in that partition.
 
 ```
-sudo mount /dev/sd?2 /mnt
+mount /dev/sd?2 /mnt
 cd /mnt/
 mkdir ssh/
 cd ssh/
 ssh-keygen -q -N '' -f ssh_host_rsa_key -t rsa
+```
+
+You will also need a directory for opensplice with a file [opensplice.xml](https://bitbucket.org/rose-line/downloads/opensplice.xml)
+
+In /mnt:
+```
+mkdir opensplice
+cd opensplice/
+wget https://bitbucket.org/rose-line/qot-stack/downloads/opensplice.xml
 cd ~
-sudo umount /mnt
+umount /mnt
 ```
 
 For now (until we can mount an sd card partition for the rootfs), this sym-link mechanism will be used to allow different nodes to have individual copies of files/directories.
