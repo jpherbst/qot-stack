@@ -429,10 +429,12 @@ $> git submodule update
 Then, install an overlay for the device tree compiler. This compiles a new version of ```dtc``` which you can use to build overlays for the BeagleBone Black.
 
 ```
-$> pushd thirdparty/bbb.org-overlays
+$> pushd thirdparty/bb.org-overlays
 $> ./dtc-overlay.sh
 $> popd
 ```
+
+\*Note the version of dtc you have.
 
 ## STEP 4 : Build OpenSplice ##
 
