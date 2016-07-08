@@ -578,16 +578,38 @@ $> testptp -d /dev/ptp1 -c % qot_am335x driver exposes the core as a ptp clock %
 
 In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
 
-For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c) to enable the pins.
+For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (`/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c`) to enable the pins. (You can use the `diff` and `patch` utilities to do this easily) Patch the file and commit the changes in the `KERNEL` repository.
 The new file can be found at (https://bitbucket.org/rose-line/qot-stack/downloads/cpts.c) 
-Simply replace the existing cpts.c file with the new one and rebuild the kernel,
+
+In `/export/bb-kernel/KERNEL`:
+```
+patch (...)  % patch the cpts.c file
+git add drivers/net/ethernet/ti/cpts.c
+git commit -m "patched cpts.c to add eth controller pin functionalities"
+```
+
+Then we need to create a git formatted patch, put it inside the the `/bb-kernel/patches/` directory, and point `patch.sh` to the patch file. This is because the kernel building scripts (`build_kernel.sh` and `rebuild.sh`) use patch.sh to apply all required patches before building the kernel.
 
 ```
-$> cd /export/bb-kernel/tools
-$> ./rebuild.sh
+git format-patch HEAD~ % creates a patch file with the changes from the previous commit
+cd .. % to go back to /export/bb-kernel/
+cp KERNEL/0001-patched-cpts.c-to-add-eth-controller-pint-functionali.patch \
+   patches/beaglebone/phy/
 ```
 
-After the kernel is rebuild, restart the beaglebone nodes, and run the following in one terminal,
+Now edit `patch.sh` and find where the script enters the `/patches/beaglebone/phy/` directory. (Search for 'patches/beaglebone/phy' in the file) and add the following line:
+```
+${git} "${DIR}/patches/beaglebone/phy/0001-patched-cpts.c-to-add-eth-controller-pin-functionali.patch"
+```
+
+Now we are ready to rebuild the kernel.
+
+In /export/bb-kernel:
+```
+$> ./tools/rebuild.sh
+```
+
+After the kernel is rebuilt, restart the beaglebone nodes, and run the following in one terminal,
 
 ```
 $> phc2phc
@@ -596,7 +618,7 @@ $> phc2phc
 Keep this running for the entire synchronization process.
 Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to verify), we now need to synchronize clocks across different devices.
 
-The ```qotdaemon``` application monitors the ```/dev``` directory for the creation and destruction of ```timelineX``` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over ```eth0```. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
+The `qotdaemon` application monitors the `/dev` directory for the creation and destruction of `timelineX` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over `eth0`. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
 
 In order to create a timeline first, run helloworld application in a separate terminal,
 
