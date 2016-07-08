@@ -360,7 +360,7 @@ cd ssh/
 ssh-keygen -q -N '' -f ssh_host_rsa_key -t rsa
 ```
 
-You will also need a directory for opensplice with a file [opensplice.xml](https://bitbucket.org/rose-line/downloads/opensplice.xml)
+You will also need a directory for opensplice with a file [opensplice.xml](https://bitbucket.org/rose-line/qot-stack/downloads/opensplice.xml)
 
 In /mnt:
 ```
