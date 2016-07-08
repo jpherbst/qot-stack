@@ -184,7 +184,7 @@ ROOTFS=/export/rootfs
 TFTPFS=/export/tftp
 ```
 
-Then, run the install script.
+Then, run the install script while you are in `bb-kernel`.
 
 ```
 $> /export/install_netboot.sh
