@@ -30,6 +30,9 @@
 #ifndef QOT_STACK_SRC_API_C_QOT_H
 #define QOT_STACK_SRC_API_C_QOT_H
 
+// uses siginfo
+#include <signal.h>
+
 /* Include basic types, time math and ioctl interface */
 #include "../../qot_types.h"
 
@@ -257,3 +260,4 @@ qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est);
 qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est); 
 
 #endif
+
