@@ -24,10 +24,10 @@ ADD_EXECUTABLE(helloworld_end2end
 )
 TARGET_LINK_LIBRARIES(helloworld_end2end qot)
 
-ADD_EXECUTABLE(helloworld_random
-	helloworld_random.c
-)
-TARGET_LINK_LIBRARIES(helloworld_random qot -lrt -lm)
+#ADD_EXECUTABLE(helloworld_random
+#	helloworld_random.c
+#)
+#TARGET_LINK_LIBRARIES(helloworld_random qot -lrt -lm)
 
 ADD_EXECUTABLE(helloworld_gpio_vanilla
 	helloworld_gpio_vanilla.c
@@ -105,14 +105,14 @@ INSTALL(
 		applications
 )
 
-INSTALL(
-	TARGETS 
-		helloworld_random
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
+#INSTALL(
+#	TARGETS 
+#		helloworld_random
+#	DESTINATION 
+#		bin 
+#	COMPONENT 
+#		applications
+#)
 
 INSTALL(
 	TARGETS 
