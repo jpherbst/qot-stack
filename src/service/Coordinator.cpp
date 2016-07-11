@@ -46,9 +46,11 @@ std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts)
 
 void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr) 
 {
+	BOOST_LOG_TRIVIAL(info) << "on_data_available() called";
 	int i = 0;
 	// Iterate over all samples
 	for (auto& s : dr.read()) {
+		i++;
 		// If this is NOT the timeline of interest
 		if (s->data().uuid() != timeline.uuid()) {
 			// check for domain clash
@@ -157,6 +159,8 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 			}
 		}
 	}
+
+	BOOST_LOG_TRIVIAL(info) << "i= " << i;
 }
 
 void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
@@ -255,7 +259,7 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 	if (err)
 		return;
 
-	// BOOST_LOG_TRIVIAL(info) << "Heartbeat";
+	BOOST_LOG_TRIVIAL(info) << "Heartbeat";
 
 	// Send out the timeline information
 	dw.write(timeline);
