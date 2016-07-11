@@ -106,16 +106,18 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 		}
 	}
 
+	// done processing data
+	// see if we've found a new master
 	if (newmaster != timeline.master()) {
 		BOOST_LOG_TRIVIAL(info) << "new master should be " << newmaster;
 		timeline.master() = newmaster;
 		timeline.domain() = newdomain;
 
 		BOOST_LOG_TRIVIAL(info) << "restarting sync service";
-		// restart sync service as master or slave depending on whether newmaster == my name
+		// restart sync service as master or slave depending on whether master == my name
 		if(timeline.accuracy() > 0){
 			int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-			sync->Start(newmaster == timeline.name(), sync_interval, timeline.domain(), &timelinefd, 1);
+			sync->Start(timeline.master() == timeline.name(), sync_interval, timeline.domain(), &timelinefd, 1);
 		}
 	}
 }
@@ -124,6 +126,16 @@ void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::Timeline
 	const dds::core::status::LivelinessChangedStatus& status) 
 {
 	// Not sure what to do with this...
+
+	// according to C++ API reference, this function gets called when the
+	// 'liveliness' of a DataWriter writing to this DataReader has changed
+	// "changed" meaning has become 'alive' or 'not alive'.
+	// 
+	// I think this can detect when new writers have joined the board/topic
+	// and when current writers have died. (maybe)
+	//   - Sean Kim
+
+	BOOST_LOG_TRIVIAL(info) << "on_liveliness_changed() called.";
 }
 
 Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr)
@@ -216,7 +228,7 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 	if (err)
 		return;
 
-	BOOST_LOG_TRIVIAL(info) << "Heartbeat";
+	//BOOST_LOG_TRIVIAL(info) << "Heartbeat";
 
 	// Send out the timeline information
 	dw.write(timeline);
