@@ -119,9 +119,11 @@ int main(int argc, char **argv)
 		<< " with an ip address " << vm["addr"].as<std::string>() << " and timeline id " << vm["timelineid"].as<int>();
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	//qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
+	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
 
-	qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
+	//qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
+	
+	BOOST_LOG_TRIVIAL(info) << "notifier constructor returned";
 	// Run the io service
 	io.run();
 

@@ -60,38 +60,35 @@ using namespace qot;
 
 // Constructor
 Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr) 
-	: asio(io), basename(name), baseiface(iface), baseaddr(addr)
+: asio(io), basename(name), baseiface(iface), baseaddr(addr)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier";
 
 	/* First, add all existing timelines in the system */
-  	DIR * d = opendir(QOT_IOCTL_BASE);
-    if (!d)
-    {
-    	BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
-    	return;
-    }
-    else
-    {
-	    while (1)
-	    {
-	        // "Readdir" gets subsequent entries from "d"
-	        struct dirent *entry = readdir(d);
-	        if (!entry)
-	            break;
-
+	DIR * d = opendir(QOT_IOCTL_BASE);
+	if (!d)
+	{
+		BOOST_LOG_TRIVIAL(error) << "Could not open the directory " << QOT_IOCTL_BASE;
+		return;
+	}
+	else
+	{
+		struct dirent *entry;
+		// "Readdir" gets subsequent entries from "d"
+		while (entry = readdir(d))
+		{
 			// If this event is the creation or deletion of a character device
 			char str[QOT_MAX_NAMELEN]; 
 			int ret, val;	
 			ret = sscanf(entry->d_name, QOT_IOCTL_FORMAT, str, &val);
-	        if ((ret==2) && (strncmp(str,QOT_IOCTL_TIMELINE,QOT_MAX_NAMELEN)==0))
-    			this->add(val);
-  	     }
-    }
-    
-    /* After going through all the entries, close the directory. */
-    if (closedir(d))
-    	BOOST_LOG_TRIVIAL(error) << "Could not close the directory " << QOT_IOCTL_BASE;
+			if ((ret == 2) && (strncmp(str,QOT_IOCTL_TIMELINE,QOT_MAX_NAMELEN)==0))
+				this->add(val);
+		}
+	}
+
+	/* After going through all the entries, close the directory. */
+	if (closedir(d))
+		BOOST_LOG_TRIVIAL(error) << "Could not close the directory " << QOT_IOCTL_BASE;
 
 	BOOST_LOG_TRIVIAL(info) << "Watching directory " << QOT_IOCTL_BASE;
 	thread = boost::thread(boost::bind(&Notifier::watch, this, QOT_IOCTL_BASE));
@@ -106,7 +103,7 @@ Notifier::~Notifier()
 void Notifier::add(int id)
 {
 	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " 
-		<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+	<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
 
 	// If we get to this point then this is a valid timeline
 	std::map<int,Timeline*>::iterator it = timelines.find(id);
@@ -119,7 +116,7 @@ void Notifier::add(int id)
 void Notifier::del(int id)
 {
 	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " 
-		<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+	<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
 
 	std::map<int,Timeline*>::iterator it = timelines.find(id);
 	if (it != timelines.end())
@@ -162,18 +159,18 @@ void Notifier::watch(const char* dir)
 		else if (pfds.revents & POLLIN)
 		{
 			// Read to determine the event change happens on watched directory
-			int length = read(fd, buffer, EVENT_BUF_LEN); 
+			int length = read(fd, buffer, EVENT_BUF_LEN);
 			if (length < 0)
 			{
 				BOOST_LOG_TRIVIAL(warning) << "Warning: read error ";
 				close(fd);
 				return;
-			}  
+			}
 
 			// Read return the list of change events happens. 
 			int i = 0;
 			while (i < length)
-			{     
+			{
 				struct inotify_event *event = (struct inotify_event *) &buffer[i];    
 
 				// If this event is the creation or delation of a character device
