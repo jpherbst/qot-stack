@@ -46,11 +46,19 @@ std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineType& ts)
 
 void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr) 
 {
-	BOOST_LOG_TRIVIAL(info) << "on_data_available() called";
+	//BOOST_LOG_TRIVIAL(info) << "on_data_available() called";
+
+	// tmp vars for finding new master if there needs to be
+	double      minacc    = timeline.accuracy();
+	std::string newmaster = timeline.master();
+	int         newdomain = timeline.domain();
+
 	int i = 0;
 	// Iterate over all samples
 	for (auto& s : dr.read()) {
 		i++;
+		//BOOST_LOG_TRIVIAL(info) << s->data().name();
+
 		// If this is NOT the timeline of interest
 		if (s->data().uuid() != timeline.uuid()) {
 			// check for domain clash
@@ -86,81 +94,30 @@ void Coordinator::on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>
 			continue;
 		//BOOST_LOG_TRIVIAL(info) << "Message received from peer " << s->data().name();
 
-		// If I currently think that I am the master
-		if (timeline.master() == timeline.name()) {
-			// Strictest accuracy requirement gets the master role
-			bool handover = (s->data().accuracy() < timeline.accuracy());
-
-			// If the same accuracy is desired at both ends, then there is a collision
-			// that we need to resolve. We use a string comparison on the name.
-			if (s->data().accuracy() == timeline.accuracy()
-			    && s->data().name().compare(timeline.name()) < 0) {
-				handover = true;
-			}
-
-			// But I shouldn't be, because this peer needs better accuracy...
-			if (handover) {
-				BOOST_LOG_TRIVIAL(info) << "The master role should be handed to slave "  
-				                        << s->data().name() << ":" << s->data().domain();
-
-				// Handover the master ownership to the peer
-				timeline.master() = s->data().name();
-				timeline.domain() = s->data().domain(); //Added by Fatima
-
-				// (Re)start the synchronization service as master
-				//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
-				if (timeline.accuracy() > 0) {
-					int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-					sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
-				}
-			}
-		}
-		// I think I am a slave
-		else {
-			// but this node thinks I should be the master
-			if (s->data().master() == timeline.name()) {
-				BOOST_LOG_TRIVIAL(info) << "Some slave " << s->data().name()
-				                        << " thinks that I should be the master on domain " << s->data().domain();
-
-				// Make myself the master and copy over the domain
-				timeline.domain() = s->data().domain();
-				timeline.master() = timeline.name();
-
-				// (Re)start the synchronization service as master
-				//sync.Start(phc, qotfd, timeline.domain(), true, timeline.accuracy());
-				if(timeline.accuracy() > 0){
-					int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-					sync->Start(true, sync_interval, timeline.domain(), &timelinefd, 1);
-				}
-			}
-			// If I am a slave and this node thinks that it is the master
-			else if (s->data().name() == s->data().master()) {
-				//BOOST_LOG_TRIVIAL(info) << "I am a slave and listening to master "  
-				//                        << s->data().name() << ":" << s->data().domain();
-
-				// If the master's domain is different from what I expected
-				if (s->data().domain() != timeline.domain()) {
-					BOOST_LOG_TRIVIAL(info) << "I am slave and I have wrong domain. Switching from domain " << timeline.domain()
-					                        << " to master's domain " << s->data().domain();
-
-					// Set the new domain
-					timeline.domain() = s->data().domain();
-
-					// (Re)start the synchronization service
-					//sync.Start(phc, qotfd, timeline.domain(), false, timeline.accuracy());
-					if(timeline.accuracy() > 0) {
-						int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-						sync->Start(false, sync_interval, timeline.domain(), &timelinefd, 1);
-					}
-				}
-
-				// Make sure that we are on the right domain
-				timeline.master() = s->data().name();
+		if (s->data().accuracy() < minacc) {
+			minacc = s->data().accuracy();
+			newmaster = s->data().master();
+			newdomain = s->data().domain();
+		} else if (s->data().accuracy() == minacc) {
+			if (s->data().name() < newmaster) {
+				newmaster = s->data().master();
+				newdomain = s->data().domain();
 			}
 		}
 	}
 
-	BOOST_LOG_TRIVIAL(info) << "i= " << i;
+	if (newmaster != timeline.master()) {
+		BOOST_LOG_TRIVIAL(info) << "new master should be " << newmaster;
+		timeline.master() = newmaster;
+		timeline.domain() = newdomain;
+
+		BOOST_LOG_TRIVIAL(info) << "restarting sync service";
+		// restart sync service as master or slave depending on whether newmaster == my name
+		if(timeline.accuracy() > 0){
+			int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
+			sync->Start(newmaster == timeline.name(), sync_interval, timeline.domain(), &timelinefd, 1);
+		}
+	}
 }
 
 void  Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
