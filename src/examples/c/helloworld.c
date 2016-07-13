@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 		else if (DEBUG)
 		{
 			printf("[Iteration %d ]: core time =>\n", i++);
-			printf("Actual wake up          %lld %llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
+			printf("Scheduled wake up          %lld %llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
 			printf("Time Estimate @ wake up %lld %llu\n", est_now.estimate.sec, est_now.estimate.asec);
 			printf("Uncertainity below %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
 			printf("Uncertainity above %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
