@@ -3,3 +3,6 @@
 	url = https://github.com/PrismTech/opensplice.git
 	branch = OSPL_V6_4_OSS_RELEASE
 	ignore = all
+[submodule "thirdparty/bb.org-overlays"]
+	path = thirdparty/bb.org-overlays
+	url = https://github.com/beagleboard/bb.org-overlays
