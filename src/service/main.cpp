@@ -52,15 +52,15 @@ using namespace qot;
 // Generate a random tring
 std::string RandomString(uint32_t length)
 {
-    auto randchar = []() -> char
-    {
-        const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[ rand() % max_index ];
-    };
-    std::string str(length,0);
-    std::generate_n( str.begin(), length, randchar );
-    return str;
+	auto randchar = []() -> char
+	{
+		const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		const size_t max_index = (sizeof(charset) - 1);
+		return charset[ rand() % max_index ];
+	};
+	std::string str(length,0);
+	std::generate_n( str.begin(), length, randchar );
+	return str;
 }
 
 // Main entry point of application
@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 {
 	// Seed the random number generated with a nanosecond count
 	struct timespec t={0,0};
-    clock_gettime(CLOCK_REALTIME, &t);
+	clock_gettime(CLOCK_REALTIME, &t);
 	srand(t.tv_nsec);
 
 	// Parse command line options
@@ -88,15 +88,15 @@ int main(int argc, char **argv)
 
 	// Set logging level
 	if (vm.count("verbose") > 0)
-    {
-    	boost::log::core::get()->set_filter
+	{
+	boost::log::core::get()->set_filter
 	    (
 	        boost::log::trivial::severity >= boost::log::trivial::info
 	    );
 	}
 	else
 	{
-    	boost::log::core::get()->set_filter
+	boost::log::core::get()->set_filter
 	    (
 	        boost::log::trivial::severity >= boost::log::trivial::warning
 	    );
@@ -119,9 +119,11 @@ int main(int argc, char **argv)
 		<< " with an ip address " << vm["addr"].as<std::string>() << " and timeline id " << vm["timelineid"].as<int>();
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	//qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
+	qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
 
-	qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
+	//qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
+	
+	BOOST_LOG_TRIVIAL(info) << "notifier constructor returned";
 	// Run the io service
 	io.run();
 

@@ -33,14 +33,14 @@
 #include <boost/log/trivial.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
- // Timeline Message
+// Timeline Message
 #include <msg/QoT_DCPS.hpp>
 
 // Synchronization engine
 //#include "PTP.hpp"
 #include "sync/Sync.hpp"
 
- // Include the QOT api
+// Include the QOT api
 extern "C"
 {
 	#include "../qot_types.h"
