@@ -536,6 +536,10 @@ void qot_scheduler_update(qot_timeline_t *timeline)
         	expires_next = core_expires;
         	break;
         }
+        else
+        {
+            break;
+        }
 	}
 	raw_spin_unlock_irqrestore(&timeline->rb_lock, flags);
 
@@ -547,7 +551,10 @@ void qot_scheduler_update(qot_timeline_t *timeline)
 	if(timepoint_cmp(&current_core_time, &expires_next) > 0 && timepoint_cmp(&expires_next, &next_interrupt_callback) > 0)
 	{
 		raw_spin_lock_irqsave(&qot_scheduler_lock, flags);
-		qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt);
+	    if(!qot_clock_program_core_interrupt(expires_next, 1, scheduler_interface_interrupt))
+        {
+            next_interrupt_callback = expires_next;
+        }
 		raw_spin_unlock_irqrestore(&qot_scheduler_lock, flags);
 	}
 	return;

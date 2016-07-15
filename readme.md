@@ -503,6 +503,17 @@ $> sudo make install
 $> popd
 ```
 
+You may get this error:
+```
+WARNING: "qot_register" [/home/shk/bb/qot-stack/src/modules/qot_am335x/qot_am335x.ko] undefined!
+WARNING: "qot_unregister" [/home/shk/bb/qot-stack/src/modules/qot_am335x/qot_am335x.ko] undefined!
+```
+while compiling. This is due to module files being in different directories. Copy over `Module.symvers` file to fix this error.
+```
+$> cp src/modules/qot/Module.symvers src/modules/qot_am335x/Module.symvers
+```
+Run `make` again and the warning should be gone.
+
 This will install the QoT stack to your the NFS share located as `/export/rootfs`. It should be available instantly on the nodes.
 
 After installing the user-space applications you might need to run `ldconfig` on the node.
