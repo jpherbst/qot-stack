@@ -1,7 +1,10 @@
-/*.d
-/*.o
+*.d
+*.o
+*.~
+/*.dtbo
 /hwstamp_ctl
 /phc2sys
 /pmc
 /ptp4l
-/build/
+build/
+.tmp_versions/

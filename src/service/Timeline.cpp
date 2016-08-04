@@ -80,7 +80,7 @@ Timeline::~Timeline()
 
 	// Kill the thread
 	this->kill = true;
-    //this->thread.join();
+	//this->thread.join();
 
 	// Close ioctl
 	if (fd > 0)
@@ -90,11 +90,11 @@ Timeline::~Timeline()
 void Timeline::MonitorThread()
 {
 	// Wait until the main thread sets up the binding and posix clock
-    BOOST_LOG_TRIVIAL(info) << "Polling for activity";
+	BOOST_LOG_TRIVIAL(info) << "Polling for activity";
 
-    // Start polling
-    //while (!this->kill)
-   // {
+	// Start polling
+	//while (!this->kill)
+	// {
 
     	// Initialize the polling struct
 		/*struct pollfd pfd[1];
