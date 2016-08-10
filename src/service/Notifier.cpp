@@ -60,7 +60,7 @@ using namespace qot;
 
 // Constructor
 Notifier::Notifier(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr) 
-: asio(io), basename(name), baseiface(iface), baseaddr(addr)
+	: asio(io), basename(name), baseiface(iface), baseaddr(addr)
 {
 	BOOST_LOG_TRIVIAL(info) << "Starting the notifier";
 
@@ -103,7 +103,7 @@ Notifier::~Notifier()
 void Notifier::add(int id)
 {
 	BOOST_LOG_TRIVIAL(info) << "New timeline detected at " 
-	<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+	                        << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
 
 	// If we get to this point then this is a valid timeline
 	std::map<int,Timeline*>::iterator it = timelines.find(id);
@@ -116,7 +116,7 @@ void Notifier::add(int id)
 void Notifier::del(int id)
 {
 	BOOST_LOG_TRIVIAL(info) << "Timeline deletion detected at " 
-	<< QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+	                        << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
 
 	std::map<int,Timeline*>::iterator it = timelines.find(id);
 	if (it != timelines.end())

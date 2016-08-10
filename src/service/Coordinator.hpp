@@ -57,9 +57,14 @@ namespace qot
 		public: Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr);
 		public: ~Coordinator();
 
-		// Required by dds::sub::NoOpDataReaderListene
+		// Required by dds::sub::NoOpDataReaderListener
+		// dds callback. Gets called when new data is available to
+		// read. All it does is update the lastcount_ member if the
+		// new data is from the master.
 		public: virtual void on_data_available(dds::sub::DataReader<qot_msgs::TimelineType>& dr);
-		public: virtual void  on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
+
+		// another dds callback. not sure what it does
+		public: virtual void on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineType>& dr, 
 			const dds::core::status::LivelinessChangedStatus& status);
 	
 		// Initialize this coordinator with a name
@@ -72,16 +77,20 @@ namespace qot
 		public: void Stop();
 
 		// Heartbeat signal for this coordinator
+		// This function is periodically called with an asynchronous
+		// timer. It checks for timed out master and has logic for
+		// electing the master.
 		private: void Heartbeat(const boost::system::error_code& err);
-		private: void Timeout(const boost::system::error_code& err);
 
 		// Asynchronous service
 		private: boost::asio::io_service *asio;
 		private: boost::asio::deadline_timer timer;
 
 		// Coordinator state
-		private: int phc;
-		private: int timelinefd;
+		private: int counter_;   // count # heartbeats since start
+		private: int lastcount_; // counter_ value at last time I saw msg from current master
+		private: int tml_id_;    // timeline id, as in /dev/timeline[tml_id_]
+		private: int timelinefd; // fd for timeline character device
 		//private: PTP sync;
 
 		// Join the DDS domain to exchange information about timelines

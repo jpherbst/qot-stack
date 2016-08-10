@@ -80,12 +80,12 @@ void servo_destroy(struct servo *servo)
 }
 
 double servo_sample(enum servo_type type,
-			struct servo *servo,
-		    int64_t offset,
-		    uint64_t local_ts,
-		    enum servo_state *state,
-		    double *max_drift,
-			double *min_drift) //QOT
+                    struct servo *servo,
+                    int64_t offset,
+                    uint64_t local_ts,
+                    enum servo_state *state,
+                    double *max_drift,
+                    double *min_drift) /*QOT*/
 {
 	double r;
 

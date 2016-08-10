@@ -52,25 +52,26 @@ namespace qot
 	{
 	// Constructor and destructor
 	public: Timeline(boost::asio::io_service *io, const std::string &name,
-						const std::string &iface, const std::string &addr, int id);
+		const std::string &iface, const std::string &addr, int id);
 	public: ~Timeline();
 
 	// Heartbeat timer
-	private: void MonitorThread();				// Polling thread for params
+	private: void MonitorThread(); // Polling thread for params
 	private: void Heartbeat(const boost::system::error_code& /*e*/);
 
 	// Asynchronous service
 	private: boost::asio::io_service *asio;
-	private: boost::thread thread;				// Worker thread for capture
+	private: boost::thread thread; // Worker thread for capture
 
 	// Communication with local timeline
-	private: int fd;							// IOCTL link
+	private: int id_; // 'id' of timeline as in /dev/timeline[id_]
+	private: int fd; // IOCTL link
 
-	private: qot_binding_t msgb;				// Information about the timeline
-	private: qot_timeline_t msgt;				// Information about the timeline
+	private: qot_binding_t msgb;  // Information about the timeline
+	private: qot_timeline_t msgt; // Information about the timeline
 
-	private: bool kill;							// Kill flag
-	private: std::string basename;				// Name of service
+	private: bool kill; // Kill flag
+	private: std::string basename; // Name of service
 
 	// Network (DDS) coordinator
 	private: Coordinator coordinator;

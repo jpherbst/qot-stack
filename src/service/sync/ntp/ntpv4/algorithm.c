@@ -45,7 +45,7 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
   Interval interv_list[total];
   filter(resp_list, interv_list, total);
 
-  // verifiy intervals
+  // verify intervals
   /*
   for(i = 0; i < total; i++){
     printf("%d %lld %lld %lld %lld\n", interv_list[i].stratum, interv_list[i].offset, interv_list[i].low, interv_list[i].up, interv_list[i].rootDist);
