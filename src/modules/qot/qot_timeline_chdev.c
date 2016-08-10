@@ -385,7 +385,7 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
     {
-    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
     }
 

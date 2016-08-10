@@ -1,6 +1,7 @@
 *.d
 *.o
 *.~
+*.dwo
 /*.dtbo
 /hwstamp_ctl
 /phc2sys
