@@ -186,7 +186,7 @@ static timepoint_t qot_am335x_read_time(void)
 
 static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 {
-	s64 ts, tp;
+	s64 ts, tp, duty;
 	u32 load, match, tc, offset;
 	timepoint_t event_core_timestamp, next_event;
 	unsigned long flags;
@@ -247,6 +247,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Get the signed ns start time and period */
 		ts = ptp_to_s64(&channel->state.perout.start);
 		tp = ptp_to_s64(&channel->state.perout.period);
+		duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
 
 		// pr_info("qot_am335x: NS offset...%lld\n",ts);
 		// pr_info("qot_am335x: NS period...%lld\n",tp);
@@ -271,14 +272,17 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Use the cyclecounter mult at shift to scale */
 		tp = div_u64((tp << channel->parent->cc.shift)
 			+ channel->parent->tc.frac, channel->parent->cc.mult);
+		duty = div_u64((duty << channel->parent->cc.shift)
+			+ channel->parent->tc.frac, channel->parent->cc.mult);
 
 		raw_spin_unlock_irqrestore(&channel->parent->lock, flags);
 
 		/* Map to an offset, load and match */
 		offset = tc; 		// (start)
 		load   = tp; 		// (low+high)
-		match  = tp/2; 		// (low)
-
+		//match  = tp/2; 		// (low) 
+		match = duty; 
+		
 		channel->parent->compare.load = load;
 		channel->parent->compare.match = match;
 		//pr_info("qot_am335x: PWM offset...%u\n",offset);
@@ -289,7 +293,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 			omap_dm_timer_set_int_enable(timer, OMAP_TIMER_INT_OVERFLOW);
 		omap_dm_timer_enable(timer);
 		omap_dm_timer_set_prescaler(timer, AM335X_NO_PRESCALER);
-		omap_dm_timer_set_pwm(timer, 1, 1,
+		omap_dm_timer_set_pwm(timer, channel->parent->compare.perout.edge - 1, 1,
 			OMAP_TIMER_TRIGGER_OVERFLOW_AND_COMPARE);	/* 3 = trigger */
 		omap_dm_timer_set_load(timer, 1, -load);		/* 1 = autoreload */
 		omap_dm_timer_set_match(timer, 1, -match);		/* 1 = enable */

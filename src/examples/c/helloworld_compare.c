@@ -51,6 +51,7 @@
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
 #define OFFSET_MSEC      2000
+#define DUTY_CYCLE       50
 
 static int running = 1;
 
@@ -73,9 +74,6 @@ int main(int argc, char *argv[])
     qot_callback_t callback;
     qot_event_t event;
 
-    int step_size_ms = OFFSET_MSEC;
-
-
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
 	if (argc > 1)
@@ -87,15 +85,24 @@ int main(int argc, char *argv[])
 		m = argv[2];
 
     // Loop Interval
+    int step_size_ms = OFFSET_MSEC;
     if (argc > 3)
         step_size_ms = atoi(argv[3]);
 
+    // Duty Cycle
+    request.duty_cycle = DUTY_CYCLE;
+    if (argc > 4)
+        request.duty_cycle = atoi(argv[4]);
+
+    // Starting Edge -> Should be 1 for Rising, 2 for Falling
+    request.edge = QOT_TRIGGER_RISING;
+    if (argc > 5)
+        request.edge = atoi(argv[5]);
 
     // Initialize stepsize
     TL_FROM_mSEC(request.period, (int64_t) step_size_ms);
 
     /** CREATE TIMELINE **/
-
 	my_timeline = timeline_t_create();
 	if(!my_timeline)
 	{

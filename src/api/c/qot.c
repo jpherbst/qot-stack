@@ -312,6 +312,10 @@ qot_return_t timeline_enable_output_compare(timeline_t *timeline,
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
+    if(request->duty_cycle >= 100)
+        return QOT_RETURN_TYPE_ERR;
+    if(request->edge != QOT_TRIGGER_RISING && request->edge != QOT_TRIGGER_FALLING)
+        return QOT_RETURN_TYPE_ERR;
 
     request->timeline = timeline->info;
     // Blocking wait on remote timeline time
