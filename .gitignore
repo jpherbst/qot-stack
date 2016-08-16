@@ -1,6 +1,7 @@
 *.d
 *.o
 *.~
+*.dwo
 /*.dtbo
 /hwstamp_ctl
 /phc2sys
@@ -8,3 +9,6 @@
 /ptp4l
 build/
 .tmp_versions/
+qot-stack.sublime-project
+qot-stack.sublime-workspace
+

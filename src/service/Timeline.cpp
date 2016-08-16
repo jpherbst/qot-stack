@@ -28,7 +28,7 @@
 /* This file header */
 #include "Timeline.hpp"
 
-#include <sstream>
+#include <string>
 
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_IOCTL_BASE          "/dev"
@@ -38,36 +38,42 @@
 
 using namespace qot;
 
-Timeline::Timeline(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr, int id)
-	: 	coordinator(io, name, iface, addr), kill(false)
+Timeline::Timeline(boost::asio::io_service *io, const std::string &name,
+	const std::string &iface, const std::string &addr, int id)
+	: id_(id), kill(false), coordinator(io, name, iface, addr)
 {
 	// First, save the id to the message data structure. Having this present
 	// in the data structure will cause us to bind without affecting metrics
 	//this->msg.id = id;
 
 	// Second, bind to the timeline to get the base requirements
-	std::ostringstream oss("");
-	oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
-	this->fd = open(oss.str().c_str(), O_RDWR);
+	//std::ostringstream oss("");
+	//oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
+	//this->fd = open(oss.str().c_str(), O_RDWR);
+	std::string tml_filename = "";
+	tml_filename = tml_filename + QOT_IOCTL_BASE + "/" + QOT_IOCTL_TIMELINE + std::to_string(id_);
+	BOOST_LOG_TRIVIAL(info) << "opening timeline chdev: " << tml_filename;
+	this->fd = open(tml_filename.c_str(), O_RDWR);
 	if (fd < 0)
 	{
-		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
+		//BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
+		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << tml_filename;
 		return;
 	}
 	if (ioctl(fd, TIMELINE_GET_INFO, &msgt))
 	{
-		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id << " have no info.";
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id_ << " have no info.";
 		return;
 	}
 	if (ioctl(fd, TIMELINE_GET_BINDING_INFO, &msgb))
 	{
-		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id << " have binding problems";
+		BOOST_LOG_TRIVIAL(warning) << "Timeline " << id_ << " have binding problems";
 		return;
 	}
 	BOOST_LOG_TRIVIAL(info) << "Timeline information received successfully";
 
 	// Initialize the coordinator with the given PHC id, UUID, accuracy and resolution
-	coordinator.Start(id, this->fd, msgt.name, msgb.demand.accuracy, msgb.demand.resolution);
+	coordinator.Start(id_, this->fd, msgt.name, msgb.demand.accuracy, msgb.demand.resolution);
 
 	// We can now start polling, because the timeline is setup
 	//thread = boost::thread(boost::bind(&Timeline::MonitorThread, this));
@@ -96,7 +102,7 @@ void Timeline::MonitorThread()
 	//while (!this->kill)
 	// {
 
-    	// Initialize the polling struct
+	// Initialize the polling struct
 		/*struct pollfd pfd[1];
 		memset(pfd,0,sizeof(pfd));
 		pfd[0].fd = this->fd;

@@ -63,8 +63,8 @@ namespace qot
 
 		// Control functions
 		public: void Reset();
-		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size);
-		public: void Stop();						// Stop
+		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, int timelineid, int *timelinesfd, uint16_t timelines_size);
+		public: void Stop();
 
 		// This thread performs rhe actual syncrhonization
 		private: int SyncThread(int *timelinesfd, uint16_t timelines_size);

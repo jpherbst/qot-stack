@@ -4,7 +4,8 @@ obj-m += qot_core.o
 obj-m += qot_am335x.o
 
 KERNELDIR ?= /export/bb-kernel/KERNEL
-KERNELVER ?= 4.1.12-bone-rt-r16
+#KERNELVER ?= 4.1.12-bone-rt-r16
+KERNELVER ?= 4.6.3-bone-rt-r3
 
 IPADDR ?= 192.168.1.110
 
@@ -24,31 +25,36 @@ install:
 	sudo chmod 755 /export/rootfs/usr/bin/capes
 
 install_sd:
-	sudo scp -v src/modules/qot/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
-	sudo scp -v src/modules/qot_am335x/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
-	sudo scp -v *.dtbo root@$(IPADDR):/lib/firmware
-	sudo scp -v ./src/qot-daemon/test.sh root@$(IPADDR):/home
-	sudo scp targets/common/80-qot.rules root@$(IPADDR):/etc/udev/rules.d/
-	sudo scp targets/am335x/capes root@$(IPADDR):/usr/bin/
-	sudo scp /export/rootfs/usr/local/lib/*.so root@$(IPADDR):/usr/local/lib/
-	sudo scp src/api/c/qot.h root@$(IPADDR):/usr/local/include/ 
-	sudo scp src/api/cpp/qot.hpp root@$(IPADDR):/usr/local/include/
-	sudo scp build/src/qot-daemon/qotd root@$(IPADDR):/usr/local/bin/
-	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotd
-	sudo scp build/src/service/qotdaemon root@$(IPADDR):/usr/local/bin/
-	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotdaemon
-	sudo scp build/src/service/testptp root@$(IPADDR):/usr/local/bin/
-	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/testptp
-	sudo scp build/src/service/phc2phc root@$(IPADDR):/usr/local/bin/
-	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/phc2phc
+	# modules and stuff
+	scp src/modules/qot/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	scp src/modules/qot_am335x/*.ko root@$(IPADDR):/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	scp *.dtbo root@$(IPADDR):/lib/firmware
+	#sudo scp src/qot-daemon/test.sh root@$(IPADDR):/home
+	scp targets/common/80-qot.rules root@$(IPADDR):/etc/udev/rules.d/
+	scp targets/am335x/capes root@$(IPADDR):/usr/bin/
+	# dynamic libraries and headers
+	scp /export/rootfs/usr/local/lib/*.so root@$(IPADDR):/usr/local/lib/
+	scp src/api/c/qot.h root@$(IPADDR):/usr/local/include/ 
+	scp src/api/cpp/qot.hpp root@$(IPADDR):/usr/local/include/
+	# executables
+	scp build/src/qot-daemon/qotd root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotd
+	scp build/src/service/qotdaemon root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/qotdaemon
+	scp build/src/service/testptp root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/testptp
+	scp build/src/service/phc2phc root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/phc2phc
 	# Install Apps using this template
-	sudo scp build/src/examples/c/helloworld root@$(IPADDR):/usr/local/bin/
-	sudo ssh root@$(IPADDR) chmod 755 /usr/local/bin/helloworld
+	scp build/src/examples/c/helloworld root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/helloworld
+	scp build/src/examples/c/sean/ledapp root@$(IPADDR):/usr/local/bin/
+	ssh root@$(IPADDR) chmod 755 /usr/local/bin/ledapp
 	# Install Apps Ends
-	sudo ssh root@$(IPADDR) chmod 755 /usr/bin/capes
-	sudo ssh root@$(IPADDR) depmod
-	sudo ssh root@$(IPADDR) ldconfig
+	ssh root@$(IPADDR) chmod 755 /usr/bin/capes
+	ssh root@$(IPADDR) depmod
+	ssh root@$(IPADDR) ldconfig
 
 reload:
-	ssh root@172.17.11.0 depmod
-	ssh root@172.17.11.0 ldconfig
+	ssh root@$(IPADDR) depmod
+	ssh root@$(IPADDR) ldconfig

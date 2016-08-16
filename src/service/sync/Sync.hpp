@@ -75,15 +75,20 @@ namespace qot
 	};
 
 	// Base functionality
-	class Sync
-	{
-		public: virtual void Reset() = 0;                       // Reset the synchronization algorithm
+	class Sync {
+		// Reset the synchronization algorithm
+		public: virtual void Reset() = 0;
+
+		// Start synchronization
 		public: virtual void Start(bool master,
-		int log_sync_interval,
-		uint32_t sync_session,
-		int *timelinesfd,
-		uint16_t timelines_size) = 0;   // Start syncronization
-		public: virtual void Stop() = 0;                        // Stop synchronization
+			int log_sync_interval,
+			uint32_t sync_session,
+			int timelineid,
+			int *timelinesfd,
+			uint16_t timelines_size) = 0;
+
+		// Stop synchronization
+		public: virtual void Stop() = 0;
 
 		// Factory method to produce a handle to a sync algorithm
 		public: static boost::shared_ptr<Sync> Factory(

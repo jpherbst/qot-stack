@@ -18,6 +18,9 @@ ENDIF (CROSS_AM335X)
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
 
+#debug symbols -sean
+ADD_DEFINITIONS(-ggdb)
+
 # Preprocessor directive required to link boost trivial logging
 FIND_PACKAGE(Boost 1.55 REQUIRED
 	COMPONENTS thread system program_options log date_time)
