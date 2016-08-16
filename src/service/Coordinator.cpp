@@ -88,6 +88,7 @@ Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, c
 	  counter_(0), lastcount_(0)
 {
 	timeline.name() = (std::string) name;	// Our name
+	timeline.domain() = rand() % 128;
 	sync = Sync::Factory(io, addr, iface);	// handle to sync algorithm
 }
 
@@ -189,26 +190,6 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 		// get rid of old samples
 		// TODO: ideally just 'take' the timed out master's samples
 		dr.take();
-
-/*
-		std::vector<std::string> params(1);
-		params[0] = timeline.master();
-
-		dds::sub::cond::QueryCondition cond = 
-			dr.create_querycondition(
-				DDS::READ_SAMPLE_STATE | DDS::NOT_READ_SAMPLE_STATE,
-				DDS::NEW_VIEW_STATE | DDS::NOT_NEW_VIEW_STATE,
-				DDS::ALIVE_INSTANCE_STATE | DDS::NOT_ALIVE_DISPOSED_INSTANCE_STATE | DDS::NOT_ALIVE_NO_WRITERS_INSTANCE_STATE,
-				"name LIKE %1", params);
-		qot_msgs::TimelineTypeSeq data;
-		DDS::SampleInfoSeq info;
-		dr.take_w_condition(data, info, cond);
-
-		for (auto &s : data) {
-			BOOST_LOG_TRIVIAL(info) << "found take_w_condition data with name "
-			                        << s->data().name();
-		}
-*/
 
 		// update my master as undecided
 		timeline.master() = "";
