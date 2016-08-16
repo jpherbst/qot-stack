@@ -43,11 +43,11 @@
 extern "C"
 {
 	#include <string.h>
-    #include <stdio.h>
-    #include <stdlib.h>
-    #include <dirent.h>
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <dirent.h>
 
-    #include "../../qot_types.h"
+	#include "../../qot_types.h"
 }
 
 namespace qot
@@ -74,16 +74,21 @@ namespace qot
 		SLAVE
 	};
 
-    // Base functionality
-    class Sync
-    {
-        public: virtual void Reset() = 0;                       // Reset the synchronization algorithm
-        public: virtual void Start(bool master,
-                                int log_sync_interval,
-                                uint32_t sync_session,
-                                int *timelinesfd,
-                                uint16_t timelines_size) = 0;   // Start syncronization
-        public: virtual void Stop() = 0;                        // Stop synchronization
+	// Base functionality
+	class Sync {
+		// Reset the synchronization algorithm
+		public: virtual void Reset() = 0;
+
+		// Start synchronization
+		public: virtual void Start(bool master,
+			int log_sync_interval,
+			uint32_t sync_session,
+			int timelineid,
+			int *timelinesfd,
+			uint16_t timelines_size) = 0;
+
+		// Stop synchronization
+		public: virtual void Stop() = 0;
 
 		// Factory method to produce a handle to a sync algorithm
 		public: static boost::shared_ptr<Sync> Factory(
@@ -95,7 +100,7 @@ namespace qot
 		// Helper functions to check if the IP address is in private / public subnet
 		private: static bool IsIPprivate(const std::string ip);
 		private: static uint32_t IPtoUint(const std::string ip);
-    };
+	};
 }
 
 #endif

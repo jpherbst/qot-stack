@@ -77,7 +77,7 @@ UInteger8 clock_class(struct clock *c);
  */
 struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 			   enum timestamp_type timestamping, struct default_ds *dds,
-			   enum servo_type servo, int *timelinesfd, int timelines_size); /* QOT */
+			   enum servo_type servo, int timelineid, int *timelinesfd, int timelines_size); /* QOT */
 
 /**
  * Obtains a clock's default data set.

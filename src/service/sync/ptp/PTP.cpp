@@ -37,7 +37,7 @@ using namespace qot;
 
 PTP::PTP(boost::asio::io_service *io,	// ASIO handle
 		const std::string &iface		// interface
-	) : asio(io), baseiface(iface)
+	) : /*asio(io),*/ baseiface(iface)
 {	
 	this->Reset();	
 }
@@ -122,7 +122,8 @@ void PTP::Reset()
 	cfg_settings.cfg_ignore = 0;
 }
 
-void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size)
+void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
+	int timelineid, int *timelinesfd, uint16_t timelines_size)
 {
 	// First stop any sync that is currently underway
 	this->Stop();
@@ -144,7 +145,7 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session, int *
 
 	kill = false;
 
-	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelinesfd, timelines_size));
+	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
 
 void PTP::Stop()
@@ -155,7 +156,7 @@ void PTP::Stop()
 }
 
 
-int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
+int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 {
 	BOOST_LOG_TRIVIAL(info) << "Sync thread started ";
 	char *config = NULL, *req_phc = NULL;
@@ -226,8 +227,7 @@ int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 	}
 
 	// Determine the required iface stamping modes
-	switch (*timestamping)
-	{
+	switch (*timestamping) {
 	case TS_SOFTWARE:
 		required_modes |= SOF_TIMESTAMPING_TX_SOFTWARE |
 			SOF_TIMESTAMPING_RX_SOFTWARE |
@@ -274,8 +274,8 @@ int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 		phc_index = iface->ts_info.phc_index;
 	} else {
 		fprintf(stderr, "ptp device not specified and\n"
-			        "automatic determination is not\n"
-			        "supported. please specify ptp device\n");
+		                "automatic determination is not\n"
+		                "supported. please specify ptp device\n");
 		return -1;
 	}
 
@@ -292,7 +292,8 @@ int PTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 
 	// Create the clock
 	clock = clock_create(phc_index, (struct interfaces_head*)&cfg_settings.interfaces, 
-		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo, timelinesfd, timelines_size);
+		*timestamping, &cfg_settings.dds, cfg_settings.clock_servo,
+		timelineid, timelinesfd, timelines_size);
 	if (!clock)
 	{
 		fprintf(stderr, "failed to create a clock\n");

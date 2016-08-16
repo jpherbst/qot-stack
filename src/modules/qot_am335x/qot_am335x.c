@@ -29,6 +29,7 @@
  */
 
 /* Sufficient to develop a device-tree based platform driver */
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
@@ -1113,7 +1114,11 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 
 
 		/* Create the timer */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,1,12) // to check version for 'of_node()' vs 'to_of_node()' -sean kim
 		nodec = of_node(child);
+#else
+		nodec = to_of_node(child);
+#endif
 		phand = of_get_property(nodec, "timer", NULL);
 		nodet = (struct device_node*) of_find_node_by_phandle(be32_to_cpup(phand));
 		of_property_read_string_index(nodet, "ti,hwmods", 0, &tmp);

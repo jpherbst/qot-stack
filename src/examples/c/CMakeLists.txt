@@ -1,3 +1,6 @@
+# add directory for my apps
+ADD_SUBDIRECTORY(sean)
+
 # Simple application to demonstrate how to connect to a timeline
 ADD_EXECUTABLE(helloworld
 	helloworld.c

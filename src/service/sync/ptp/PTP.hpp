@@ -75,11 +75,12 @@ namespace qot
 
 		// Control functions
 		public: void Reset();
-		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, int *timelinesfd, uint16_t timelines_size);
+		public: void Start(bool master, int log_sync_interval,
+			uint32_t sync_session, int timelineid, int *timelinesfd, uint16_t timelines_size);
 		public: void Stop();						// Stop
 
 		// This thread performs rhe actual syncrhonization
-		private: int SyncThread(int *timelinesfd, uint16_t timelines_size);
+		private: int SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size);
 
 		// Boost ASIO
 		private: boost::asio::io_service *asio;

@@ -52,15 +52,15 @@ using namespace qot;
 // Generate a random tring
 std::string RandomString(uint32_t length)
 {
-    auto randchar = []() -> char
-    {
-        const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[ rand() % max_index ];
-    };
-    std::string str(length,0);
-    std::generate_n( str.begin(), length, randchar );
-    return str;
+	auto randchar = []() -> char
+	{
+		const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		const size_t max_index = (sizeof(charset) - 1);
+		return charset[ rand() % max_index ];
+	};
+	std::string str(length,0);
+	std::generate_n( str.begin(), length, randchar );
+	return str;
 }
 
 // Main entry point of application
@@ -68,18 +68,18 @@ int main(int argc, char **argv)
 {
 	// Seed the random number generated with a nanosecond count
 	struct timespec t={0,0};
-    clock_gettime(CLOCK_REALTIME, &t);
+	clock_gettime(CLOCK_REALTIME, &t);
 	srand(t.tv_nsec);
 
 	// Parse command line options
 	boost::program_options::options_description desc("Allowed options");
 	desc.add_options()
-		("help,h",  	"produce help message")
-		("verbose,v",  	"print verbose debug messages")
-		("iface,i",  	boost::program_options::value<std::string>()->default_value("eth0"), "PTP-compliant interface") 
-		("name,n", 		boost::program_options::value<std::string>()->default_value(RandomString(32)), "name of this node")
-		("addr,a", 		boost::program_options::value<std::string>()->default_value("192.168.2.33"), "ip address for this node")
-		("timelineid,d",boost::program_options::value<int>()->default_value(0), "timeline id")
+		("help,h",       "produce help message")
+		("verbose,v",    "print verbose debug messages")
+		("iface,i",      boost::program_options::value<std::string>()->default_value("eth0"), "PTP-compliant interface") 
+		("name,n",       boost::program_options::value<std::string>()->default_value(RandomString(32)), "name of this node")
+		("addr,a",       boost::program_options::value<std::string>()->default_value("192.168.2.33"), "ip address for this node")
+		("timelineid,d", boost::program_options::value<int>()->default_value(0), "timeline id")
 	;
 	boost::program_options::variables_map vm;
 	boost::program_options::store(
@@ -88,15 +88,15 @@ int main(int argc, char **argv)
 
 	// Set logging level
 	if (vm.count("verbose") > 0)
-    {
-    	boost::log::core::get()->set_filter
+	{
+	boost::log::core::get()->set_filter
 	    (
 	        boost::log::trivial::severity >= boost::log::trivial::info
 	    );
 	}
 	else
 	{
-    	boost::log::core::get()->set_filter
+	boost::log::core::get()->set_filter
 	    (
 	        boost::log::trivial::severity >= boost::log::trivial::warning
 	    );
@@ -114,14 +114,14 @@ int main(int argc, char **argv)
 	boost::asio::io_service::work work(io);
 
 	// Some friendly debug
-	BOOST_LOG_TRIVIAL(info) << "My UNIQUE name is " << vm["name"].as<std::string>() 
+	BOOST_LOG_TRIVIAL(info) << "My unique name is " << vm["name"].as<std::string>() 
 		<< " and I will perform synchronization over interface " << vm["iface"].as<std::string>()
-		<< " with an ip address " << vm["addr"].as<std::string>() << " and timeline id " << vm["timelineid"].as<int>();
+		<< " with an ip address " << vm["addr"].as<std::string>();
 
 	// Create the inotify monitoring dservice for /dev/timelineX and incoming DDS messages
-	//qot::Notifier notifier(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
-
-	qot::Timeline timeline(&io, vm["name"].as<std::string>(), vm["iface"].as<std::string>(), vm["addr"].as<std::string>(), vm["timelineid"].as<int>());
+	qot::Notifier notifier(&io, vm["name"].as<std::string>(),
+		vm["iface"].as<std::string>(), vm["addr"].as<std::string>());
+	
 	// Run the io service
 	io.run();
 

@@ -1,7 +1,14 @@
-/*.d
-/*.o
+*.d
+*.o
+*.~
+*.dwo
+/*.dtbo
 /hwstamp_ctl
 /phc2sys
 /pmc
 /ptp4l
-/build/
+build/
+.tmp_versions/
+qot-stack.sublime-project
+qot-stack.sublime-workspace
+
