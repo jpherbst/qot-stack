@@ -89,10 +89,11 @@ static struct omap_dm_timer **sched_timer = NULL;
 static struct qot_am335x_data *qot_am335x_data_ptr = NULL;
 
 struct qot_am335x_compare_interface{
-	qot_perout_t perout;					/* Periodic Output Data        */
-	u32 load;								/* Load Register               */
-	u32 match;								/* Match Register              */
-	int key;								/* Key to enable single access */
+	qot_perout_t perout;					/* Periodic Output Data        		  */
+	u32 load;								/* Load Register               		  */
+	u32 match;								/* Match Register              		  */
+	int key;								/* Key to enable single access        */
+	int reprogram_flag;                     /* Flag indicating whether a reprogram is needed */
 	qot_return_t (*callback)(qot_perout_t *perout_ret, timepoint_t *event_core_timestamp, timepoint_t *next_event_time);	/* Time Conversion Callback */
 };
 
@@ -208,7 +209,18 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 	case EVENT_MATCH:
 
 		/* Do nothing - can be used to stop PWM */
-
+	    event_core_timestamp = qot_am335x_read_time();
+		channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
+	    if(channel->parent->compare.reprogram_flag == 1 && TP_TO_nSEC(channel->parent->compare.perout.start) < TP_TO_nSEC(event_core_timestamp))
+	    {
+		    tc = omap_dm_timer_read_counter(timer);
+		    //omap_dm_timer_enable(timer);
+		    omap_dm_timer_stop(timer);
+			omap_dm_timer_set_load(timer, 1, -channel->parent->compare.load);		 /*1 = autoreload */
+			omap_dm_timer_set_match(timer, 1, -channel->parent->compare.match);		/* 1 = enable */
+			omap_dm_timer_start(timer);
+			omap_dm_timer_write_counter(timer, -channel->parent->compare.match + AM335X_REWRITE_DELAY);
+		}
 		break;
 
 	case EVENT_OVERFLOW:
@@ -219,39 +231,17 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 			// TODO/* Get an s64 value in core time */
 			event_core_timestamp = qot_am335x_read_time();
 			channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
-
-			// raw_spin_lock_irqsave(&channel->parent->lock, flags);
-
-			// /* Use the cyclecounter mult at shift to scale */
-			// tp = div_u64((tp << channel->parent->cc.shift)
-			// 	+ channel->parent->tc.frac, channel->parent->cc.mult);
-
-			// raw_spin_unlock_irqrestore(&channel->parent->lock, flags);
-
-			// /* Map to a load and match */
-			// load   = tp; 		// (low+high)
-			// match  = tp/2; 		// (low)
-
-			// // Rewrite counter based on new load value		
-			// if(load != channel->parent->compare.load)	
-			// 	omap_dm_timer_write_counter(timer, omap_dm_timer_read_counter(timer) - load - (0xffffffff- channel->parent->compare.load) + AM335X_REWRITE_DELAY);
-
 		}
 
 		break;
 
 	case EVENT_START:
 
-		// pr_info("qot_am335x: period s...%lld\n",channel->state.perout.period.sec);
-		// pr_info("qot_am335x: period ns...%lu\n",channel->state.perout.period.nsec);
-
 		/* Get the signed ns start time and period */
 		ts = ptp_to_s64(&channel->state.perout.start);
 		tp = ptp_to_s64(&channel->state.perout.period);
 		duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
 
-		// pr_info("qot_am335x: NS offset...%lld\n",ts);
-		// pr_info("qot_am335x: NS period...%lld\n",tp);
 
 		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
@@ -281,17 +271,14 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Map to an offset, load and match */
 		offset = tc; 		// (start)
 		load   = tp; 		// (low+high)
-		//match  = tp/2; 		// (low) 
-		match = duty; 
+		match = duty;       // (low)
 		
 		channel->parent->compare.load = load;
 		channel->parent->compare.match = match;
-		//pr_info("qot_am335x: PWM offset...%u\n",offset);
-		//pr_info("qot_am335x: PWM period...%u\n",load);
 
 		/* Configure timer */
 		if(timer->id == COMPARE_TIMER)
-			omap_dm_timer_set_int_enable(timer, OMAP_TIMER_INT_OVERFLOW);
+			omap_dm_timer_set_int_enable(timer, OMAP_TIMER_INT_OVERFLOW | OMAP_TIMER_INT_MATCH);
 		omap_dm_timer_enable(timer);
 		omap_dm_timer_set_prescaler(timer, AM335X_NO_PRESCALER);
 		omap_dm_timer_set_pwm(timer, channel->parent->compare.perout.edge - 1, 1,
@@ -310,7 +297,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 
 		/* Disable the timer */
 		if(timer->id == COMPARE_TIMER)
-			omap_dm_timer_set_int_disable(timer, OMAP_TIMER_INT_OVERFLOW);
+			omap_dm_timer_set_int_disable(timer, OMAP_TIMER_INT_OVERFLOW | OMAP_TIMER_INT_MATCH);
 		omap_dm_timer_enable(timer);
 		omap_dm_timer_stop(timer);
 
@@ -520,14 +507,40 @@ static long qot_am335x_timeline_enable_compare(timepoint_t *core_start, timeleng
 {
 	unsigned long flags;
 	struct qot_am335x_data *pdata = qot_am335x_data_ptr;
-
+    int overwrite_request = 0;
+    timelength_t core_period_time = *core_period;
+    s64 tp, duty;
 	if(on)
 	{
 		raw_spin_lock_irqsave(&pdata->lock, flags);
-		if(pdata->compare.key != 0)
+		if(pdata->compare.key != 0 && pdata->compare.perout.owner_file != perout->owner_file)
 		{
 			raw_spin_unlock_irqrestore(&pdata->lock, flags);
+			pr_info("enable_compare: compare failed\n");
 			return 1;
+		}
+		else if(pdata->compare.key == 1)
+		{
+			pr_info("enable_compare: being reprogrammed\n");
+			if(TP_TO_nSEC(pdata->compare.perout.start) < TP_TO_nSEC(perout->start))
+			{
+				tp = (s64) TL_TO_nSEC(core_period_time);
+				if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
+				{
+					raw_spin_unlock_irqrestore(&pdata->lock, flags);
+					pr_info("enable_compare: period too large\n");
+					return 1;
+				}
+				tp = div_u64((tp << pdata->cc.shift) + pdata->tc.frac, pdata->cc.mult);
+				pdata->compare.load = tp;
+				duty = div_s64(tp*(100LL-(s64)pdata->compare.perout.duty_cycle),100L);
+				pdata->compare.match = duty;
+				pdata->compare.perout = *perout;
+				pdata->compare.reprogram_flag = 1;
+				raw_spin_unlock_irqrestore(&pdata->lock, flags);
+				return 0;
+			}
+			overwrite_request = 1;
 		}
 		pdata->compare.key = 1;
 		raw_spin_unlock_irqrestore(&pdata->lock, flags);
@@ -535,7 +548,6 @@ static long qot_am335x_timeline_enable_compare(timepoint_t *core_start, timeleng
 		// Set Callback and perout data
 		pdata->compare.callback = callback;
 		pdata->compare.perout = *perout;
-
 		pr_info("enable_compare: timeline %d, period %llu %llu\n", perout->timeline.index, perout->period.sec, perout->period.asec);
 		
 		// Set PTP state
@@ -556,11 +568,23 @@ static long qot_am335x_timeline_enable_compare(timepoint_t *core_start, timeleng
 			return 1;
 		}
 		pdata->compare.key = 0;
+		pdata->compare.perout.owner_file = NULL;
 		raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	}
 	
+	if (overwrite_request == 1)
+	{
+		qot_am335x_perout(&pdata->pins[COMPARE_PIN], EVENT_STOP);
+	}
 	if(qot_am335x_perout(&pdata->pins[COMPARE_PIN], (on ? EVENT_START : EVENT_STOP)) < 0)
 	{
+		if(on)
+		{
+			raw_spin_lock_irqsave(&pdata->lock, flags);
+			pdata->compare.perout.owner_file = NULL;
+			pdata->compare.key = 0;
+			raw_spin_unlock_irqrestore(&pdata->lock, flags);
+		}
 		return 1;
 	}
 	return 0;
@@ -1175,6 +1199,8 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	
 	/* Initialize key for output compare */
 	pdata->compare.key = 0;
+	pdata->compare.perout.owner_file = NULL;
+	pdata->compare.reprogram_flag = 0;
 
 	/* Return the platform data */
 	return pdata;

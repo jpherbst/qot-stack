@@ -62,6 +62,11 @@ ADD_EXECUTABLE(helloworld_capture_simple
 )
 TARGET_LINK_LIBRARIES(helloworld_capture_simple qot)
 
+ADD_EXECUTABLE(helloworld_control_pwm
+	helloworld_control_pwm.c
+)
+TARGET_LINK_LIBRARIES(helloworld_control_pwm qot)
+
 # Install the executables to the given prefix
 INSTALL(
 	TARGETS 
@@ -165,6 +170,15 @@ INSTALL(
 INSTALL(
 	TARGETS 
 		helloworld_capture_simple
+	DESTINATION 
+		bin 
+	COMPONENT 
+		applications
+)
+
+INSTALL(
+	TARGETS 
+		helloworld_control_pwm
 	DESTINATION 
 		bin 
 	COMPONENT 
