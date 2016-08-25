@@ -1,6 +1,6 @@
 /*
- * @file helloworld_compare.c
- * @brief Simple C example showing how to trigger output compare
+ * @file helloworld_control_pwm.c
+ * @brief Simple C example showing how to trigger output compare (PWM) with varying duty cycles
  * @author Sandeep D'souza
  * 
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -48,10 +48,11 @@
 #include "../../api/c/qot.h"
 
 // Basic onfiguration
-#define TIMELINE_UUID    "my_test_timeline"
-#define APPLICATION_NAME "default"
-#define OFFSET_MSEC      2000
-#define DUTY_CYCLE       50
+#define TIMELINE_UUID         "my_test_timeline"
+#define APPLICATION_NAME      "default"
+#define OFFSET_MSEC           2000
+#define DUTY_CYCLE            50
+#define PWM_CHANGE_PERIOD_MS  10000
 
 static int running = 1;
 
@@ -73,6 +74,10 @@ int main(int argc, char *argv[])
     qot_perout_t request;
     qot_callback_t callback;
     qot_event_t event;
+    timelength_t pwm_change_period;
+
+    // Initialize change period
+    TL_FROM_mSEC(pwm_change_period, PWM_CHANGE_PERIOD_MS);
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
@@ -140,23 +145,21 @@ int main(int argc, char *argv[])
         wake.asec = 0;
     }    
 
-    // Configure Periodic request
-    request.start.sec = wake.sec + 1;
-    request.start.asec = wake.asec;
-
     signal(SIGINT, exit_handler);
 
-    if(timeline_enable_output_compare(my_timeline, &request))
-    {
-        printf("Cannot request periodic output\n");
-        goto exit_point;
-    }
-    else
-    {
-        printf("Output Compare Succesful\n");
-    }
-
     while (running) {
+        // Configure Periodic request
+        request.start.sec = wake.sec + 1;
+        request.start.asec = wake.asec;
+        if(timeline_enable_output_compare(my_timeline, &request))
+        {
+            printf("Cannot request periodic output\n");
+            goto terminate;
+        }
+        else
+        {
+            printf("Output Compare Succesful\n");
+        }
         if(timeline_read_events(my_timeline, &event))
         {
             printf("Could not read events\n");
@@ -164,11 +167,13 @@ int main(int argc, char *argv[])
         }
         printf("Event detected at %lld %llu with event code %d\n", event.timestamp.estimate.sec, event.timestamp.estimate.asec, event.type);
 
-        // timepoint_add(&wake, &request.period);
-        // wake_now.estimate = wake;
-        // timeline_waituntil(my_timeline, &wake_now);
+        timepoint_add(&wake, &pwm_change_period);
+        wake_now.estimate = wake;
+        timeline_waituntil(my_timeline, &wake_now);
+        request.duty_cycle = request.duty_cycle*6/7;
     }
 
+terminate:
     if(timeline_disable_output_compare(my_timeline, &request))
     {
         printf("Cannot disable periodic output\n");

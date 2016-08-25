@@ -355,10 +355,10 @@ static inline void utimepoint_sub(utimepoint_t *t, utimelength_t *v)
  * @brief Edge trigger codes from the QoT stack
  */
 typedef enum {
-	QOT_TRIGGER_NONE	= (0),		/* No edges								*/
+	QOT_TRIGGER_NONE	= (0),		/* No edges	- Not for PWM				*/
 	QOT_TRIGGER_RISING	= (1),		/* Rising edge only						*/
 	QOT_TRIGGER_FALLING	= (2),		/* Falling edge only					*/
-	QOT_TRIGGER_BOTH	= (3),		/* Both edges							*/
+	QOT_TRIGGER_BOTH	= (3),		/* Both edges - Not for PWM				*/
 } qot_trigger_t;
 
 /**
@@ -426,7 +426,7 @@ typedef struct qot_timer {
 /* QoT external input timestamping */
 typedef struct qot_extts {
 	int pin_index;          			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Edge to capture -> Not supported now*/
+	qot_trigger_t edge;					/* Edge to capture */
 	qot_return_t response;			    /* Response */
 	#ifdef __KERNEL__
 	struct file *owner_file;            /* Owning File Descriptor  */
@@ -436,9 +436,10 @@ typedef struct qot_extts {
 /* QoT programmable periodic output */
 typedef struct qot_perout {
 	char pin[QOT_MAX_NAMELEN];			/* Pin (according to testptp -l) */
-	qot_trigger_t edge;					/* Off, rising, falling, toggle */
+	qot_trigger_t edge;					/* Rising and falling only*/
 	timepoint_t start;					/* Start time */
 	timelength_t period;				/* Period */
+	int duty_cycle;						/* Duty Cycle 1-100 */
 	qot_return_t response;			    /* Response */
 	qot_timeline_t timeline;			/* Timeline Data Structure */
 	#ifdef __KERNEL__

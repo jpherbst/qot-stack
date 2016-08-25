@@ -4,8 +4,8 @@ obj-m += qot_core.o
 obj-m += qot_am335x.o
 
 KERNELDIR ?= /export/bb-kernel/KERNEL
-#KERNELVER ?= 4.1.12-bone-rt-r16
-KERNELVER ?= 4.6.3-bone-rt-r3
+KERNELVER ?= 4.1.12-bone-rt-r16
+#KERNELVER ?= 4.6.3-bone-rt-r3
 
 IPADDR ?= 192.168.1.110
 
