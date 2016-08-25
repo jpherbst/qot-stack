@@ -1,6 +1,8 @@
 *.d
 *.o
 *.~
+*.swp
+*.swo
 *.dwo
 /*.dtbo
 /hwstamp_ctl
