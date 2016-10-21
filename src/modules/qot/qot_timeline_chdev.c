@@ -691,12 +691,9 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(utp.estimate);
-        timelinetime = coretime; // Fatima
-        //qot_loc2rem(timeline_impl->index, 0, &coretime); //Fatima
-        qot_loc2rem(timeline_impl->index, 0, &timelinetime); //Fatima
-        //TP_FROM_nSEC(utp.estimate, coretime); //Fatima
-        TP_FROM_nSEC(stp.estimate, timelinetime); //Fatima
-        // find upper bound on core time
+        timelinetime = coretime; 
+        qot_loc2rem(timeline_impl->index, 0, &timelinetime); 
+        TP_FROM_nSEC(utp.estimate, timelinetime); 
 
         /* Calculate sync uncertainty _START */
         if(timeline_impl->u_nsec < 0){
@@ -706,7 +703,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
             l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
         }
-
+        
         sync_uncertainty.estimate.sec = 0;
         sync_uncertainty.estimate.asec = 0;
 
