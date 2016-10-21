@@ -136,6 +136,7 @@ int main(int argc, char *argv[])
 	{
 		wake = wake_now.estimate;
 		timepoint_add(&wake, &step_size);
+        wake.asec = 0;
 	}
 
 	signal(SIGINT, exit_handler);
@@ -160,13 +161,12 @@ int main(int argc, char *argv[])
 		{
 			printf("[Iteration %d ]: core time =>\n", i++);
 			printf("Scheduled wake up          %lld %llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
-			printf("Time Estimate @ wake up %lld %llu\n", est_now.estimate.sec, est_now.estimate.asec);
-			printf("Uncertainity below %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
-			printf("Uncertainity above %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
+			printf("Time Estimate @ wake up    %lld %llu\n", est_now.estimate.sec, est_now.estimate.asec);
+			printf("Uncertainity below         %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
+			printf("Uncertainity above         %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
+			printf("WAITING FOR %d ms\n", step_size_ms);
 
 		}
-		if(DEBUG)
-			printf("WAITING FOR %d ms\n", step_size_ms);
 		timepoint_add(&wake, &step_size);
 		wake_now.estimate = wake;
 		timeline_waituntil(my_timeline, &wake_now);

@@ -149,13 +149,11 @@ static int qot_user_timeline_create_notify(qot_timeline_t *timeline)
             continue;
         }
         event->info.type = QOT_EVENT_TIMELINE_CREATE;
+        qot_clock_get_core_time(&event->info.timestamp);
         strncpy(event->info.data,timeline->name, QOT_MAX_NAMELEN);
         raw_spin_lock_irqsave(&con->list_lock, flags);
-        // if(down_interruptible(&con->list_sem))
-        //     return -ERESTARTSYS;
         list_add_tail(&event->list, &con->event_list);
         con->event_flag = 1;
-        //up(&con->list_sem);
         raw_spin_unlock_irqrestore(&con->list_lock, flags);
         wake_up_interruptible(&con->wq);
         con_node = rb_next(con_node);
@@ -192,7 +190,8 @@ qot_return_t qot_user_chdev_add_event(struct file *fileobject, qot_event_t *even
 static qot_return_t qot_perout_notify(qot_perout_t *perout, timepoint_t *event_core_timestamp, timepoint_t *next_event)
 {
     utimepoint_t event_timestamp;
-    s64 period, start, event_timestamp_ns, num_periods; 
+    //s64 period, start, event_timestamp_ns;// num_periods; 
+    s64 event_timestamp_ns;
     unsigned long flags;
 
     event_t *event;
@@ -213,6 +212,8 @@ static qot_return_t qot_perout_notify(qot_perout_t *perout, timepoint_t *event_c
     event_timestamp_ns = TP_TO_nSEC(event_timestamp.estimate);
     qot_loc2rem(perout->timeline.index, 0, &event_timestamp_ns);
     TP_FROM_nSEC(event_timestamp.estimate, event_timestamp_ns);
+    // Send Back Timeline Reference TImestamp
+    *event_core_timestamp = event_timestamp.estimate;
     // TODO -> Still need to add sync uncertainty
     
     // Populate event information

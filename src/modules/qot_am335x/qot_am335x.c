@@ -211,13 +211,15 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Do nothing - can be used to stop PWM */
 	    event_core_timestamp = qot_am335x_read_time();
 		channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
-	    if(channel->parent->compare.reprogram_flag == 1 && TP_TO_nSEC(channel->parent->compare.perout.start) < TP_TO_nSEC(event_core_timestamp))
+		
+		// Compare start of reprogram with current timeline reference time (callback returns timeline reference in event_core_timestamp)
+	    if(channel->parent->compare.reprogram_flag == 1 && (TP_TO_nSEC(channel->parent->compare.perout.start) - TL_TO_nSEC(channel->parent->compare.perout.period)) < TP_TO_nSEC(event_core_timestamp))
 	    {
 		    tc = omap_dm_timer_read_counter(timer);
 		    //omap_dm_timer_enable(timer);
 		    omap_dm_timer_stop(timer);
 			omap_dm_timer_set_load(timer, 1, -channel->parent->compare.load);		 /*1 = autoreload */
-			omap_dm_timer_set_match(timer, 1, -channel->parent->compare.match);		/* 1 = enable */
+			omap_dm_timer_set_match(timer, 1, -channel->parent->compare.match);		 /* 1 = enable */
 			omap_dm_timer_start(timer);
 			omap_dm_timer_write_counter(timer, -channel->parent->compare.match + AM335X_REWRITE_DELAY);
 		}

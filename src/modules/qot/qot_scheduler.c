@@ -118,7 +118,7 @@ static int qot_sleeper_wakeup(struct timeline_sleeper *sleeper, struct rb_node *
     *timeline_node = rb_next(*timeline_node);
     if(sleeper->periodic_timer_flag == 1)
     {
-    	utimepoint_t time_now;
+    	//utimepoint_t time_now;
     	struct task_struct *task;
     	struct siginfo info;
 		memset(&info, 0, sizeof(struct siginfo));
@@ -360,7 +360,7 @@ static void qot_init_sleeper(struct timeline_sleeper *sl, struct task_struct *ta
 // initializes the qot timeline sleeper structure -> grab a spinlock before initializing
 static void qot_init_timer_sleeper(struct timeline_sleeper *sl, struct task_struct *task, struct qot_timeline *timeline, timelength_t *period, timepoint_t *start_offset, int count)
 {
-    timelength_t elapsed_time;
+    timelength_t elapsed_time = {0ULL, 0ULL};
     timepoint_t core_time;
     timepoint_t current_timeline_time;
 
