@@ -62,10 +62,10 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 
 * Mani Srivastava
 * Sudhakar Pamarti
+* Fatima anwar
 * Andrew Symington
 * Hani Esmaeelzadeh
 * Amr Alanwar
-* Fatima Muhammad
 * Paul Martin
 
 **Carnegie-Mellon University (CMU)**
