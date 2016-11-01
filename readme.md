@@ -62,7 +62,7 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 
 * Mani Srivastava
 * Sudhakar Pamarti
-* Fatima anwar
+* Fatima M. Anwar
 * Andrew Symington
 * Hani Esmaeelzadeh
 * Amr Alanwar
