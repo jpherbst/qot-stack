@@ -186,7 +186,7 @@ qot_return_t timeline_unbind(timeline_t *timeline)
 
     if (timeline->qotusr_fd)
         close(timeline->qotusr_fd);
-    
+   
     return QOT_RETURN_TYPE_OK;
 }
 

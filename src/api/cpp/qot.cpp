@@ -1,370 +1,707 @@
 /*
- * @file qot.cpp
- * @brief Userspace C++ API to manage QoT timelines
- * @author Andrew Symington, Fatima Anwar and Sandeep D'souza
+ * @file qot.h
+ * @brief A simple C application programmer interface to the QoT stack
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
  *
- * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
+ * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice,
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
-// This library include
-#include "qot.hpp"
-
-// C++ includes
-#include <exception>
-#include <sstream>
-#include <iostream>
-
-// Private functionality
+/* System includes */
 extern "C"
 {
-	#include "../../src/qot_types.h"
+    #include <math.h>
+    #include <pthread.h>
+    #include <stdio.h>
+    #include <stdlib.h>
+    #include <unistd.h>
+    #include <fcntl.h>
+    #include <signal.h>
+    #include <errno.h>
+    #include <poll.h>
+
+    #include <linux/ptp_clock.h>
 }
 
-#define DEBUG false
+/* This file includes */
+#include "qot.hpp"
 
-using namespace qot;
+#define DEBUG 0
 
-// Bind to a timeline
-Timeline::Timeline(const std::string &uuid, uint64_t acc, uint64_t res)
-	: name(RandomString(QOT_MAX_NAMELEN)), fd_qot(-1), lk(this->m), kill(false),
-		thread(std::bind(&Timeline::CaptureThread, this))
-{
-	// Open the QoT scheduler
-	if (DEBUG) std::cout << "Opening IOCTL to qot_core" << std::endl;
-	this->fd_qot = open("/dev/qot", O_RDWR);
-	if (this->fd_qot < 0)
-		throw CannotCommunicateWithCoreException();
+/* Timeline implementation */
+typedef struct timeline {
+    qot_timeline_t info;                  /* Basic timeline information               */
+    qot_binding_t binding;                /* Basic binding info                       */
+    int fd;                               /* File descriptor to /dev/timelineX ioctl  */
+    int qotusr_fd;                        /* File descriptor to /dev/qotusr ioctl     */
+    int clock_fd;                         /* File Descriptor to /dev/ptpY             */
+    qot_callback_t event_callback;        /* Event Callback Function                  */
+    messenger_t messenger;                /* Messenger Object                         */
+} timeline_t;
 
-	// Check to make sure the UUID is valid
-	if (uuid.length() > QOT_MAX_NAMELEN)
-		throw ProblematicUUIDException();
-
-	// Package up a request	to send over ioctl
-	struct qot_message msg;
-	msg.tid = -1;				// This tells the qot core that this is a user
-	msg.request.acc = acc;
-	msg.request.res = res;
-	strncpy(msg.uuid, uuid.c_str(), QOT_MAX_NAMELEN);
-
-	// Add this clock to the qot clock list through scheduler
-	if (DEBUG) std::cout << "Binding to timeline " << uuid << std::endl;
-	if (ioctl(this->fd_qot, TIMELINE_BIND_JOIN, &msg))
-		throw CannotBindToTimelineException();
-
-	// Construct the file handle tot he poix clock /dev/timelineX
-	std::ostringstream oss;
-	oss << "/dev/";
-	oss << QOT_IOCTL_TIMELINE;
-	oss << msg.tid;
-
-	// Open the clock
-	if (DEBUG) std::cout << "Opening clock " << oss.str() << std::endl;
-	this->fd_clk = open(oss.str().c_str(), O_RDWR);
-	if (this->fd_clk < 0)
-		throw CannotOpenPOSIXClockException();
-
-	// Convert the file descriptor to a clock handle
-	this->clk = ((~(clockid_t) (this->fd_clk) << 3) | 3);
-
-	if (DEBUG) std::cout << "Start polling " << std::endl;
-
-	// We can now start polling, because the timeline is setup
-	this->cv.notify_one();
+/* Is the given timeline a valid one */
+qot_return_t timeline_check_fd(timeline_t *timeline) {
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    return QOT_RETURN_TYPE_OK;
 }
 
-// Unbind from a timeline
-Timeline::~Timeline()
+/* Create a Timeline Data Structure */
+timeline_t *timeline_t_create()
 {
-	// Kill the thread
-	this->kill = true;
-
-	// Threads must now exit
-    this->thread.join();
-
-	// Close the clock and timeline
-	if (this->fd_clk)
-		close(fd_clk);
-	if (this->fd_qot)
-		close(fd_qot);
+    timeline_t *timeline;
+    timeline = (timeline_t*) malloc(sizeof(struct timeline));
+    return timeline;
 }
 
-// Set the binding accuracy
-int Timeline::SetAccuracy(uint64_t acc)
+/* Destroy a Timeline Data Structure */
+void timeline_t_destroy(timeline_t *timeline)
 {
-	// Package up a rewuest
-	struct qot_message msg;
-	msg.request.acc = acc;
-
-	// Update this clock
-	if (ioctl(this->fd_qot, QOT_SET_ACCURACY, &msg) == 0)
-		return 0;
-
-	// We only get here on failure
-	throw CommunicationWithCoreFailedException();
+    free(timeline);
 }
 
-// Set the binding resolution
-int Timeline::SetResolution(uint64_t res)
+/* Bind to a timeline */
+qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *name, timelength_t res, timeinterval_t acc) 
 {
-	// Package up a rewuest
-	struct qot_message msg;
-	msg.request.res = res;
+    char qot_timeline_filename[15];
+    int usr_file;
+    
 
-	// Update this clock
-	if (ioctl(this->fd_qot, QOT_SET_RESOLUTION, &msg) == 0)
-		return 0;
+    // Check to make sure the UUID is valid
+    if (strlen(uuid) > QOT_MAX_NAMELEN)
+        return QOT_RETURN_TYPE_ERR;
 
-	// We only get here on failure
-	throw CommunicationWithCoreFailedException();
-}
+    // Open the QoT Core
+    if (DEBUG) 
+        printf("Opening IOCTL to qot_core\n");
+    usr_file = open("/dev/qotusr", O_RDWR);
+    if (DEBUG)
+        printf("IOCTL to qot_core opened %d\n", usr_file);
 
-// Get the current time
-int64_t Timeline::GetTime()
-{
-	struct timespec ts;
-	int ret = clock_gettime(this->clk, &ts);
-	return (int64_t) ts.tv_sec * 1000000000ULL + (int64_t) ts.tv_nsec;
-}
-
-// Get the achieved accuracy
-uint64_t Timeline::GetAccuracy()
-{
-	// Package up a request
-	//struct qot_metric msg;
-	//if (ioctl(this->fd_qot, QOT_GET_ACTUAL_METRIC, &msg) == 0)
-	//	return msg.acc;
-	//throw CommunicationWithPOSIXClockException();
-	return 0;
-}
-
-// Get the achieved resolutions
-uint64_t Timeline::GetResolution()
-{
-	// Package up a rewuest
-	//struct qot_metric msg;
-	//if (ioctl(this->fd_qot, QOT_GET_ACTUAL_METRIC, &msg) == 0)
-	//	return msg.res;
-	//throw CommunicationWithPOSIXClockException();
-	return 0;
-}
-
-// Get the name of the application
-std::string Timeline::GetName()
-{
-	return this->name;
-}
-
-// Set the name of the application
-void Timeline::SetName(const std::string &name)
-{
-	this->name = name;
-}
-
-// Generate an interrupt on a given timer pin
-int Timeline::GenerateInterrupt(const std::string& pname, uint8_t enable,
-	int64_t start, uint32_t high, uint32_t low, uint32_t repeat)
-{
-	// Check to make sure the pin name is valid
-	if (pname.length() > QOT_MAX_NAMELEN)
-		throw ProblematicPinNameException();
-
-	// Package up a request
-	struct qot_message msg;
-	msg.compare.enable = enable;
-	msg.compare.start = start;
-	msg.compare.high = high;
-	msg.compare.low = low;
-	msg.compare.repeat = repeat;
-	strcpy(msg.compare.name,pname.c_str());
-
-	// Update this clock
-	if (ioctl(this->fd_qot, QOT_SET_COMPARE, &msg) == 0)
-		return 0;
-
-	// We only get here on failure
-	throw CommunicationWithCoreFailedException();
-}
-
-// Wait until some global time
-int64_t Timeline::WaitUntil(int64_t val)
-{
-	// TODO: Adwait to improve this -> Changes made by Sandeep
-	struct qot_message msg;
-	int64_t cur = this->GetTime();
-	if (cur < val)
-		return -1;
-	
-	msg.wait_until.tv_sec  = val / 1e9;
-	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
-	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
-		return 0;
-	return -2;
-}
-
-// Wait until the next period on some global time
-int64_t Timeline::WaitUntilNextPeriod(int64_t period, int64_t epoch)
-{
-	// TODO: Adwait to improve this -> Changes made by Sandeep
-	struct qot_message msg;
-	int64_t cur = this->GetTime();
-
-	int64_t periods_since_epoch = 0;
-	int64_t val;
-
-	if (cur < epoch)
-		return -1;
-	
-	periods_since_epoch = cur/period;
-	if(periods_since_epoch == 0)
-		return 0;
-	val = period*(periods_since_epoch + 1);
-	if (val < cur)
-	{
-		printf("val less than current time\n");
-		return -1;
-	}
-
-	msg.wait_until.tv_sec  = val / 1e9;
-	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
-	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
-		return 0;
-	printf("sleepfailed\n");
-	return -2;
-}
-
-// Sleep for a given number of nanoseconds
-int64_t Timeline::Sleep(uint64_t val)
-{
-	// TODO: Adwait to improve this -> Changes made by Sandeep
-	struct qot_message msg;
-	int64_t cur = this->GetTime();
-	val = (uint64_t)(val + cur);
-	msg.wait_until.tv_sec  = val / 1e9;
-	msg.wait_until.tv_nsec = val - ((uint64_t)1e9 * msg.wait_until.tv_sec);
-	if (ioctl(this->fd_qot, QOT_WAIT_UNTIL, &msg) == 0)
-		return 0;
-	return -1;
-}
-
-// // Wait until some global time
-// int64_t Timeline::WaitUntil(int64_t val)
-// {
-// 	// TODO: Adwait to improve this
-// 	int64_t cur = this->GetTime();
-// 	if (cur < val)
-// 		return -1;
-// 	uint64_t dif = (uint64_t)(val - cur);
-// 	struct timespec ts, ret;
-// 	ts.tv_sec  = dif / 1e9;
-// 	ts.tv_nsec = dif - ((uint64_t)1e9 * ts.tv_sec);
-// 	nanosleep(&ts, &ret);
-// 	return 0;
-// }
-
-// // Sleep for a given number of nanoseconds
-// int64_t Timeline::Sleep(uint64_t val)
-// {
-// 	// TODO: Adwait to improve this
-// 	struct timespec ts, ret;
-// 	ts.tv_sec  = val / 1e9;
-// 	ts.tv_nsec = val - ((uint64_t)1e9 * ts.tv_sec);
-// 	nanosleep(&ts, &ret);
-// 	return 0;
-// }
-
-// Listen for an interrupt on a pin
-void Timeline::SetCaptureCallback(CaptureCallbackType callback)
-{
-	this->cb_capture = callback;
-}
-
-void Timeline::SetEventCallback(EventCallbackType callback)
-{
-	this->cb_event = callback;
-}
-
-// A thread to manage file descriptor polling (should introduce a mutex)
-void Timeline::CaptureThread()
-{
-	// Wait until the main thread sets up the binding and posix clock
-    while (fd_qot < 0)
-    	this->cv.wait(this->lk);
-
-    if (DEBUG) std::cout << "Polling for activity" << std::endl;
-
-    // Sto store message data
-	struct qot_message msg;
-
-    // Start polling
-    while (!kill)
+    if (usr_file < 0)
     {
-    	// Initialize the polling struct
-		struct pollfd pfd[1];
-		memset(pfd,0,sizeof(pfd));
-		pfd[0].fd = this->fd_qot;
-		pfd[0].events = POLLIN;
+        printf("Error: Invalid file\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
 
-		if (DEBUG) std::cout << "Polling..." << std::endl;
+    timeline->qotusr_fd = usr_file;
+    
+    // Bind to the timeline
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
 
-		// Wait until an asynchronous data push from the kernel module
-		if (poll(pfd,1,QOT_POLL_TIMEOUT_MS))
-		{
-			// Some event just occured on the timeline
-			if (pfd[0].revents & POLLIN)
-			{
-				if (DEBUG) std::cout << "Timeline Event..." << std::endl;
-				while (ioctl(this->fd_qot, QOT_GET_EVENT, &msg) == 0)
-				{
-					// Callback with the event
-					if (cb_event)
-						this->cb_event(msg.event.info, msg.event.type);
+    strcpy(timeline->info.name, uuid);  
 
-					// Special callback for capture events to
-					if (msg.event.type == EVENT_CAPTURE)
-					{
-						if (DEBUG) std::cout << "Capture Event..." << std::endl;
-						while (ioctl(this->fd_qot, QOT_GET_CAPTURE, &msg) == 0)
-						{
-							// Callback with the capture pin name and time
-							if (cb_capture)
-								this->cb_capture(msg.capture.name, msg.capture.edge);
-						}
-					}
-				}
-			}
-		}
-	}
+    // Try to create a new timeline if none exists
+    if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    // Construct the file handle to the posix clock /dev/timelineX
+    sprintf(qot_timeline_filename, "/dev/timeline%d", timeline->info.index);
+
+    // Open the clock
+    if (DEBUG) 
+        printf("Opening clock %s\n", qot_timeline_filename);
+    timeline->fd = open(qot_timeline_filename, O_RDWR);
+    if (!timeline->fd)
+    {
+        printf("Cant open /dev/timeline%d\n", timeline->info.index);
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    
+    
+    if (DEBUG) 
+        printf("Opened clock %s\n", qot_timeline_filename);
+    // Populate Binding fields
+    strcpy(timeline->binding.name, name);
+    timeline->binding.demand.resolution = res;
+    timeline->binding.demand.accuracy = acc;
+    TL_FROM_SEC(timeline->binding.period, 0);
+    TP_FROM_SEC(timeline->binding.start_offset, 0);
+    
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
+    // Bind to the timeline
+    if(ioctl(timeline->fd, TIMELINE_BIND_JOIN, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    if (DEBUG) 
+        printf("Bound to timeline %s\n", uuid);
+
+    // Initialize Messenger
+    timeline->messenger = create_messenger(timeline->binding.name, timeline->info.name);
+
+    // This was there in the old api code
+    // if (DEBUG) std::cout << "Start polling " << std::endl;
+
+    // // We can now start polling, because the timeline is setup
+    // this->cv.notify_one();
+
+    return QOT_RETURN_TYPE_OK;
 }
 
-// Random string generator
-std::string Timeline::RandomString(uint32_t length)
+qot_return_t timeline_unbind(timeline_t *timeline) 
 {
-    auto randchar = []() -> char
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Unbind from the timeline
+    if(ioctl(timeline->fd, TIMELINE_BIND_LEAVE, &timeline->binding) < 0)
     {
-        const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[ rand() % max_index ];
-    };
-    std::string str(length,0);
-    std::generate_n( str.begin(), length, randchar );
-    return str;
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Close the timeline file
+    if (timeline->fd)
+        close(timeline->fd);
+
+    // Try to destroy the timeline if possible (will destroy if no other bindings exist)
+    if(ioctl(timeline->qotusr_fd, QOTUSR_DESTROY_TIMELINE, &timeline->info) == 0)
+    {
+       if(DEBUG)
+          printf("Timeline %d destroyed\n", timeline->info.index);
+    }
+    else
+    {
+       if(DEBUG)
+          printf("Timeline %d not destroyed\n", timeline->info.index);
+    }
+
+    if (timeline->qotusr_fd)
+        close(timeline->qotusr_fd);
+
+    // Call Messenger Object Destructor 
+    delete_messenger(timeline->messenger);
+
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_send_message(timeline_t *timeline, qot_message_t message) 
+{
+    publish_message(timeline->messenger, message);
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_subscribe_message(timeline_t *timeline, qot_message_t *message)
+{
+    // Populate the logic later
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_define_cluster(timeline_t *timeline, const std::vector<std::string> Nodes)
+{
+    qot_return_t retval;
+    retval = define_cluster(timeline->messenger, Nodes);
+    return retval;
+}
+
+qot_return_t timeline_wait_for_peers(timeline_t *timeline)
+{
+    qot_return_t retval;
+    retval = wait_for_peers_to_join(timeline->messenger);
+    return retval; 
+}
+
+qot_return_t timeline_get_accuracy(timeline_t *timeline, timeinterval_t *acc) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    *acc = timeline->binding.demand.accuracy;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_get_resolution(timeline_t *timeline, timelength_t *res) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    *res = timeline->binding.demand.resolution;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_get_name(timeline_t *timeline, char *name) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    strcpy(name, timeline->binding.name);
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    strcpy(uuid, timeline->info.name);
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    timeline->binding.demand.accuracy = *acc;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *acc = timeline->binding.demand.accuracy;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    timeline->binding.demand.resolution = *res;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *res = timeline->binding.demand.resolution;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_set_schedparams(timeline_t *timeline, timelength_t *period, timepoint_t *start_offset) 
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    timeline->binding.start_offset = *start_offset;
+    timeline->binding.period = *period;
+    // Update the binding
+    if(ioctl(timeline->fd, TIMELINE_BIND_UPDATE, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
+{
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Get the core time
+    if(ioctl(timeline->fd, TIMELINE_GET_CORE_TIME_NOW, core_now) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
+{    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_enable_output_compare(timeline_t *timeline,
+    qot_perout_t *request) {
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    if(request->duty_cycle >= 100)
+        return QOT_RETURN_TYPE_ERR;
+    if(request->edge != QOT_TRIGGER_RISING && request->edge != QOT_TRIGGER_FALLING)
+        return QOT_RETURN_TYPE_ERR;
+
+    request->timeline = timeline->info;
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_OUTPUT_COMPARE_ENABLE, request) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_disable_output_compare(timeline_t *timeline,
+    qot_perout_t *request) {
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    request->timeline = timeline->info;
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_OUTPUT_COMPARE_DISABLE, request) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_config_pin_timestamp(timeline_t *timeline, qot_extts_t *request, int enable) 
+{
+    qot_clock_t core_clock;
+    char ptp_device[QOT_MAX_NAMELEN];           /* File Name              */
+    int fd;                                     /* device file descriptor */
+    int index = 1;                              /* Channel index, 'corresponding to the pin */
+    struct ptp_clock_caps caps;                 /* Clock capabilities */
+    struct ptp_pin_desc desc;                   /* Pin configuration */
+    struct ptp_extts_request extts_request;     /* External timestamp req */
+
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the presiding core clock
+    if(ioctl(timeline->qotusr_fd, QOTUSR_GET_CORE_CLOCK_INFO, &core_clock) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Create the file name
+    sprintf(ptp_device, "/dev/ptp%d", core_clock.phc_id);
+
+    if(enable)
+    {
+        /* Open the core clock ptp character device */
+        fd = open(ptp_device, O_RDWR);
+        if (fd < 0) {
+            printf("Failed to open ptp device %s\n", ptp_device);
+            return QOT_RETURN_TYPE_ERR;
+        }
+        printf("Opened ptp device %s with fd = %d\n", ptp_device, fd);
+        timeline->clock_fd = fd;
+
+        /* Pin to perform external time stamping */
+        index = request->pin_index;
+
+        /* Check if clock supports external timestamps */
+        if (ioctl(fd, PTP_CLOCK_GETCAPS, &caps)) {
+            printf("cannot get capabilities of clock");
+            return QOT_RETURN_TYPE_ERR;
+        }
+        if(caps.n_ext_ts < 1)
+        {
+            printf("clock cannot perform external timestamping\n");
+            return QOT_RETURN_TYPE_ERR;
+        }
+
+        /* Configure the pin to support external timestamps */
+        memset(&desc, 0, sizeof(desc));
+        desc.index = index;
+        desc.func = 1;                              /* '1' corresponds to external timestamp */
+        desc.chan = index;
+        if (ioctl(fd, PTP_PIN_SETFUNC, &desc)) {
+            printf("Set pin func failed for\n");
+            return QOT_RETURN_TYPE_ERR;
+        }
+        
+        /* Request timestamps from the pin */ 
+        memset(&extts_request, 0, sizeof(extts_request));
+        extts_request.index = index;
+        extts_request.flags = PTP_ENABLE_FEATURE;
+        if (ioctl(fd, PTP_EXTTS_REQUEST, &extts_request)) {
+            printf("Requesting timestamps failed for\n");
+            return QOT_RETURN_TYPE_ERR;
+        }
+    }
+    else
+    {
+        /* Disable the pin */
+        if (fcntl(timeline->clock_fd, F_GETFD)==-1)
+            return QOT_RETURN_TYPE_ERR;
+        memset(&desc, 0, sizeof(desc));
+        desc.index = request->pin_index;
+        desc.func = 0;              // '0' corresponds to no function 
+        desc.chan = request->pin_index;
+        if (ioctl(timeline->clock_fd, PTP_PIN_SETFUNC, &desc)) {
+            perror("PTP_PIN_SETFUNC Disable");
+        }
+        
+        /* Close the character device */
+        close(timeline->clock_fd);
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_read_pin_timestamps(timeline_t *timeline, qot_event_t *event) 
+{
+    int cnt;
+    struct ptp_extts_event event_ptp;               /* PTP event */
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->clock_fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    cnt = read(timeline->clock_fd, &event_ptp, sizeof(event_ptp));
+    if (cnt != sizeof(event_ptp)) {
+        printf("Cannot read event");
+    }
+    event->type = QOT_EVENT_EXTERNAL_TIMESTAMP;
+    event->timestamp.estimate.sec  = event_ptp.t.sec;
+    event->timestamp.estimate.asec = event_ptp.t.nsec*nSEC_PER_SEC;
+    
+    // Convert the core time to remote time
+    if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, &event->timestamp.estimate) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable,
+    qot_callback_t callback) {
+    return QOT_RETURN_TYPE_ERR;
+}
+
+qot_return_t timeline_read_events(timeline_t *timeline, qot_event_t *event)
+{
+    struct pollfd fds;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    fds.fd = timeline->qotusr_fd;
+    fds.events = POLLIN;
+
+    if(poll(&fds, 1, -1) <= 0)
+        return QOT_RETURN_TYPE_ERR;
+
+    if(fds.revents && POLLIN == POLLIN)
+    {
+        if(ioctl(timeline->qotusr_fd, QOTUSR_GET_NEXT_EVENT, event) < 0)
+        {
+            return QOT_RETURN_TYPE_ERR;
+        }
+    }
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp) 
+{
+    qot_sleeper_t sleeper;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    sleeper.timeline = timeline->info;
+    sleeper.wait_until_time = *utp;
+
+    if(DEBUG)
+        printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
+    
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *utp = sleeper.wait_until_time;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_waituntil_nextperiod(timeline_t *timeline, utimepoint_t *utp) 
+{
+    qot_sleeper_t sleeper;
+    timelength_t elapsed_time;
+    timepoint_t wakeup_time;
+    u64 elapsed_ns = 0;
+    u64 period_ns = 0;
+    u64 num_periods = 0;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    sleeper.timeline = timeline->info;
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, &sleeper.wait_until_time) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    // Check Start Offset
+    if(timepoint_cmp(&timeline->binding.start_offset, &sleeper.wait_until_time.estimate) < 0)
+    {
+        sleeper.wait_until_time.estimate = timeline->binding.start_offset;
+    }
+    else 
+    {
+        // Calculate Next Wakeup Time
+        timepoint_diff(&elapsed_time, &sleeper.wait_until_time.estimate, &timeline->binding.start_offset);
+        elapsed_ns = TL_TO_nSEC(elapsed_time);
+        period_ns = TL_TO_nSEC(timeline->binding.period);
+        num_periods = (elapsed_ns/period_ns);
+        if(elapsed_ns % period_ns != 0)
+            num_periods++;
+        elapsed_ns = period_ns*num_periods;
+        TL_FROM_nSEC(elapsed_time, elapsed_ns);
+        wakeup_time = timeline->binding.start_offset;
+        timepoint_add(&wakeup_time, &elapsed_time);
+        sleeper.wait_until_time.estimate = wakeup_time;
+     }
+
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    *utp = sleeper.wait_until_time;
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl) 
+{
+    qot_sleeper_t sleeper;
+
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, &sleeper.wait_until_time) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    // Convert timelength to a timepoint
+    sleeper.wait_until_time.interval =  utl->interval;
+    timepoint_add(&sleeper.wait_until_time.estimate, &utl->estimate);
+    
+    // Blocking wait on remote timeline time
+    if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_timer_callback_t callback) 
+{
+    struct sigaction act;
+
+    if(!timeline || !timer)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Create a timer
+    if(ioctl(timeline->fd, TIMELINE_CREATE_TIMER, timer) < 0)
+    {
+        printf("Failed To Create Timer\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+
+    act.sa_sigaction = callback;
+    act.sa_flags = SA_SIGINFO;
+
+    if (sigaction(SIGALRM, &act, NULL) == -1)
+    {
+        printf("sigaction failed !\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+    
+}
+
+qot_return_t timeline_timer_cancel(timeline_t *timeline, qot_timer_t *timer) 
+{
+    if(!timeline || !timer)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Create a timer
+    if(ioctl(timeline->fd, TIMELINE_DESTROY_TIMER, timer) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est) 
+{    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est) 
+{    
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+    if (fcntl(timeline->fd, F_GETFD)==-1)
+        return QOT_RETURN_TYPE_ERR;
+    
+    // Get the timeline time
+    if(ioctl(timeline->fd, TIMELINE_REMOTE_TO_CORE, est) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    return QOT_RETURN_TYPE_OK;
 }

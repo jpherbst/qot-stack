@@ -178,8 +178,8 @@ int main(int argc, char *argv[])
         wake_now.estimate = wake;
         timeline_waituntil(my_timeline, &wake_now);
         // Toggle Pins
-        if(wake.sec % 2 == 0)
-            *gpio_setdataout_addr= PIN;
+        if((wake.sec*1000 + wake.asec/1000000000000000ULL) % (int64_t)(2*step_size_ms) == 0)
+            *gpio_setdataout_addr = PIN;
         else
             *gpio_cleardataout_addr = PIN;
         if(ANALYZE)

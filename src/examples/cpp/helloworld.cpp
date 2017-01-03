@@ -1,9 +1,10 @@
 /*
- * @file helloworld_timeline.cpp
- * @brief Simple C++ example showing how to register to listen for capture events
- * @author Andrew Symington and Fatima Anwar 
+ * @file helloworld.c
+ * @brief Simple C example showing how to use wait_until 
+ * @author Andrew Symington, Sandeep D'souza and Fatima Anwar 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Carnegie Mellon University, 2016.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -26,86 +27,179 @@
  */
 
 
-// C++ includes
-#include <iostream>
+// C includes
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <math.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/timex.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
-// Include the QoT API
-#include "../api/c/qot.h"
+
+// Include the QoT CPP API
+#include "../../api/cpp/qot.hpp"
 
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define WAIT_TIME_SECS   1
-#define NUM_ITERATIONS   10
 #define OFFSET_MSEC      1000
 
-// This function is called by the QoT API when a capture event occus
-void callback(const std::string &name, uint8_t event)
+#define DEBUG 1
+
+static int running = 1;
+
+static void exit_handler(int s)
 {
-	switch(event)
-	{
-		case qot::TIMELINE_EVENT_CREATE : 
-			std::cout << "Timeline created"; 
-			break;
-		case qot::TIMELINE_EVENT_DESTROY : 
-			std::cout << "Timeline destroyed"; 
-			break;
-		case qot::TIMELINE_EVENT_JOIN : 
-			std::cout << "Peer joined timeline"; 
-			break;
-		case qot::TIMELINE_EVENT_LEAVE : 
-			std::cout << "Peer left timeline"; 
-			break;
-		case qot::TIMELINE_EVENT_SYNC : 
-			std::cout << "Timeline synchronization update"; 
-			break;
-		case qot::TIMELINE_EVENT_CAPTURE : 
-			std::cout << "Capture event on this timeline"; 
-			break;
-		case qot::TIMELINE_EVENT_UDPATE  : 
-			std::cout << "Local timeline parameters updated"; 
-			break;
-	}
+	printf("Exit requested \n");
+  	running = 0;
 }
 
 // Main entry point of application
 int main(int argc, char *argv[])
 {
-	// Allow this to go on for a while
-	int n = NUM_ITERATIONS;
-	if (argc > 1)
-		n = atoi(argv[1]);
+	// Variable declaration
+	timeline_t *my_timeline;
+	qot_return_t retval;
+	utimepoint_t est_now;
+	utimepoint_t wake_now;
+	timepoint_t  wake;
+	timelength_t step_size;
+	qot_message_t message;
+
+	timelength_t resolution;//= { .sec = 0, .asec = 1e9 }; // 1nsec
+	timeinterval_t accuracy;//= { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
+
+	// Accuracy and resolution values
+	resolution.sec = 0;
+	resolution.asec = 1e9;
+
+	accuracy.below.sec = 0;
+	accuracy.below.asec = 1e12;
+	accuracy.above.sec = 0;
+	accuracy.above.asec = 1e12;
+
+	// Set the Cluster Nodes which will take part in the coordination
+	std::vector<std::string> Nodes = {"Node1", "Node2"};
+
+	int i = 0;
+
+	int step_size_ms = OFFSET_MSEC;
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
-	if (argc > 2)
-		u = argv[2];
+	if (argc > 1)
+		u = argv[1];
 
-	// Grab the timeline
+	// Grab the application name
 	const char *m = APPLICATION_NAME;
-	if (argc > 3)
-		m = argv[3];
+	if (argc > 2)
+		m = argv[2];
+
+    // Loop Interval
+    if (argc > 3)
+        step_size_ms = atoi(argv[3]);
+
+    strcpy(message.name, m);
+    message.type = QOT_MSG_COORD_READY;
+
+	// Initialize stepsize
+	TL_FROM_mSEC(step_size, step_size_ms);
+
+	if(DEBUG)
+		printf("Helloworld starting.... process id %i\n", getpid());
+
+	my_timeline = timeline_t_create();
+	if(!my_timeline)
+	{
+		printf("Unable to create the timeline_t data structure\n");
+		QOT_RETURN_TYPE_ERR;
+	}
 
 	// Bind to a timeline
-	try
+	if(DEBUG)
+		printf("Binding to timeline %s ........\n", u);
+	if(timeline_bind(my_timeline, u, m, resolution, accuracy))
 	{
-		qot::Timeline timeline(u, 1, 1);	
-		timeline.SetEventCallback(callback);
-		timeline.SetName(m);
-		for (int i = 0; i < n; i++)
-		{
-			int64_t tval = timeline.GetTime();
-			std::cout << "[Iteration " << (i+1) << "] " << tval << std::endl;
-			std::cout << "WAITING FOR " << OFFSET_MSEC << "ms AT " << tval << std::endl;
-			timeline.Sleep(OFFSET_MSEC * 1e6);
-			std::cout << "RESUMED AT " << timeline.GetTime() << std::endl;
-		}
+		printf("Failed to bind to timeline %s\n", u);
+		timeline_t_destroy(my_timeline);
+		return QOT_RETURN_TYPE_ERR;
 	}
-	catch (std::exception &e)
+	// Define Cluster
+	if(timeline_define_cluster(my_timeline, Nodes))
 	{
-		std::cout << "EXCEPTION: " << e.what() << std::endl;
+		printf("Failed to define cluster\n");
+		goto exit_point;
 	}
 
+	// Wait for Peers to Join
+	printf("Waiting for peers to join ...\n");
+	if(timeline_wait_for_peers(my_timeline))
+	{
+		printf("Failed to wait for peers\n");
+		goto exit_point;
+	}
+
+	// Read Initial Time
+    if(timeline_gettime(my_timeline, &wake_now))
+	{
+		printf("Could not read timeline reference time\n");
+		goto exit_point;
+	}
+	else
+	{
+		wake = wake_now.estimate;
+		timepoint_add(&wake, &step_size);
+        wake.asec = 0;
+	}
+
+	signal(SIGINT, exit_handler);
+
+
+	while(running)
+	{
+		if(timeline_gettime(my_timeline, &est_now))
+		{
+			printf("Could not read timeline reference time\n");
+			goto exit_point;
+		}
+		else if (DEBUG)
+		{
+			printf("[Iteration %d ]: core time =>\n", i++);
+			printf("Scheduled wake up          %lld %llu\n", wake_now.estimate.sec, wake_now.estimate.asec);
+			printf("Time Estimate @ wake up    %lld %llu\n", est_now.estimate.sec, est_now.estimate.asec);
+			printf("Uncertainity below         %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
+			printf("Uncertainity above         %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
+			printf("WAITING FOR %d ms\n", step_size_ms);
+			//timeline_send_message(my_timeline, message);
+
+		}
+		timepoint_add(&wake, &step_size);
+		wake_now.estimate = wake;
+		timeline_waituntil(my_timeline, &wake_now);
+	}
+
+/** DESTROY TIMELINE **/
+exit_point:
 	// Unbind from timeline
+	if(timeline_unbind(my_timeline))
+	{
+		printf("Failed to unbind from timeline  %s\n", u);
+		timeline_t_destroy(my_timeline);
+		return QOT_RETURN_TYPE_ERR;
+	}
+	printf("Unbound from timeline  %s\n", u);
+
+	// Free the timeline data structure
+	timeline_t_destroy(my_timeline);	
 	return 0;
 }
