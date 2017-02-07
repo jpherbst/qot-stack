@@ -62,4 +62,10 @@ module qot_msgs
     };
 #pragma keylist TimelineMsgingType name
 
+	struct NameService {
+        long     userID;           // unique user identification
+        string name;               // name of the node
+    };
+#pragma keylist NameService name
+
 };

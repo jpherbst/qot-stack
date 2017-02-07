@@ -1,219 +1,301 @@
 /*
- * @file qot.hpp
- * @brief Userspace C++ API to manage QoT timelines
- * @author Andrew Symington and Fatima Anwar
+ * @file qot.h
+ * @brief A simple CPP application programming interface to the QoT stack
+ * @author Sandeep D'souza
  *
- * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Carnegie Mellon University, 2016.
+ * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- * 	1. Redistributions of source code must retain the above copyright notice,
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *  2. Redistributions in binary form must reproduce the above copyright notice,
  *     this list of conditions and the following disclaimer in the documentation
  *     and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
-​
+
 #ifndef QOT_STACK_SRC_API_CPP_QOT_H
 #define QOT_STACK_SRC_API_CPP_QOT_H
-​
-namespace qot
+
+#include <vector>
+#include <string>
+
+/* Include basic types, time math and ioctl interface */
+extern "C"
 {
-	/**
-	 * @brief Convenience decalaration
-	 */
-	typedef std::function<void(TimelineEventType event,
-		const std::string &data, timeest_t eventtime)> EventCallbackType;
-​
-	/**
-	 * @brief Various exceptions
-	 */
-	struct CannotCommunicateWithCoreException : public std::exception {
-		const char * what () const throw () {
-			return "Cannot bind to a timeline";
-		}
-	};
-	struct ProblematicUUIDException : public std::exception {
-		const char * what () const throw () {
-			return "The specified UUID exceeds the size limit";
-		}
-	};
-	struct ProblematicPinNameException : public std::exception {
-		const char * what () const throw () {
-			return "The specified pin name exceeds the size limit";
-		}
-	};
-	struct CannotBindToTimelineException : public std::exception {
-		const char * what () const throw () {
-			return "Cannot bind to a timeline";
-		}
-	};
-	struct CannotOpenPOSIXClockException : public std::exception {
-		const char * what () const throw () {
-			return "Cannot open the POSIX clock";
-		}
-	};
-	struct CommunicationWithCoreFailedException : public std::exception {
-		const char * what () const throw () {
-			return "The qot core respodned with an error";
-		}
-	};
-	struct CommunicationWithPOSIXClockException : public std::exception {
-		const char * what () const throw () {
-			return "The qot core respodned with an error";
-		}
-	};
-​
-	/**
-	 * @brief The timeline class is the primary interface between user-space code and
-	 *        the quality of time stack.
-	 */
-	class Timeline
-	{
-		/**
-		 * @brief Bind to a timeline
-		 * @param uuid A unique identifier for the timeline
-		 * @param acc Required accuracy
-		 * @param res Required resolution
-		 * @return Positive: success Negative: error
-		 **/
-​
-//////////////
-		 //////////////
-		 //////////////
-		 ////////////// Use #define msec, usec, nsec in header files and use in calls
-		 ////////////// basic datatypes: time_t (signed), interval_t ({+ve, +ve}), duration_t ({+ve}), durationest_t ({duration_t, interval_t})
-		 //////////////
-​
-		public:
-			Timeline(const std::string &uuid, duration_t resolution, interval_t accuracy);
-
-		//	accuracy_lower_limit: t_true >= t_returned - accuracy_lower_limit
-		//	accuracy_upper_limit: t_true <= t_returned + accuracy_upper_limit
-​
-		/**
-		 * @brief Unbind from a timeline
-		 **/
-		public: ~Timeline();
-​
-		/**
-		 * @brief Set the desired binding accuracy
-		 * @param accuracy The new accuracy
-		 * @return Positive: success Negative: error
-		 **/
-		public:
-			int SetAccuracy(interval_t accuracy);
-
-		/**
-		 * @brief Set the desired binding resolution
-		 * @param res The new resolution
-		 * @return Positive: success Negative: error
-		 **/
-		public: int SetResolution(duration_t res);
-​
-		/**
-		 * @brief Get the current global timeline
-		 * @return The time (in nanoseconds) since the Unix epoch
-		 **/
-		public: timeest_t GetTime();
-​
-		/**
-		 * @brief Get the accuracy achieved by the system
-		 * @return The current accuracy
-		 **/
-		public: interval_t GetAccuracy();
-​
-		/**
-		 * @brief Get the resolution achieved by the system
-		 * @return The current accuracy
-		 **/
-		public: duration_t GetResolution();
-​
-		/**
-		 * @brief Get the name of this application (how it presents itself to peers)
-		 * @return The name of the binding / application
-		 **/
-		public: std::string GetName();
-​
-		/**
-		 * @brief Get the name of this application (how it presents itself to peers)
-		 * @param name the new name for this application
-		 **/
-		public: void SetName(const std::string &name);
-​
-		/**
-		 * @brief Request a compare action on a given pin
-		 * @param pname The pin name (must be offered by the driver)
-		 * @param enable Turn compare on or off
-		 * @param start The global start time
-		 * @param high The high time of the duty cycle
-		 * @param low The low time of the duty cycle
-		 * @param limit The total number of cycles (0: infinite)
-		 * @return 0+: success, <0: error
-		 **/
-		public:
-			int ConfigPinInterrupt(const std::string &pname, time_t start, interval_t period);
-			int CancelPinInterrupt(const std::string &pname);
-​
-			int ConfigPinTimestamp(const std::string &pname, transition_t edge, EventCallbackType TimestampCallback);
-			int CancelPinTimestamp(const std::string &pname);
-​
-		/**
-		 * @brief Request to be notified of network events (device, action)
-		 * @param callback Callback funtion for device binding
-		 **/
-		public: int TimelineEventCallback(TimelineEventType type, EventCallbackType callback);
-		public: int CancelTimelineEventCallback(TimelineEventType type);
-​
-​
-​		/**
-		 * @brief Wait until some global time (if in past calls back immediately)
-		 * @param val Global time
-		 * @return Predicted error 
-		 **/
-		public: timeest_t WaitUntil(timeest_t absolute_time);
-
-		/**
-		 * @brief Wait until next period on some global time (if in past calls back immediately)
-		 * @param val Task Period in nanoseconds, epoch in ns (reference value from which task refers to time)
-		 * @return Predicted error 
-		 **/
-		//public: timeest_t WaitUntilNextPeriod(int64_t period, int64_t epoch);
-
-		/**
-		 * @brief Sleep for a given number of nanoseconds relative to the call time
-		 * @param val Number of nanoseconds
-		 * @return Predicted error 
-		 **/
-		public: timeest_t Sleep(timeest_t relative_time);
-​
-		public: int CreateTimer(
-			const std::string &name,
-			timeest_t start_time, durationest_t period, EventCallbackType TimerCallback, int count);
-		public: int DestroyTimer(const std::string &name);
-​
-​
-		// period is
-​
-​
-		/**
-		 * @brief Sleep for a given number of nanoseconds
-		 * @param val Number of nanoseconds
-		 * @return Predicted error
-		 **/
-		public: timeest_t Sleep(durationest_t delta);
-	};
+	#include <signal.h>
+	#include "../../qot_types.h"
 }
-​
+
+/* Include Messenger Framework */ 
+#include "lib/messenger.hpp"
+
+/* Opaque type */
+typedef struct timeline timeline_t;
+
+/* Function callbacks */
+typedef void (*qot_callback_t)(const qot_event_t *evt);
+
+typedef void (*qot_timer_callback_t)(int sig, siginfo_t *si, void *ucontext);
+
+/**
+ * @brief Constructor for the timeline_t data structure
+ * @return returns a pointer to the timeline_t data structure
+ **/
+timeline_t *timeline_t_create();
+
+/**
+ * @brief Destructor for the timeline_t data structure
+ * @param pointer to the timeline_t data structure
+ **/
+void timeline_t_destroy(timeline_t *timeline);
+
+/**
+ * @brief Bind to a timeline with a given resolution and accuracy
+ * @param timeline Pointer to a timeline struct
+ * @param uuid Name of the timeline
+ * @param name Name of this binding
+ * @param res Maximum tolerable unit of time
+ * @param acc Maximum tolerable deviation from true time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_bind(timeline_t *timeline, const char *uuid,
+    const char *name, timelength_t res, timeinterval_t acc);
+
+/**
+ * @brief Unbind from a timeline
+ * @param timeline Pointer to a timeline struct
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_unbind(timeline_t *timeline);
+
+/**
+ * @brief Send a Message
+ * @param timeline Pointer to a timeline struct
+ * @param message QoT Message type
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_send_message(timeline_t *timeline, qot_message_t message);
+
+/**
+ * @brief Subscribe to Messages
+ * @param timeline Pointer to a timeline struct
+ * @param message QoT Message type
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_subscribe_message(timeline_t *timeline, qot_message_t *message);
+
+/**
+ * @brief Define the cluster
+ * @param timeline Pointer to a timeline struct
+ * @param Vector of nodes names
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_define_cluster(timeline_t *timeline, const std::vector<std::string> Nodes);
+
+/**
+ * @brief Wait for all peers to join the coordination
+ * @param timeline Pointer to a timeline struct
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_wait_for_peers(timeline_t *timeline);
+
+/**
+ * @brief Get the accuracy requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param acc Maximum tolerable deviation from true time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_get_accuracy(timeline_t *timeline, timeinterval_t *acc);
+
+/**
+ * @brief Get the resolution requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param res Maximum tolerable unit of time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_get_resolution(timeline_t *timeline, timelength_t *res);
+
+/**
+ * @brief Query the name of this application
+ * @param timeline Pointer to a timeline struct
+ * @param name Pointer to the where the name will be written
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_get_name(timeline_t *timeline, char *name);
+
+/**
+ * @brief Query the timeline's UUID
+ * @param timeline Pointer to a timeline struct
+ * @param uuid Name of the timeline
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_get_uuid(timeline_t *timeline, char *uuid);
+
+
+/**
+ * @brief Set the accuracy requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param acc Maximum tolerable deviation from true time
+ * @return A status code indicating success (0) or other
+ **/
+ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc);
+
+/**
+ * @brief Set the resolution requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param res Maximum tolerable unit of time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res);
+
+/**
+ * @brief Set the periodic scheduling parameters requirement associated with this binding
+ * @param timeline Pointer to a timeline struct
+ * @param start_offset First wakeup time
+ * @param period wakeup period
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_set_schedparams(timeline_t *timeline, timelength_t *period, timepoint_t *start_offset); 
+
+/**
+ * @brief Query the time according to the core
+ * @param timeline Pointer to a timeline struct
+ * @param core_now Estimated time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now);
+
+/**
+ * @brief Query the time according to the timeline
+ * @param timeline Pointer to a timeline struct
+ * @param est Estimated time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est);
+
+/**
+ * @brief Request an interrupt be generated on a given pin
+ * @param timeline Pointer to a timeline struct
+ * @param request Pointer to interrupt configuration
+ * @param callback A function to call on each edge event
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_enable_output_compare(timeline_t *timeline, qot_perout_t *request);
+
+/**
+ * @brief Disable interrupt be generated on a given pin
+ * @param timeline Pointer to a timeline struct
+ * @param request Pointer to interrupt configuration
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_disable_output_compare(timeline_t *timeline, qot_perout_t *request);
+
+/**
+ * @brief Request an interrupt be generated on a given pin
+ * @param timeline Pointer to a timeline struct
+ * @param request Pointer to timestamp configuration
+ * @param callback A function to call on each edge event
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_config_pin_timestamp(timeline_t *timeline, qot_extts_t *request, int enable);
+
+/**
+ * @brief Perform a blocking read to get timestamp events
+ * @param timeline Pointer to a timeline struct
+ * @param event Pointer to event structure
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_read_pin_timestamps(timeline_t *timeline, qot_event_t *event);
+
+/**
+ * @brief Request to be informed of timeline events
+ * @param timeline Pointer to a timeline struct
+ * @param enable Enable or disable callback for the events
+ * @param callback The function that will be called
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_config_events(timeline_t *timeline, uint8_t enable, qot_callback_t callback);
+
+/**
+ * @brief Read events on a timeline
+ * @param timeline Pointer to a timeline struct
+ * @param event Pointer to event structure
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_read_events(timeline_t *timeline, qot_event_t *event);
+
+/**
+ * @brief Block wait until a specified uncertain point
+ * @param timeline Pointer to a timeline struct
+ * @param utp The time point at which to resume. This will be modified by the
+ *            function to reflect the predicted time of resume
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp);
+
+/**
+ * @brief Block wait until next period
+ * @param timeline Pointer to a timeline struct
+ * @param utp Returns the actual uncertain wakeup time
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_waituntil_nextperiod(timeline_t *timeline, utimepoint_t *utp);
+
+/**
+ * @brief Block for a specified length of uncertain time
+ * @param timeline Pointer to a timeline struct
+ * @param utl The period for blocking. This will be modified by the
+ *             function to reflect the estimated time of blocking
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_sleep(timeline_t *timeline, utimelength_t *utl);
+
+/**
+ * @brief Non-blocking call to create a timer
+ * @param timeline Pointer to a timeline struct
+ * @param timer A pointer to a timer object
+ * @param callback The function that will be called
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_timer_create(timeline_t *timeline, qot_timer_t *timer, qot_timer_callback_t callback);
+
+/**
+ * @brief Non-blocking call to cancel a timer
+ * @param timeline Pointer to a timeline struct
+ * @param timer A pointer to a timer object
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_timer_cancel(timeline_t *timeline, qot_timer_t *timer);
+
+/**
+ * @brief Converts core time to remote timeline time
+ * @param timeline Pointer to a timeline struct
+ * @param est timepoint to be converted
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est); 
+
+/**
+ * @brief Converts remote timeline time to core time
+ * @param timeline Pointer to a timeline struct
+ * @param est timepoint to be converted
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est); 
+
 #endif
+

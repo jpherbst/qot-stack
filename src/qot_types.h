@@ -37,6 +37,7 @@
 /* For ease of conversion */
 #define ASEC_PER_NSEC (u64)1000000000ULL
 #define ASEC_PER_USEC (u64)1000000000000ULL
+#define ASEC_PER_MSEC (u64)1000000000000000ULL
 
 #define MAX_TIMEPOINT_SEC  9223372036LL
 #define MAX_LL  9223372036854775807LL
@@ -381,6 +382,17 @@ typedef enum {
 } qot_event_type_t;
 
 /**
+ * @brief Timeline message types
+ */
+typedef enum {
+	QOT_MSG_COORD_READY        = (0),    /* Node ready            */
+	QOT_MSG_COORD_START        = (1),    /* Coordination Start    */
+	QOT_MSG_COORD_STOP         = (2),    /* Coordination Stop     */
+	QOT_MSG_SENSOR_VAL         = (3),    /* Sensor Value          */
+	QOT_MSG_INVALID            = (4),    /* Invalid Message (used as a bound for the enum List) */
+} qot_msg_type_t;
+
+/**
  * @brief Clock error types
  */
 typedef enum {
@@ -502,6 +514,14 @@ typedef struct qot_binding {
 	timepoint_t start_offset;			 /* Start offset for periodic scheduling */
 	timelength_t period;                 /* Scheduling Period */
 } qot_binding_t;
+
+/* QoT Message type */
+typedef struct qot_message {
+	char name[QOT_MAX_NAMELEN];          /* Application node name */
+	qot_msg_type_t type;				 /* Message type */
+	utimepoint_t timestamp;				 /* Uncertain timestamp associated with message*/
+	char data[QOT_MAX_NAMELEN];			 /* Message data */
+} qot_message_t;
 
 /* Upper and lower bound on current time */
 typedef struct qot_bounds {
