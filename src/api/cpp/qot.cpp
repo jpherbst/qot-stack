@@ -47,7 +47,7 @@ extern "C"
 /* This file includes */
 #include "qot.hpp"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -196,7 +196,6 @@ qot_return_t timeline_unbind(timeline_t *timeline)
 
     // Call Messenger Object Destructor 
     delete_messenger(timeline->messenger);
-
     return QOT_RETURN_TYPE_OK;
 }
 

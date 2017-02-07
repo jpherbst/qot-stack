@@ -101,6 +101,22 @@ namespace qot  {
         std::vector<std::string>& AliveNodes;
     };
 
+    /* Escape Handler handles termination of the waitset */
+    class EscapeHandler
+    {
+    public:
+        EscapeHandler(bool& terminated) : terminated(terminated) {}
+
+        void operator() (void)
+        {
+            std::cout << "Cluster Manager has terminated." << std::endl;
+            terminated = true;
+        }
+
+    private:
+        bool& terminated;
+    };
+
 }
 
 #endif

@@ -104,6 +104,12 @@ namespace qot
 		// Flag Signifying whether all  nodes have joined the DDS domain
 		public: bool readyFlag;
 
+		// Guard condition to terminate the watch thread 
+    	private: dds::core::cond::GuardCondition escape;
+
+    	// Flag to terminate the cluster manager
+		private: bool terminated;
+
 		// ClusterManagement Ready Synchronization 
 		private: std::mutex mtx;
 		private: std::condition_variable cv;
