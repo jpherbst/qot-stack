@@ -31,6 +31,8 @@
 // Get the Cluster Handlers
 #include "ClusterHandlers.hpp"
 
+#define DEBUG 0
+
 using namespace qot;
 
 std::ostream& operator <<(std::ostream& os, const qot_msgs::NameService& ns)
@@ -43,7 +45,7 @@ std::ostream& operator <<(std::ostream& os, const qot_msgs::NameService& ns)
 
 
 ClusterManager::ClusterManager(const std::string &name, const std::string &uuid)
-	: sub_entity(), name(name), uuid(uuid), ClusterNodes(), AliveNodes(), readyFlag(false)
+	: sub_entity(name, uuid), name(name), uuid(uuid), ClusterNodes(), AliveNodes()
 {
 	// Initialize the Cluster Manager	
 	/**
@@ -67,23 +69,37 @@ ClusterManager::ClusterManager(const std::string &name, const std::string &uuid)
     statusMask << dds::core::status::StatusMask::liveliness_changed();
     userLeft.enabled_statuses(statusMask);
 
+    /**
+     * A GuardCondition is assigned a handler which will be used to close
+     * the message board
+     */
+    EscapeHandler escapeHandler(terminated);
+    escape.handler(escapeHandler);
+
+
     /** A WaitSet is created and the four conditions created above are attached to it */
     waitSet += newUser;
     waitSet += userLeft;
+    waitSet += escape;
 
+    /* Start Polling Thread to wait for all users to join */
+    readyFlag = false; // Set ready flag to false -> indicates all nodes have joined
+    terminated = false; // Set terminated flag to false
     thread = boost::thread(boost::bind(&ClusterManager::watch, this));
-
-	BOOST_LOG_TRIVIAL(info) << "ClusterManager Initialized for node " << name;
+    
+    if(DEBUG)
+		BOOST_LOG_TRIVIAL(info) << "ClusterManager Initialized for node " << name;
 }
 
 ClusterManager::~ClusterManager() 
 {
 	// Can be extended later ...
 	// Join the main thread
+	escape.trigger_value(true);
 	thread.join();
 }
 
-// Subscribe to Messages
+// Define the initial cluster of nodes participating in the coordination
 qot_return_t ClusterManager::DefineCluster(const std::vector<std::string> Nodes)
 {
 	// Copy Cluster Vector from User and sort it
@@ -95,19 +111,25 @@ qot_return_t ClusterManager::DefineCluster(const std::vector<std::string> Nodes)
 qot_return_t ClusterManager::WaitForReady()
 {
 	std::unique_lock<std::mutex> lck(mtx);
+	if(DEBUG)
+		std::cout << "[ClusterManager::WaitForReady] Waiting for nodes to join: Ready Flag is " << readyFlag << "\n";
   	while (!readyFlag) 
   		cv.wait(lck);
+  	if(DEBUG)
+  		std::cout << "[ClusterManager::WaitForReady] All Nodes Joined: Ready Flag is " << readyFlag << "\n";
   	return QOT_RETURN_TYPE_OK;
 }
 
 void ClusterManager::watch()
 {
-	while(1)
+	while(!terminated)
 	{
-		waitSet.dispatch();
-		if(ClusterNodes == AliveNodes)
+		waitSet.dispatch(); 
+		if(std::includes(AliveNodes.begin(), AliveNodes.end(), ClusterNodes.begin(), ClusterNodes.end()) && !ClusterNodes.empty() && !AliveNodes.empty())
 		{
 			std::unique_lock<std::mutex> lck(mtx);
+			if(DEBUG)
+				std::cout << "Ready flag has become true" << std::endl;
 			readyFlag = true;
 			cv.notify_all();
 		}

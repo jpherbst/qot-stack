@@ -40,7 +40,7 @@ extern "C"
 	#include <sys/types.h>
 	#include <sys/inotify.h>
 
-	// So that we know the character device for the timelin
+	// So that we know the character device for the timeline
 	#include "../qot_types.h"
 }
 

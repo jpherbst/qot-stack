@@ -538,6 +538,9 @@ typedef struct stimepoint {
 	timepoint_t l_estimate;		/* Lower bound on estimate of time */
 } stimepoint_t;
 
+// Callback Function Prototypes
+typedef void (*qot_msg_callback_t)(const qot_message_t *msg);
+
 /**
  * @brief Key messages supported by /dev/timelineX
  */

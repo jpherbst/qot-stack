@@ -43,9 +43,11 @@ public:
     /**
      * This constructor initialises the entities used for publishing.
      */
-    PubEntities() :
+    PubEntities(const std::string &node_name, const std::string &timeline_uuid):
         MessageWriter(dds::core::null), nameServiceWriter(dds::core::null)
     {
+        std::ostringstream timeline_partition;
+        timeline_partition << "Messaging_" << "tl" << timeline_uuid;
         /** A dds::domain::DomainParticipant is created for the default domain. */
         dds::domain::DomainParticipant participant
             = dds::domain::DomainParticipant(org::opensplice::domain::default_id());
@@ -53,7 +55,7 @@ public:
         /** A dds::pub::Publisher is created on the domain participant. */
         dds::pub::qos::PublisherQos pubQos
             = participant.default_publisher_qos()
-                << dds::core::policy::Partition("Messaging");
+                << dds::core::policy::Partition(timeline_partition.str());
         dds::pub::Publisher publisher(participant, pubQos);
 
         /**
@@ -112,9 +114,11 @@ public:
     /**
      * This constructor initialises the entities for subscribing.
      */
-    SubEntities() :
+    SubEntities(const std::string &node_name, const std::string &timeline_uuid) :
         MessageReader(dds::core::null), nameServiceReader(dds::core::null)
     {
+        std::ostringstream timeline_partition;
+        timeline_partition << "Messaging_" << "tl" << timeline_uuid;
         /** A dds::domain::DomainParticipant is created for the default domain. */
         dds::domain::DomainParticipant participant
             = dds::domain::DomainParticipant(org::opensplice::domain::default_id());
@@ -122,7 +126,7 @@ public:
         /** A dds::sub::Subscriber is created on the domain participant. */
         dds::sub::qos::SubscriberQos subQos
             = participant.default_subscriber_qos()
-                << dds::core::policy::Partition("Messaging");
+                << dds::core::policy::Partition(timeline_partition.str());
         dds::sub::Subscriber subscriber(participant, subQos);
 
         /**
@@ -142,6 +146,19 @@ public:
         dds::topic::Topic<qot_msgs::TimelineMsgingType> MessageTopic
             = dds::topic::Topic<qot_msgs::TimelineMsgingType>(participant, "QoT_Messaging", reliableTopicQos);
 
+        // Define the filter expression -> Such that messages sent by the node are rejected
+        std::string expression = "(name <> %0)";
+
+        // Define the filter parameters
+        std::vector<std::string> params = {node_name};
+
+        // Create the filter for the content-filtered-topic
+        dds::topic::Filter filter(expression, params);
+
+        // Create the ContentFilteredTopic
+        dds::topic::ContentFilteredTopic<qot_msgs::TimelineMsgingType> cfMessageTopic
+         = dds::topic::ContentFilteredTopic<qot_msgs::TimelineMsgingType>(MessageTopic,"CFQoT_Messaging",filter);
+
         /**
          * A dds::sub::qos::DataReaderQos is created with the history set to KeepAll so
          * that all messages are kept
@@ -150,7 +167,7 @@ public:
         drQos << dds::core::policy::History::KeepAll();
 
         /** A dds::sub::DataReader is created for the qot_msgs::TimelineMsgingType topic with a modified Qos. */
-        MessageReader = dds::sub::DataReader<qot_msgs::TimelineMsgingType>(subscriber, MessageTopic, drQos);
+        MessageReader = dds::sub::DataReader<qot_msgs::TimelineMsgingType>(subscriber, cfMessageTopic, drQos);
 
         /** A dds::topic::qos::TopicQos is created with Durability set to Transient */
         dds::topic::qos::TopicQos transientTopicQos

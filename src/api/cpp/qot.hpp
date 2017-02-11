@@ -32,6 +32,7 @@
 
 #include <vector>
 #include <string>
+#include <set>
 
 /* Include basic types, time math and ioctl interface */
 extern "C"
@@ -88,15 +89,15 @@ qot_return_t timeline_unbind(timeline_t *timeline);
  * @param message QoT Message type
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_send_message(timeline_t *timeline, qot_message_t message);
+qot_return_t timeline_publish_message(timeline_t *timeline, qot_message_t message);
 
 /**
  * @brief Subscribe to Messages
  * @param timeline Pointer to a timeline struct
- * @param message QoT Message type
+ * @param MsgTypes set of message types
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_subscribe_message(timeline_t *timeline, qot_message_t *message);
+qot_return_t timeline_subscribe_message(timeline_t *timeline, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback);
 
 /**
  * @brief Define the cluster

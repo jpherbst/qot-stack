@@ -30,6 +30,7 @@
 
 #include <vector>
 #include <string>
+#include <set>
 
 // Delays (milliseconds)
 #define DELAY_HEARTBEAT 		1000
@@ -50,33 +51,73 @@ std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineMsgingType& 
 	return os;
 }
 
+// Initialize Hashmap to convert from qot_msg_type_t to the DDS idl 
+// ->> Should be changed when a new message is added
+void Messenger::initialize_hashmap()
+{
+	type_hashmap[QOT_MSG_COORD_READY] = "COORD_READY"; 
+	type_hashmap[QOT_MSG_COORD_START] = "COORD_START";
+	type_hashmap[QOT_MSG_COORD_STOP]  = "COORD_STOP";
+	type_hashmap[QOT_MSG_SENSOR_VAL]  = "SENSOR_VAL";
+	type_hashmap[QOT_MSG_INVALID]     = "INVALID_MSG";
+}
+
 // Need to populate these functions
 void Messenger::add_to_subscribed_msg_type_list(qot_msg_type_t type)
 {
+	unsigned long long temp_mask = 1;
+	temp_mask = temp_mask << type;
+	sub_type_mask = sub_type_mask | temp_mask;
 	return;
 }
 
 // Need to populate these functions
 void Messenger::remove_from_subscribed_msg_type_list(qot_msg_type_t type)
 {
+	unsigned long long temp_mask = 1;
+	temp_mask = temp_mask << type;
+	temp_mask = ~temp_mask;
+	sub_type_mask = sub_type_mask & temp_mask;
+	return;
+}
+
+// Need to populate these functions
+void Messenger::add_to_subscribed_msg_name_list(const std::string &name)
+{
+	// Add the unique name of the node to the unordered set
+	sub_nodes.insert(name);
+	return;
+}
+
+// Need to populate these functions
+void Messenger::remove_from_subscribed_msg_name_list(const std::string &name)
+{
+	// Remove the node's name from the unordered set of subscribed nodes
+	sub_nodes.erase(name);
 	return;
 }
 
 void Messenger::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr) 
 {
+	// QoT Message type
+	qot_message_t qot_msg;
 	// get only new/unread data
 	dds::sub::status::DataState aliveDataState;
             aliveDataState << dds::sub::status::SampleState::any()
                 << dds::sub::status::ViewState::any()
                 << dds::sub::status::InstanceState::alive();
 
+    // Setup query based on application subscription requests
+    query_lock.lock();
+    dds::sub::Query query(dr, sub_expression, sub_params);
+    query_lock.unlock();
     /**
      * Take messages. Using take instead of read removes the messages from
      * the system, preventing resources from being saturated due to a build
      * up of messages
      */
     dds::sub::LoanedSamples<qot_msgs::TimelineMsgingType> messages
-        = dr.select().state(aliveDataState).take();
+        = dr.select().content(query).state(aliveDataState).take();
 
     /** Output the username and content for each message */
     for (dds::sub::LoanedSamples<qot_msgs::TimelineMsgingType>::const_iterator message
@@ -84,13 +125,15 @@ void Messenger::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingT
     {
         if(message->info().valid())
         {
-            BOOST_LOG_TRIVIAL(info) << "Message Received from " << message->data().name() << " says " << message->data().type();
+            strcpy(qot_msg.name, (message->data().name()).c_str());
+            qot_msg.type = (qot_msg_type_t) message->data().type();
+            if(msg_callback != NULL)
+			{
+				msg_callback(&qot_msg);
+			}
+            //BOOST_LOG_TRIVIAL(info) << "Message Received from " << message->data().name() << " says " << message->data().type();
         }
     }
-	// for (auto &s : dr.select().state(dds::sub::status::SampleState::not_read()).take()) {
-	// 	BOOST_LOG_TRIVIAL(info) << "Message Received from " << s->data().name() << " says " << s->data().type();
-	// }
-	//BOOST_LOG_TRIVIAL(info) << "on_data_available() called";
 }
 
 void Messenger::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr, 
@@ -110,11 +153,23 @@ void Messenger::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineMsg
 }
 
 Messenger::Messenger(const std::string &name, const std::string &uuid)
-	: pub_entity(), sub_entity(),//dp(0), topic(dp, "timeline_messaging"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic),
-	name(name), uuid(uuid), cluster_manager(name, uuid)
+	: pub_entity(name, uuid), sub_entity(name, uuid), name(name), uuid(uuid), cluster_manager(name, uuid), sub_type_mask(0xffffffffffffffff)
 {
+	std::ostringstream convert;
+
+	// Initialize the hashmap for the queries
+	initialize_hashmap();
+
+	// Query expression initialization (accept all packets except the invalid ones)
+	sub_expression = "(type < %0)";
+	convert << "INVALID_MSG";
+	sub_params.clear();
+	sub_params.push_back(convert.str());
+
+	// Initialize Subscription Function pointer to NULL
+	msg_callback = NULL;
+
 	// Create the message listener
-	//dr.listener(this, dds::core::status::StatusMask::data_available());
 	sub_entity.MessageReader.listener(this, dds::core::status::StatusMask::data_available());
 
 	// Add this node to the NameService
@@ -122,13 +177,13 @@ Messenger::Messenger(const std::string &name, const std::string &uuid)
 	name_msg.name() = name;
 	pub_entity.nameServiceWriter << name_msg;
 
+
 	BOOST_LOG_TRIVIAL(info) << "Messenger Initialized for node " << timeline_msg.name();
 }
 
 Messenger::~Messenger() 
 {
 	// Cancel the listener
-	//dr.listener(nullptr, dds::core::status::StatusMask::none());
 	sub_entity.MessageReader.listener(nullptr, dds::core::status::StatusMask::none());
 	cluster_manager.~ClusterManager();
 }
@@ -154,25 +209,52 @@ qot_return_t Messenger::Publish(const qot_message_t msg)
 	return QOT_RETURN_TYPE_OK;  
 }
 
-// Subscribe to Messages
-qot_return_t Messenger::Subscribe(const qot_msg_type_t type, const std::string &name)
+// Subscribe to Messages -> The list is reset each time
+qot_return_t Messenger::Subscribe(const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback) 
 {
-	if (type >= 0 && type < QOT_MSG_INVALID)
-		add_to_subscribed_msg_type_list(type);
-	// if (!name.empty())
-	// 	add_to_subscribed_msg_name_list(name);
+	int param_count = 1;
+	std::ostringstream sub_exp_temp;
 
-	return QOT_RETURN_TYPE_OK;
-}
+	query_lock.lock();
 
-// Unsubscribe from Messages
-qot_return_t Messenger::Unsubscribe(const qot_msg_type_t type, const std::string &name)
-{
-	if (type >= 0 && type < QOT_MSG_INVALID)
-		remove_from_subscribed_msg_type_list(type);
-	// if (!name.empty())
-	// 	remove_from_subscribed_msg_name_list(name);
+	if(callback != NULL)
+	{
+		msg_callback = callback;
+	}
+	else
+	{
+		query_lock.unlock();
+		return QOT_RETURN_TYPE_ERR;
+	}
 
+	// Clear the parameter vector and the expression string
+	sub_expression = "(type < %0)";
+	sub_params.clear();
+	sub_params.push_back(type_hashmap[QOT_MSG_INVALID]);
+
+
+	// Populate the Subscription Message Type List
+	for(std::set<qot_msg_type_t>::const_iterator it = MsgTypes.begin() ; it != MsgTypes.end(); ++it)
+	{
+		if (*it >= 0 && *it < QOT_MSG_INVALID)
+		{
+			sub_params.push_back(type_hashmap[*it]);
+			if (it != MsgTypes.begin())
+			{
+				sub_exp_temp << " OR ";
+			}
+			else
+			{
+				sub_exp_temp << " AND (";
+			}
+			sub_exp_temp << "(type = %" << param_count << ")";
+			param_count++;
+		}
+	}
+	sub_exp_temp << ")";
+	sub_expression = sub_expression + sub_exp_temp.str();
+	query_lock.unlock();
+	std::cout << sub_expression << std::endl;
 	return QOT_RETURN_TYPE_OK;
 }
 

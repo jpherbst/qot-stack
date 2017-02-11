@@ -64,10 +64,16 @@ static void exit_handler(int s)
   	running = 0;
 }
 
+static void messaging_handler(const qot_message_t *msg)
+{
+    printf("Message Received from %s\n", msg->name);
+    printf("Message Type %d\n", msg->type);
+}
+
 // Main entry point of application
 int main(int argc, char *argv[])
 {
-	// Variable declaration
+	// Variable declarations
 	timeline_t *my_timeline;
 	qot_return_t retval;
 	utimepoint_t est_now;
@@ -76,8 +82,8 @@ int main(int argc, char *argv[])
 	timelength_t step_size;
 	qot_message_t message;
 
-	timelength_t resolution;//= { .sec = 0, .asec = 1e9 }; // 1nsec
-	timeinterval_t accuracy;//= { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
+	timelength_t resolution;
+	timeinterval_t accuracy;
 
 	// Accuracy and resolution values
 	resolution.sec = 0;
@@ -90,6 +96,11 @@ int main(int argc, char *argv[])
 
 	// Set the Cluster Nodes which will take part in the coordination
 	std::vector<std::string> Nodes = {"Node1", "Node2"};
+
+	// Set the Message types the node wants to subscribe to
+	std::set<qot_msg_type_t> MsgTypes;
+	MsgTypes.insert(QOT_MSG_COORD_START);
+	MsgTypes.insert(QOT_MSG_SENSOR_VAL);
 
 	int i = 0;
 
@@ -110,7 +121,7 @@ int main(int argc, char *argv[])
         step_size_ms = atoi(argv[3]);
 
     strcpy(message.name, m);
-    message.type = QOT_MSG_COORD_READY;
+    message.type = QOT_MSG_SENSOR_VAL;
 
 	// Initialize stepsize
 	TL_FROM_mSEC(step_size, step_size_ms);
@@ -141,6 +152,13 @@ int main(int argc, char *argv[])
 		goto exit_point;
 	}
 
+	// Define Message types to subscribe to
+	if(timeline_subscribe_message(my_timeline, MsgTypes, messaging_handler))
+	{
+		printf("Failed to subscribe to message\n");
+		goto exit_point;
+	}
+
 	// Wait for Peers to Join
 	printf("Waiting for peers to join ...\n");
 	if(timeline_wait_for_peers(my_timeline))
@@ -164,7 +182,7 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, exit_handler);
 
-
+	// Periodic Wakeup Loop
 	while(running)
 	{
 		if(timeline_gettime(my_timeline, &est_now))
@@ -180,7 +198,7 @@ int main(int argc, char *argv[])
 			printf("Uncertainity below         %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
 			printf("Uncertainity above         %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
 			printf("WAITING FOR %d ms\n", step_size_ms);
-			//timeline_send_message(my_timeline, message);
+			timeline_publish_message(my_timeline, message);
 
 		}
 		timepoint_add(&wake, &step_size);

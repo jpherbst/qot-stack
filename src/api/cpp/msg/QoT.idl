@@ -42,7 +42,9 @@ module qot_msgs
     enum MsgType {
 		COORD_READY,
 		COORD_START,
-		SENSOR_VAL
+		COORD_STOP,
+		SENSOR_VAL,
+		INVALID_MSG
 	};
 
 	// Uncertain Timestamp Type
