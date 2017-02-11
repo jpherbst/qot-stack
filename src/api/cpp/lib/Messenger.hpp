@@ -1,6 +1,6 @@
 /**
- * @file Messenger.cpp
- * @brief Library to manage Inter-Process Notifications for Distributed QoT based Coordinated Applications
+ * @file Messenger.hpp
+ * @brief Library Header to manage Inter-Process Notifications for Distributed QoT based Coordinated Applications
  * @author Sandeep D'souza
  *
  * Copyright (c) Carnegie Mellon University, 2016. All rights reserved.
@@ -32,6 +32,12 @@
 #include <boost/bind.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+
+// Std Includes
+#include <unordered_set>
+#include <string>
+#include <mutex>
+#include <unordered_map>
 
 // Timeline Message DDS IDL
 #include <msg/QoT_DCPS.hpp>
@@ -72,10 +78,7 @@ namespace qot
 		public: qot_return_t Publish(const qot_message_t msg);
 
 		// Subscribe to Messages
-		public: qot_return_t Subscribe(const qot_msg_type_t type, const std::string &name);
-
-		// Unsubscribe from Messages
-		public: qot_return_t Unsubscribe(const qot_msg_type_t type, const std::string &name);
+		public: qot_return_t Subscribe(const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback);
 
 		// Define the cluster -> Wrapper around the cluster manager function
 		public: qot_return_t DefineCluster(const std::vector<std::string> Nodes);
@@ -83,34 +86,45 @@ namespace qot
 		// Wait for all cluster peers to join -> Wrapper around the cluster manager function
 		public: qot_return_t WaitForPeers();
 
+		// UserFunction Callback for message
+		private: qot_msg_callback_t msg_callback;
+
 		// Private member Functions
 		// Add and remove types of messages to subscribe to
 		private: void add_to_subscribed_msg_type_list(qot_msg_type_t type);
 		private: void remove_from_subscribed_msg_type_list(qot_msg_type_t type);
+		private: void add_to_subscribed_msg_name_list(const std::string &name);
+		private: void remove_from_subscribed_msg_name_list(const std::string &name);
 
+		// DDS Query Information to filter out messages based oon subscription lists
+		private: std::string sub_expression;
+		private: std::vector<std::string> sub_params;
+		private: std::mutex query_lock; // Lock the query parameters 
+		private: std::unordered_map<int,std::string> type_hashmap; 
+		private: void initialize_hashmap();
+
+		// Private Lists of Subscribed Messages
+		private: std::unordered_set<std::string> sub_nodes; // Unordered Set of nodes subscribed to (stores the unique name of each node)
+		private: unsigned long long sub_type_mask;		    // 64-bit mask of msg types subscribed to -> Init to 0xffffffffffffffff (all messages allowed)
 
 		// Messenger information about the application and the timeline
 		private: std::string uuid;    // timeline uuid
 		private: std::string name;    // application name
 
 		// Join the DDS domain to exchange information about timelines
-		// private: dds::domain::DomainParticipant dp;
-		// private: dds::topic::Topic<qot_msgs::TimelineMsgingType> topic;
-		// private: dds::pub::Publisher pub;
-		// private: dds::pub::DataWriter<qot_msgs::TimelineMsgingType> dw;
-		// private: dds::sub::Subscriber sub;
-		// private: dds::sub::DataReader<qot_msgs::TimelineMsgingType> dr;
 		private: qot_msgs::TimelineMsgingType timeline_msg;
 		private: qot_msgs::NameService name_msg;
-		// private: std::string filter_expression;
-		// private: std::vector<qot_msgs::MsgType> filter_params; 
 		private: qot::PubEntities pub_entity;
 		private: qot::SubEntities sub_entity;
 
 		// Cluster Management Class
 		private: qot::ClusterManager cluster_manager; 
 
+
+
 	};
 }
 
 #endif
+
+

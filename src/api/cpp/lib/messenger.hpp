@@ -55,6 +55,9 @@ void delete_messenger(messenger_t messenger);
 /* Publish Message*/
 qot_return_t publish_message(messenger_t messenger, qot_message_t msg);
 
+/* Subscribe Message*/
+qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback);
+
 /* Define the Nodes participating in the coordination */
 qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes);
 

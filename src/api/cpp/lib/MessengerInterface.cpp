@@ -27,10 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include "Messenger.hpp"
-// extern "C"
-// {
-    #include "messenger.hpp"
-//}
+
+#include "messenger.hpp"
 
 messenger_t create_messenger(const char *name, const char *uuid) 
 {
@@ -49,6 +47,15 @@ qot_return_t publish_message(messenger_t messenger, qot_message_t msg)
     qot_return_t retval;
     qot::Messenger* typed_obj = static_cast<qot::Messenger*>(messenger);
     retval = typed_obj->Publish(msg);
+    return retval;
+}
+
+/* Subscribe Message*/
+qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback)
+{
+    qot_return_t retval;
+    qot::Messenger* typed_obj = static_cast<qot::Messenger*>(messenger);
+    retval = typed_obj->Subscribe(MsgTypes, callback);
     return retval;
 }
 

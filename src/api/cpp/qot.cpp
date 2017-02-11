@@ -47,7 +47,7 @@ extern "C"
 /* This file includes */
 #include "qot.hpp"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -199,16 +199,17 @@ qot_return_t timeline_unbind(timeline_t *timeline)
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_send_message(timeline_t *timeline, qot_message_t message) 
+qot_return_t timeline_publish_message(timeline_t *timeline, qot_message_t message) 
 {
     publish_message(timeline->messenger, message);
     return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t timeline_subscribe_message(timeline_t *timeline, qot_message_t *message)
+qot_return_t timeline_subscribe_message(timeline_t *timeline, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback)
 {
-    // Populate the logic later
-    return QOT_RETURN_TYPE_OK;
+    qot_return_t retval;
+    retval = subscribe_message(timeline->messenger, MsgTypes, callback);
+    return retval;
 }
 
 qot_return_t timeline_define_cluster(timeline_t *timeline, const std::vector<std::string> Nodes)
