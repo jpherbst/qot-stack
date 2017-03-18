@@ -92,9 +92,9 @@ int main(int argc, char *argv[])
 	if (argc > 2)
 		m = argv[2];
 
-    // Loop Interval
-    if (argc > 3)
-        step_size_ms = atoi(argv[3]);
+        // Loop Interval
+        if (argc > 3)
+                step_size_ms = atoi(argv[3]);
 
 	// Initialize stepsize
 	TL_FROM_mSEC(step_size, step_size_ms);

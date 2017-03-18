@@ -14,6 +14,16 @@ IF (CROSS_AM335X)
 	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
 	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf")
 ENDIF (CROSS_AM335X)
+IF (X86_64)
+	SET(Boost_USE_STATIC_LIBS        OFF)
+	SET(Boost_USE_STATIC_RUNTIME     OFF)
+	SET(Boost_USE_MULTITHREADED      ON)
+	SET(Boost_ALL_DYN_LINK           ON)
+	SET(Boost_NO_SYSTEM_PATHS        ON)
+	SET(BOOST_ROOT       "${CROSS_COMPILE_ROOTFS}/usr")
+	SET(BOOST_INCLUDEDIR "${CROSS_COMPILE_ROOTFS}/usr/include")
+	SET(BOOST_LIBRARYDIR "${CROSS_COMPILE_ROOTFS}/usr/lib/x86_64-linux-gnu")
+ENDIF (X86_64)
 
 # This is required for boost::log
 ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
@@ -32,16 +42,31 @@ INCLUDE_DIRECTORIES(
 )
 
 # Location of boost libraries
-LINK_DIRECTORIES(
-	"${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf"
-	"${Boost_LIBRARY_DIRS}"
-)
+IF (CROSS_AM335X)
+	LINK_DIRECTORIES(
+		"${CROSS_COMPILE_ROOTFS}/usr/lib/arm-linux-gnueabihf"
+		"${Boost_LIBRARY_DIRS}"
+	)
+ENDIF (CROSS_AM335X)
+IF (X86_64)
+	LINK_DIRECTORIES(
+		"${CROSS_COMPILE_ROOTFS}/usr/lib/x86_64-linux-gnu"
+		"${Boost_LIBRARY_DIRS}"
+	)
+ENDIF (X86_64)
+
 
 #################################################################################################
 
 # Hint for finding opensplice
-SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux-dev")
-SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux-dev")
+IF (CROSS_AM335X)
+	SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux-dev")
+	SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/armv7l.linux-dev")
+ENDIF (CROSS_AM335X)
+IF (X86_64)
+	SET(ENV{OSPL_BASE} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
+	SET(ENV{OSPL_HOME} "${PROJECT_SOURCE_DIR}/thirdparty/opensplice/install/HDE/x86_64.linux-dev")
+ENDIF (X86_64)
 
 # Configure cross compilation
 IF (CROSS_AM335X)
