@@ -40,3 +40,8 @@ ADD_SUBDIRECTORY(dw1000)
 IF (CROSS_AM335X)
 	ADD_SUBDIRECTORY(qot_am335x)
 ENDIF (CROSS_AM335X)
+
+# Generic (or x86) Driver for Platforms that lack pins
+IF (X86_64)
+	ADD_SUBDIRECTORY(qot_x86)
+ENDIF (X86_64)

@@ -1,5 +1,6 @@
 obj-m += qot.o
 obj-m += qot_am335x.o
+obj-m += qot_x86.o
 qot-objs := qot_core.o              \
 			qot_clock.o             \
 			qot_clock_sysfs.o       \

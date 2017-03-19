@@ -44,7 +44,7 @@
 /* This file includes */
 #include "qot.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* Timeline implementation */
 typedef struct timeline {

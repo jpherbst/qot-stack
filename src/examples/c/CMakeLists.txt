@@ -67,15 +67,15 @@ ADD_EXECUTABLE(helloworld_control_pwm
 )
 TARGET_LINK_LIBRARIES(helloworld_control_pwm qot)
 
-ADD_EXECUTABLE(helloworld_gpio_multiple
-	helloworld_gpio_multiple.c
-)
-TARGET_LINK_LIBRARIES(helloworld_gpio_multiple qot -lrt -lm)
+#ADD_EXECUTABLE(helloworld_gpio_multiple
+#	helloworld_gpio_multiple.c
+#)
+#TARGET_LINK_LIBRARIES(helloworld_gpio_multiple qot -lrt -lm)
 
-ADD_EXECUTABLE(helloworld_compare_demo
-	helloworld_compare_demo.c
-)
-TARGET_LINK_LIBRARIES(helloworld_compare_demo qot -lrt -lm)
+#ADD_EXECUTABLE(helloworld_compare_demo
+#	helloworld_compare_demo.c
+#)
+#TARGET_LINK_LIBRARIES(helloworld_compare_demo qot -lrt -lm)
 
 
 # Install the executables to the given prefix
@@ -196,20 +196,20 @@ INSTALL(
 		applications
 )
 
-INSTALL(
-	TARGETS 
-		helloworld_gpio_multiple
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
+#INSTALL(
+#	TARGETS 
+#		helloworld_gpio_multiple
+#	DESTINATION 
+#		bin 
+#	COMPONENT 
+#		applications
+#)
 
-INSTALL(
-	TARGETS 
-		helloworld_compare_demo
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
+#INSTALL(
+#	TARGETS 
+#		helloworld_compare_demo
+#	DESTINATION 
+#		bin 
+#	COMPONENT 
+#		applications
+#)
