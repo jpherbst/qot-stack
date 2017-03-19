@@ -81,7 +81,7 @@ namespace qot
 		public: qot_return_t Subscribe(const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback);
 
 		// Define the cluster -> Wrapper around the cluster manager function
-		public: qot_return_t DefineCluster(const std::vector<std::string> Nodes);
+		public: qot_return_t DefineCluster(const std::vector<std::string> Nodes, qot_node_callback_t callback);
 
 		// Wait for all cluster peers to join -> Wrapper around the cluster manager function
 		public: qot_return_t WaitForPeers();

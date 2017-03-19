@@ -39,12 +39,16 @@
 using namespace qot;
 
 
-NewUserHandler::NewUserHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, dds::sub::status::DataState& dataState)
-: dataState(dataState), ClusterNodes(ClusterNodes), AliveNodes(AliveNodes) {}
+NewUserHandler::NewUserHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, qot_node_callback_t callback, dds::sub::status::DataState& dataState)
+: dataState(dataState), ClusterNodes(ClusterNodes), AliveNodes(AliveNodes) 
+{
+    node_callback = callback;
+}
 
 void NewUserHandler::operator() (dds::sub::DataReader<qot_msgs::NameService>& dr)
 {
-     dds::sub::status::DataState newDataState;
+    qot_node_t node_info;
+    dds::sub::status::DataState newDataState;
     newDataState << dds::sub::status::SampleState::not_read()
             << dds::sub::status::ViewState::new_view()
             << dds::sub::status::InstanceState::alive();
@@ -60,16 +64,26 @@ void NewUserHandler::operator() (dds::sub::DataReader<qot_msgs::NameService>& dr
             std::cout << "New user: " << message->data().name() << std::endl;
             // Add to List of Active Nodes
             AliveNodes.insert(std::upper_bound(AliveNodes.begin(), AliveNodes.end(), message->data().name()), message->data().name());
+            // Populate Callback information
+            strcpy(node_info.name, (message->data().name()).c_str()); 
+            node_info.userID = message->data().userID();
+            node_info.status = QOT_NODE_JOINED;
+            // Trigger a Callback to the application
+            if(node_callback != NULL)
+                node_callback(&node_info);
         }
     }
 }
 
-UserLeftHandler::UserLeftHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, dds::sub::DataReader<qot_msgs::NameService>& nameServiceReader)
-    : nameServiceReader(nameServiceReader), prevAliveCount(0),
-      ClusterNodes(ClusterNodes), AliveNodes(AliveNodes) {}
+UserLeftHandler::UserLeftHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, qot_node_callback_t callback, dds::sub::DataReader<qot_msgs::NameService>& nameServiceReader)
+: nameServiceReader(nameServiceReader), prevAliveCount(0), ClusterNodes(ClusterNodes), AliveNodes(AliveNodes) 
+{
+    node_callback = callback;
+}
 
 void UserLeftHandler::operator() (dds::core::Entity& e)
 {
+    qot_node_t node_info;
     dds::sub::DataReader<qot_msgs::TimelineMsgingType>& MessageReader
         = (dds::sub::DataReader<qot_msgs::TimelineMsgingType>&)e;
 
@@ -96,6 +110,13 @@ void UserLeftHandler::operator() (dds::core::Entity& e)
                 std::cout << "Departed user: " << user->data().name();
                 // Remove User from Alive Nodes
                 AliveNodes.erase(std::remove(AliveNodes.begin(), AliveNodes.end(), user->data().name()), AliveNodes.end());
+                 // Populate Callback information
+                strcpy(node_info.name, (user->data().name()).c_str()); 
+                node_info.userID = user->data().userID();
+                node_info.status = QOT_NODE_LEFT;
+                // Trigger a Callback to the application
+                if(node_callback != NULL)
+                    node_callback(&node_info);
                 //terminated = true;
             }
         }

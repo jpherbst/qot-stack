@@ -48,6 +48,9 @@ ClusterManager::ClusterManager(const std::string &name, const std::string &uuid)
 	: sub_entity(name, uuid), name(name), uuid(uuid), ClusterNodes(), AliveNodes()
 {
 	// Initialize the Cluster Manager	
+	/* Set the callback to NULL*/
+	node_callback = NULL;
+	
 	/**
      * A ReadCondition is created and assigned a handler which is triggered
      * when a new user joins
@@ -56,14 +59,14 @@ ClusterManager::ClusterManager(const std::string &name, const std::string &uuid)
     newDataState << dds::sub::status::SampleState::not_read()
             << dds::sub::status::ViewState::new_view()
             << dds::sub::status::InstanceState::alive();
-    qot::NewUserHandler newUserHandler(ClusterNodes, AliveNodes, newDataState);
+    qot::NewUserHandler newUserHandler(ClusterNodes, AliveNodes, node_callback, newDataState);
     dds::sub::cond::ReadCondition newUser(sub_entity.nameServiceReader, newDataState, newUserHandler);
 
     /**
      * A StatusCondition is created and assigned a handler which is triggered
      * when a DataWriter changes it's liveliness
      */
-    qot::UserLeftHandler userLeftHandler(ClusterNodes, AliveNodes, sub_entity.nameServiceReader);
+    qot::UserLeftHandler userLeftHandler(ClusterNodes, AliveNodes, node_callback, sub_entity.nameServiceReader);
     dds::core::cond::StatusCondition userLeft(sub_entity.MessageReader, userLeftHandler);
     dds::core::status::StatusMask statusMask;
     statusMask << dds::core::status::StatusMask::liveliness_changed();
@@ -100,11 +103,12 @@ ClusterManager::~ClusterManager()
 }
 
 // Define the initial cluster of nodes participating in the coordination
-qot_return_t ClusterManager::DefineCluster(const std::vector<std::string> Nodes)
+qot_return_t ClusterManager::DefineCluster(const std::vector<std::string> Nodes, qot_node_callback_t callback)
 {
 	// Copy Cluster Vector from User and sort it
 	ClusterNodes.assign(Nodes.begin(), Nodes.end());
 	std::sort(ClusterNodes.begin(), ClusterNodes.end());
+	node_callback = callback;
 	return QOT_RETURN_TYPE_OK;
 }
 

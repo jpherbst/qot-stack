@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
 		return QOT_RETURN_TYPE_ERR;
 	}
 	// Define Cluster
-	if(timeline_define_cluster(my_timeline, Nodes))
+	if(timeline_define_cluster(my_timeline, Nodes, NULL))
 	{
 		printf("Failed to define cluster\n");
 		goto exit_point;

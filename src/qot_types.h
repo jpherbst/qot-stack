@@ -538,8 +538,21 @@ typedef struct stimepoint {
 	timepoint_t l_estimate;		/* Lower bound on estimate of time */
 } stimepoint_t;
 
+/* @brief Cluster Management Flags*/
+typedef enum {
+    QOT_NODE_JOINED  = (0),
+    QOT_NODE_LEFT
+} qot_node_status_t;
+
+typedef struct qot_node {
+	char name[QOT_MAX_NAMELEN];          /* Application node name     */
+	long userID; 						 /* Unique userID of the node */
+	qot_node_status_t status;            /* Status of the node        */
+} qot_node_t;
+
 // Callback Function Prototypes
 typedef void (*qot_msg_callback_t)(const qot_message_t *msg);
+typedef void (*qot_node_callback_t)(qot_node_t *node);
 
 /**
  * @brief Key messages supported by /dev/timelineX

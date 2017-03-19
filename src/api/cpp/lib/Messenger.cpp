@@ -258,10 +258,10 @@ qot_return_t Messenger::Subscribe(const std::set<qot_msg_type_t> &MsgTypes, qot_
 	return QOT_RETURN_TYPE_OK;
 }
 
-qot_return_t Messenger::DefineCluster(const std::vector<std::string> Nodes)
+qot_return_t Messenger::DefineCluster(const std::vector<std::string> Nodes, qot_node_callback_t callback)
 {
 	// Call the Cluster Manager Cluster Define Function
-	cluster_manager.DefineCluster(Nodes);
+	cluster_manager.DefineCluster(Nodes, callback);
 	return QOT_RETURN_TYPE_OK;
 }
 

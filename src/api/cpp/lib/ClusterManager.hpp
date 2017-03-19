@@ -71,7 +71,7 @@ namespace qot
 		public: ~ClusterManager();
 	
 		// Define the nodes which will be a part of the coordination
-		public: qot_return_t DefineCluster(const std::vector<std::string> Nodes);
+		public: qot_return_t DefineCluster(const std::vector<std::string> Nodes, qot_node_callback_t callback);
 
 		// Wait for al the nodes to join the cluster
 		public: qot_return_t WaitForReady();
@@ -113,6 +113,9 @@ namespace qot
 		// ClusterManagement Ready Synchronization 
 		private: std::mutex mtx;
 		private: std::condition_variable cv;
+
+		// ClusterManagement User Callback
+		private: qot_node_callback_t node_callback;
 
 	};
 }
