@@ -4,9 +4,9 @@ obj-m += qot_core.o
 obj-m += qot_am335x.o
 
 KERNELDIR ?= /export/bb-kernel/KERNEL
-#KERNELVER ?= 4.1.12-bone-rt-r16
+KERNELVER ?= 4.1.12-bone-rt-r16
 #KERNELVER ?= 4.6.3-bone-rt-r3
-KERNELVER ?= 4.4.49-test
+#KERNELVER ?= 4.4.49-test
 
 IPADDR ?= 192.168.1.110
 
@@ -19,6 +19,7 @@ clean:
 install:
 	sudo cp -v src/modules/qot/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v src/modules/qot_am335x/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
+	sudo cp -v src/modules/qot_x86/*.ko /export/rootfs/lib/modules/$(KERNELVER)/kernel/drivers/misc
 	sudo cp -v *.dtbo /export/rootfs/lib/firmware
 	sudo cp -v ./src/qot-daemon/test.sh /export/rootfs/home
 	sudo cp targets/common/80-qot.rules /export/rootfs/etc/udev/rules.d/

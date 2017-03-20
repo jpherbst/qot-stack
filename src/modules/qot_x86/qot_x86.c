@@ -29,6 +29,7 @@
 
 /* Sufficient to develop a device-tree based platform driver */
 #include <linux/version.h>
+#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
@@ -53,12 +54,14 @@ struct qot_x86_data;
 // Global Pointer for quick access
 static struct qot_x86_data *qot_x86_data_ptr = NULL;
 
+// Scheduler Interface
 struct qot_x86_sched_interface {
 	struct qot_x86_data *parent;					/* Pointer to parent      */
 	struct hrtimer timer;                           /* HRTIMER for scheduling */
 	long (*callback)(void);                         /* QoT Callback           */
 };
 
+// Platform Data Structure
 struct qot_x86_data {
 	raw_spinlock_t lock;						/* Protects timer registers */
 	struct ptp_clock *clock;					/* PTP clock */
@@ -90,6 +93,7 @@ static int qot_x86_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	raw_spin_lock_irqsave(&pdata->lock, flags);
 	// Grab a raw monotonic timestamp from the clocksource
 	getrawmonotonic(&raw_monotonic_ts);
+	//ktime_get_ts(&monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	*ts = timespec_to_timespec64(raw_monotonic_ts);
 	return 0;
@@ -152,7 +156,7 @@ static struct ptp_clock_info qot_x86_info = {
 	.verify     = qot_x86_verify,
 };
 
-// TIMER MANAGEMENT ////////////////////////////////////////////////////////////
+// CORE TIME READ FUNCTIONALITY///////////////////////////////////////////////////////
 static timepoint_t qot_x86_read_time(void)
 {
 	s64 ns;
@@ -165,6 +169,7 @@ static timepoint_t qot_x86_read_time(void)
 	raw_spin_lock_irqsave(&pdata->lock, flags);
 	// Grab a raw monotonic timestamp from the clocksource
 	getrawmonotonic(&raw_monotonic_ts);
+	//ktime_get_ts(&monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = timespec_to_ns(&raw_monotonic_ts);
 	TP_FROM_nSEC(time_now, (s64)ns);
@@ -241,26 +246,14 @@ static long qot_x86_wake(void)
 }
 
 
-// DEVICE TREE PARSING /////////////////////////////////////////////////////////
+// MODULE CLEANUP /////////////////////////////////////////////////////////
 
 static void qot_x86_cleanup(struct qot_x86_data *pdata)
 {
 	pr_info("qot_x86: Cleaning up...\n");
 	if (pdata) {
-
 		/* Remove the PTP clock */
 		ptp_clock_unregister(pdata->clock);
-
-		/* Free PTP pin cofniguration */
-		if (pdata->info.pin_config)
-		{
-			kfree(pdata->info.pin_config);
-			pdata->info.pin_config = NULL;
-		}
-
-		/* Free platform data */
-		kfree(pdata);
-		pdata = NULL;
 	}
 }
 
@@ -280,7 +273,7 @@ struct qot_clock_impl qot_x86_impl_info = {
 	.wake = qot_x86_wake
 };
 
-/// DEVICE TREE PARSING
+/// MODULE INITIALIZATION
 static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 {
 	//struct device *dev = &pdev->dev;
@@ -334,7 +327,6 @@ err:
 
 
 // MODULE LOADING AND UNLOADING  ///////////////////////////////////////////////
-
 static int qot_x86_probe(struct platform_device *pdev)
 {
 	timelength_t read_lat_estimate;		/* Estimate of Read Latency */
@@ -404,7 +396,31 @@ static struct platform_driver qot_x86_driver = {
 	},
 };
 
-module_platform_driver(qot_x86_driver);
+static struct platform_device qot_x86_device = {
+	.name = MODULE_NAME,
+};
+
+int qot_x86_init(void)
+{
+    /* Registering with Kernel */
+    platform_driver_register(&qot_x86_driver);
+    platform_device_register(&qot_x86_device);
+
+    return 0;
+}
+
+void qot_x86_exit(void)
+{
+    /* Unregistering from Kernel */
+    platform_device_unregister(&qot_x86_device);
+    platform_driver_unregister(&qot_x86_driver);
+    return;
+}
+
+module_init(qot_x86_init);
+module_exit(qot_x86_exit);
+
+//module_platform_driver(qot_x86_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sandeep Dsouza");

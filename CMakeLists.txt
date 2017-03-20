@@ -6,7 +6,8 @@ PROJECT(qot-stack)
 
 # Cross-compile options for the BeagleBone Black
 OPTION(CROSS_AM335X "Build for the am335x" OFF)
-OPTION(X86_64 "Build for generic x86_64" OFF)
+OPTION(X86_64 "Build for x86_64" OFF)
+OPTION(GENERIC_BUILD "Build for Linux (arch independent)" OFF)
 IF (CROSS_AM335X)
 	SET(CROSS_KERNEL /export/bb-kernel/KERNEL)
 	SET(CROSS_PREFIX /export/bb-kernel/dl/gcc-linaro-4.9-2015.05-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-)

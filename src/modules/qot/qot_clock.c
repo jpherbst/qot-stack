@@ -192,7 +192,7 @@ qot_return_t qot_clock_register(qot_clock_impl_t *impl)
 qot_return_t qot_clock_unregister(qot_clock_impl_t *impl)
 {
     clk_t *clk_priv = NULL;
-    if (!clk_priv)
+    if (!impl)
         return QOT_RETURN_TYPE_ERR;
     clk_priv = qot_clock_find(impl->info.name);
     if (!clk_priv)

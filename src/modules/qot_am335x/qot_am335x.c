@@ -922,8 +922,8 @@ static void qot_am335x_cleanup(struct qot_am335x_data *pdata)
 		}
 
 		/* Free platform data */
-		kfree(pdata);
-		pdata = NULL;
+		// kfree(pdata);
+		// pdata = NULL;
 	}
 }
 

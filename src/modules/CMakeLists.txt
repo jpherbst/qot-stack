@@ -42,6 +42,7 @@ IF (CROSS_AM335X)
 ENDIF (CROSS_AM335X)
 
 # Generic (or x86) Driver for Platforms that lack pins
-IF (X86_64)
+IF (X86_64 OR GENERIC_BUILD)
 	ADD_SUBDIRECTORY(qot_x86)
-ENDIF (X86_64)
+ENDIF (X86_64 OR GENERIC_BUILD)
+
