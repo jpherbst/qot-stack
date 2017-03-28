@@ -409,20 +409,19 @@ typedef enum {
     QOT_CLK_STATE_OFF,
 } qot_clk_state_t;
 
-
 /* QoT timeline type */
 typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name                     */
     int index;                           /* The integer Y in /dev/timelineY   */
-    #ifdef __KERNEL__
-    // Changes added by Sandeep -> Scheduler Specific Stuff
-    struct rb_root event_head;           /* RB tree head for events on this timeline */
-    raw_spinlock_t rb_lock;              /* RB tree spinlock */
-    #endif
+    // #ifdef __KERNEL__
+    // //Changes added by Sandeep -> Scheduler Specific Stuff
+    // struct rb_root event_head;            RB tree head for events on this timeline 
+    // raw_spinlock_t rb_lock;              /* RB tree spinlock */
+    // #endif
 } qot_timeline_t;
 
 /* QoT wait until */
-typedef struct qot_sleeper {
+typedef struct  qot_sleeper {
 	qot_timeline_t timeline;	        /* Timeline Information    */
 	utimepoint_t wait_until_time;	    /* Uncertain time of event */
 } qot_sleeper_t;
@@ -538,8 +537,21 @@ typedef struct stimepoint {
 	timepoint_t l_estimate;		/* Lower bound on estimate of time */
 } stimepoint_t;
 
+/* @brief Cluster Management Flags*/
+typedef enum {
+    QOT_NODE_JOINED  = (0),
+    QOT_NODE_LEFT
+} qot_node_status_t;
+
+typedef struct qot_node {
+	char name[QOT_MAX_NAMELEN];          /* Application node name     */
+	long userID; 						 /* Unique userID of the node */
+	qot_node_status_t status;            /* Status of the node        */
+} qot_node_t;
+
 // Callback Function Prototypes
 typedef void (*qot_msg_callback_t)(const qot_message_t *msg);
+typedef void (*qot_node_callback_t)(qot_node_t *node);
 
 /**
  * @brief Key messages supported by /dev/timelineX

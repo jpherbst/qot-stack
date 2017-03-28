@@ -280,8 +280,8 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
 
     /* Notify the connection (by polling) of all existing timelines */
     timeline = NULL;
+    raw_spin_lock_irqsave(&qot_timeline_lock, flags);
     if (qot_timeline_first(&timeline)==QOT_RETURN_TYPE_OK) {
-        raw_spin_lock_irqsave(&qot_timeline_lock, flags);
         do {
             event = kzalloc(sizeof(event_t), GFP_KERNEL);
             if (!event) {
@@ -297,10 +297,10 @@ static int qot_user_chdev_ioctl_open(struct inode *i, struct file *f)
             //up(&con->list_sem);
             raw_spin_unlock_irqrestore(&con->list_lock, flags1);
         } while (qot_timeline_next(&timeline)==QOT_RETURN_TYPE_OK);
-        raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
         con->event_flag = 1;
         wake_up_interruptible(&con->wq);
     }
+    raw_spin_unlock_irqrestore(&qot_timeline_lock, flags);
     pr_info("qot_user_chdev_ioctl_open: /dev/qotusr file opened\n");
     return 0;
 }
@@ -403,15 +403,15 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (copy_from_user(&sleeper, (qot_sleeper_t*)arg, sizeof(qot_sleeper_t)))
             return -EACCES;
         timeline = &sleeper.timeline;
+        //pr_info("blah::%llu\n", TP_TO_nSEC(sleeper.wait_until_time.estimate));
+        //pr_info("chek::%lld %llu\n", sleeper.wait_until_time.estimate.sec, sleeper.wait_until_time.estimate.asec);
 
         // Check if the timeline exists
         if (qot_timeline_get_info(&timeline))
             return -EACCES;
-
         // Wait until the required time
         wait_until_retval = qot_attosleep(&sleeper.wait_until_time, timeline);
         qot_clock_get_core_time(&sleeper.wait_until_time);
-
         // convert from core time to timeline reference of time
         coretime = TP_TO_nSEC(sleeper.wait_until_time.estimate);
         qot_loc2rem(timeline->index, 0, &coretime);

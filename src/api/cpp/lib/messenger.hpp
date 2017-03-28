@@ -59,7 +59,7 @@ qot_return_t publish_message(messenger_t messenger, qot_message_t msg);
 qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback);
 
 /* Define the Nodes participating in the coordination */
-qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes);
+qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes, qot_node_callback_t callback);
 
 /* Wait for all peers to join the cluster*/
 qot_return_t wait_for_peers_to_join(messenger_t messenger);

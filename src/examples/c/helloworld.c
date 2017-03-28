@@ -92,9 +92,9 @@ int main(int argc, char *argv[])
 	if (argc > 2)
 		m = argv[2];
 
-    // Loop Interval
-    if (argc > 3)
-        step_size_ms = atoi(argv[3]);
+        // Loop Interval
+        if (argc > 3)
+                step_size_ms = atoi(argv[3]);
 
 	// Initialize stepsize
 	TL_FROM_mSEC(step_size, step_size_ms);
@@ -169,9 +169,8 @@ int main(int argc, char *argv[])
 		}
 		timepoint_add(&wake, &step_size);
 		wake_now.estimate = wake;
-		timeline_waituntil(my_timeline, &wake_now);
+	 	timeline_waituntil(my_timeline, &wake_now);
 	}
-	
 
 	// Unbind from timeline
 	if(timeline_unbind(my_timeline))

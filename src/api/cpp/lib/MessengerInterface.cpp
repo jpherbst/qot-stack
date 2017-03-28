@@ -59,11 +59,11 @@ qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_typ
     return retval;
 }
 
-qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes) 
+qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes, qot_node_callback_t callback) 
 {
 	qot_return_t retval;
 	qot::Messenger* typed_obj = static_cast<qot::Messenger*>(messenger);
-	retval = typed_obj->DefineCluster(Nodes);
+	retval = typed_obj->DefineCluster(Nodes, callback);
 	return retval;
 }
 

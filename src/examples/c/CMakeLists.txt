@@ -184,4 +184,3 @@ INSTALL(
 	COMPONENT 
 		applications
 )
-

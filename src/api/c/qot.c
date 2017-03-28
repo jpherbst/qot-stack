@@ -502,12 +502,12 @@ qot_return_t timeline_waituntil(timeline_t *timeline, utimepoint_t *utp)
     sleeper.wait_until_time = *utp;
 
     if(DEBUG)
-        printf("Task invoked wait until secs %lld %llu\n", utp->estimate.sec, utp->estimate.asec);
+        printf("Task invoked wait until secs %lld %llu\n", sleeper.wait_until_time.estimate.sec, sleeper.wait_until_time.estimate.asec);
     
     // Blocking wait on remote timeline time
     if(ioctl(timeline->qotusr_fd, QOTUSR_WAIT_UNTIL, &sleeper) < 0)
     {
-        return QOT_RETURN_TYPE_ERR;
+       return QOT_RETURN_TYPE_ERR;
     }
     *utp = sleeper.wait_until_time;
     return QOT_RETURN_TYPE_OK;

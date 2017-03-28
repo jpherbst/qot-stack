@@ -212,10 +212,10 @@ qot_return_t timeline_subscribe_message(timeline_t *timeline, const std::set<qot
     return retval;
 }
 
-qot_return_t timeline_define_cluster(timeline_t *timeline, const std::vector<std::string> Nodes)
+qot_return_t timeline_define_cluster(timeline_t *timeline, const std::vector<std::string> Nodes, qot_node_callback_t callback)
 {
     qot_return_t retval;
-    retval = define_cluster(timeline->messenger, Nodes);
+    retval = define_cluster(timeline->messenger, Nodes, callback);
     return retval;
 }
 

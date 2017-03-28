@@ -70,13 +70,15 @@ namespace qot  {
         /**
          * @param dataState The dataState on which to filter the messages
          */
-        NewUserHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, dds::sub::status::DataState& dataState);
+        NewUserHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, qot_node_callback_t callback, dds::sub::status::DataState& dataState);
         void operator() (dds::sub::DataReader<qot_msgs::NameService>& dr);
 
     private:
         dds::sub::status::DataState& dataState;
         std::vector<std::string>& ClusterNodes;
         std::vector<std::string>& AliveNodes;
+        qot_node_callback_t node_callback;
+
     };
 
     /**
@@ -90,7 +92,7 @@ namespace qot  {
         /**
          * @param nameServiceReader the dds::sub::DataReader<qot_msgs::NameService>
          */
-        UserLeftHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, dds::sub::DataReader<qot_msgs::NameService>& nameServiceReader);
+        UserLeftHandler(std::vector<std::string>& ClusterNodes, std::vector<std::string>& AliveNodes, qot_node_callback_t callback, dds::sub::DataReader<qot_msgs::NameService>& nameServiceReader);
 
         void operator() (dds::core::Entity& e);
 
@@ -99,6 +101,8 @@ namespace qot  {
         int prevAliveCount;
         std::vector<std::string>& ClusterNodes;
         std::vector<std::string>& AliveNodes;
+        qot_node_callback_t node_callback;
+
     };
 
     /* Escape Handler handles termination of the waitset */
