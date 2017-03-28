@@ -169,9 +169,8 @@ int main(int argc, char *argv[])
 		}
 		timepoint_add(&wake, &step_size);
 		wake_now.estimate = wake;
-		timeline_waituntil(my_timeline, &wake_now);
+	 	timeline_waituntil(my_timeline, &wake_now);
 	}
-	
 
 	// Unbind from timeline
 	if(timeline_unbind(my_timeline))

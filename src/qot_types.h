@@ -409,20 +409,19 @@ typedef enum {
     QOT_CLK_STATE_OFF,
 } qot_clk_state_t;
 
-
 /* QoT timeline type */
 typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name                     */
     int index;                           /* The integer Y in /dev/timelineY   */
-    #ifdef __KERNEL__
-    // Changes added by Sandeep -> Scheduler Specific Stuff
-    struct rb_root event_head;           /* RB tree head for events on this timeline */
-    raw_spinlock_t rb_lock;              /* RB tree spinlock */
-    #endif
+    // #ifdef __KERNEL__
+    // //Changes added by Sandeep -> Scheduler Specific Stuff
+    // struct rb_root event_head;            RB tree head for events on this timeline 
+    // raw_spinlock_t rb_lock;              /* RB tree spinlock */
+    // #endif
 } qot_timeline_t;
 
 /* QoT wait until */
-typedef struct qot_sleeper {
+typedef struct  qot_sleeper {
 	qot_timeline_t timeline;	        /* Timeline Information    */
 	utimepoint_t wait_until_time;	    /* Uncertain time of event */
 } qot_sleeper_t;

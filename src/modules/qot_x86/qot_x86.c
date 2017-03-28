@@ -168,8 +168,8 @@ static timepoint_t qot_x86_read_time(void)
 
 	raw_spin_lock_irqsave(&pdata->lock, flags);
 	// Grab a raw monotonic timestamp from the clocksource
-	getrawmonotonic(&raw_monotonic_ts);
-	//ktime_get_ts(&monotonic_ts);
+	//getrawmonotonic(&raw_monotonic_ts);
+	ktime_get_ts(&raw_monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = timespec_to_ns(&raw_monotonic_ts);
 	TP_FROM_nSEC(time_now, (s64)ns);
@@ -197,10 +197,11 @@ static long qot_x86_program_sched_interrupt(timepoint_t expiry, int force, long 
 	interface = &pdata->core_sched;
 	expiry_ns = TP_TO_nSEC(expiry);
 	raw_spin_lock_irqsave(&pdata->lock, flags);
-	getrawmonotonic(&ns_ts);
+	//getrawmonotonic(&ns_ts);
+	ktime_get_ts(&ns_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = (u64)timespec_to_ns(&ns_ts);
-	
+
 	// Check if expiry is not behind current time Else return error code
 	if(expiry_ns <= ns)
 	{
@@ -316,6 +317,7 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 	}
 
 	qot_x86_properties.phc_id = ptp_clock_index(pdata->clock);
+	pr_info("qot_x86: PTP clock id is %d\n", qot_x86_properties.phc_id);
 	/* Return the platform data */
 	return pdata;
 

@@ -64,6 +64,10 @@
 #define CAPTURE_TIMER 6
 #define COMPARE_TIMER 7
 
+#define OVERIDE_FLAG 1 // override predefined values (timers and pins)
+
+static int overide_flag = OVERIDE_FLAG;
+
 /* Different event calls for GPIO */
 enum qot_am335x_events {
 	EVENT_MATCH,
@@ -209,8 +213,11 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 	case EVENT_MATCH:
 
 		/* Do nothing - can be used to stop PWM */
-	    event_core_timestamp = qot_am335x_read_time();
-		channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
+	    if(channel->parent->compare.callback != NULL)
+	    {
+	    	event_core_timestamp = qot_am335x_read_time();
+			channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
+		}
 		
 		// Compare start of reprogram with current timeline reference time (callback returns timeline reference in event_core_timestamp)
 	    if(channel->parent->compare.reprogram_flag == 1 && (TP_TO_nSEC(channel->parent->compare.perout.start) - TL_TO_nSEC(channel->parent->compare.perout.period)) < TP_TO_nSEC(event_core_timestamp))
@@ -231,8 +238,11 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		if(timer->id == COMPARE_TIMER)
 		{
 			// TODO/* Get an s64 value in core time */
-			event_core_timestamp = qot_am335x_read_time();
-			channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
+			if(channel->parent->compare.callback != NULL)
+	    	{
+				event_core_timestamp = qot_am335x_read_time();
+				channel->parent->compare.callback(&channel->parent->compare.perout, &event_core_timestamp, &next_event);
+			}
 		}
 
 		break;
@@ -279,7 +289,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		channel->parent->compare.match = match;
 
 		/* Configure timer */
-		if(timer->id == COMPARE_TIMER)
+		if(timer->id == COMPARE_TIMER || overide_flag)
 			omap_dm_timer_set_int_enable(timer, OMAP_TIMER_INT_OVERFLOW | OMAP_TIMER_INT_MATCH);
 		omap_dm_timer_enable(timer);
 		omap_dm_timer_set_prescaler(timer, AM335X_NO_PRESCALER);
@@ -298,7 +308,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 	case EVENT_STOP:
 
 		/* Disable the timer */
-		if(timer->id == COMPARE_TIMER)
+		if(timer->id == COMPARE_TIMER || overide_flag)
 			omap_dm_timer_set_int_disable(timer, OMAP_TIMER_INT_OVERFLOW | OMAP_TIMER_INT_MATCH);
 		omap_dm_timer_enable(timer);
 		omap_dm_timer_stop(timer);
@@ -483,8 +493,8 @@ static int qot_am335x_enable(struct ptp_clock_info *ptp,
 	switch (rq->type) {
 	case PTP_CLK_REQ_EXTTS:
 		/* Check if the correct timer is requested -> This timer pin is set to INPUT in the Device Tree*/
-		if(rq->extts.index != CAPTURE_PIN)
-			return -EACCES;
+		//if(rq->extts.index != CAPTURE_PIN)
+		//	return -EACCES;
 
 		memcpy(&pdata->pins[rq->extts.index].state, rq,
 			sizeof(struct ptp_clock_request));
@@ -1204,6 +1214,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pdata->compare.key = 0;
 	pdata->compare.perout.owner_file = NULL;
 	pdata->compare.reprogram_flag = 0;
+	pdata->compare.callback = NULL; // Initialize to NULL
 
 	/* Return the platform data */
 	return pdata;

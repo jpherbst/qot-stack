@@ -32,6 +32,8 @@
 #define QOT_STACK_SRC_MODULES_QOT_QOT_TIMELINE_H
 
 #include <linux/spinlock.h>
+#include <linux/rbtree.h>
+
 #include "qot_core.h"
 
 /* qot_timeline.h */
@@ -40,6 +42,12 @@
 extern raw_spinlock_t qot_timeline_lock;
 
 /* All the functions below assume the argument pointer has been allocated */
+
+void qot_timeline_event_lock(qot_timeline_t *timeline, unsigned long *flags);
+
+void qot_timeline_event_unlock(qot_timeline_t *timeline, unsigned long *flags);
+
+struct rb_root *qot_timeline_eventhead(qot_timeline_t *timeline);
 
 /**
  * @brief Find the first timeline in the system.
