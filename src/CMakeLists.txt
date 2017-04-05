@@ -43,8 +43,14 @@ IF (BUILD_PROGAPI)
 	ADD_SUBDIRECTORY(api)
 ENDIF (BUILD_PROGAPI)
 
+# Build the GPS Service
+OPTION(BUILD_GPS_SERVICE "Build GPS service" OFF)
+IF (BUILD_GPS_SERVICE)
+	ADD_SUBDIRECTORY(gps-service)
+ENDIF (BUILD_GPS_SERVICE)
+
 # Build the qot latency daemon
-OPTION(BUILD_QOTLATD "Build qot latency daemon" ON)
+OPTION(BUILD_QOTLATD "Build qot latency daemon" OFF)
 IF (BUILD_QOTLATD)
 	ADD_SUBDIRECTORY(qot-daemon)
 ENDIF (BUILD_QOTLATD)
@@ -63,7 +69,7 @@ ENDIF (BUILD_EXAMPLE)
 
 # Build the unit tests (doesn't make sense for cross-compilation)
 IF (NOT CROSS_AM335X)
-	OPTION(BUILD_UNITEST "Build unit tests" ON)
+	OPTION(BUILD_UNITEST "Build unit tests" OFF)
 	IF (BUILD_UNITEST)
 		ADD_SUBDIRECTORY(test)
 	ENDIF (BUILD_UNITEST)
