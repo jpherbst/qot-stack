@@ -407,7 +407,6 @@ int qot_x86_init(void)
     /* Registering with Kernel */
     platform_driver_register(&qot_x86_driver);
     platform_device_register(&qot_x86_device);
-
     return 0;
 }
 
