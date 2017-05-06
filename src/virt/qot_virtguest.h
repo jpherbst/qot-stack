@@ -1,6 +1,6 @@
 /**
- * @file qot_virt.h
- * @brief Header with virtualization related datatypes (based on QEMU-KVM Virtioserial) 
+ * @file qot_virtguest.h
+ * @brief Header containing virtual guest serial communication functionality (based on QEMU-KVM Virtioserial) 
  * @author Sandeep D'souza
  * 
  * Copyright (c) Carnegie Mellon University, 2017. All rights reserved.
@@ -27,37 +27,13 @@
  *
  */
 
-#ifndef QOT_STACK_VIRT_C_QOT_H
-#define QOT_STACK_VIRT_C_QOT_H
+#ifndef QOT_STACK_VIRTGUEST_C_QOT_H
+#define QOT_STACK_VIRTGUEST_C_QOT_H
 
 // QoT Datatypes
-#include "../qot_types.h"
+#include "qot_virt.h"
 
-/**
- * @brief QoT Virt Message Types
- */
-typedef enum {
-    TIMELINE_CREATE    = (0),      /* Create a timeline                    */
-    TIMELINE_DESTROY   = (1),      /* Destroy a timeline                   */
-    TIMELINE_UPDATE    = (2),      /* Update timeline parameters           */
-} virtmsg_type_t;
-
-/**
- * @brief QoT Virt Messaging format
- */
-typedef struct qot_virtmsg {
-    qot_timeline_t info;                 /* Timeline Info                            */
-    timequality_t demand;                /* Requested QoT                            */
-    virtmsg_type_t msgtype;              /* Message type                             */
-    qot_return_t retval;                 /* Return Code (Populated by host daemon)   */
-} qot_virtmsg_t;
-
-/**
- * @brief Virt Timeline Data Structure
- */
-typedef struct timeline_virt {
-	int index;
-	int bind_count;
-} timeline_virt_t;
+// Send timeline metadata to the host OS (QEMU-KVM hypervisor) 
+qot_return_t send_message(qot_virtmsg_t *message);
 
 #endif
