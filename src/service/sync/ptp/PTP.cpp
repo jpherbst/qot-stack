@@ -133,8 +133,8 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
 	//cfg_settings.dds.dds.domainNumber = sync_session;	
 	cfg_settings.dds.dds.domainNumber = 0;
-	cfg_settings.pod.laterlogSyncInterval = 0;//log_sync_interval; // Change this when you need to slow down sync later
-	cfg_settings.pod.logSyncInterval = 0;//log_sync_interval; 
+	cfg_settings.pod.laterlogSyncInterval = log_sync_interval; // Change this when you need to slow down sync later
+	cfg_settings.pod.logSyncInterval = log_sync_interval; 
 
 	if (master){
 		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;

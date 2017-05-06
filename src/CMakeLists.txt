@@ -61,6 +61,11 @@ IF (BUILD_EXAMPLE)
 	ADD_SUBDIRECTORY(examples)
 ENDIF (BUILD_EXAMPLE)
 
+OPTION(BUILD_VIRT "Build QEMU-KVM virtualization functionality" OFF)
+IF (BUILD_VIRT)
+	ADD_SUBDIRECTORY(virt)
+ENDIF (BUILD_VIRT)
+
 # Build the unit tests (doesn't make sense for cross-compilation)
 IF (NOT CROSS_AM335X)
 	OPTION(BUILD_UNITEST "Build unit tests" ON)
