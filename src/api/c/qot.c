@@ -112,7 +112,11 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     // Try to create a new timeline if none exists
     if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
     {
-        return QOT_RETURN_TYPE_ERR;
+        // If it exists try to get information
+        if(ioctl(timeline->qotusr_fd, QOTUSR_GET_TIMELINE_INFO, &timeline->info) < 0)
+        {
+            return QOT_RETURN_TYPE_ERR;
+        }    
     }
     // Construct the file handle to the posix clock /dev/timelineX
     sprintf(qot_timeline_filename, "/dev/timeline%d", timeline->info.index);
