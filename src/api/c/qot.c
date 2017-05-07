@@ -41,8 +41,13 @@
 
 #include <linux/ptp_clock.h>
 
-/* This file includes */
+/* This file includes function definitions */
 #include "qot.h"
+
+#ifdef PARAVIRT_GUEST
+/* This file guest to host communication for a PV QEMU-KVM guest */
+#include "../../virt/qot_virtguest.h"
+#endif
 
 #define DEBUG 0
 
@@ -54,6 +59,9 @@ typedef struct timeline {
     int qotusr_fd;                        /* File descriptor to /dev/qotusr ioctl     */
     int clock_fd;                         /* File Descriptor to /dev/ptpY             */
     qot_callback_t event_callback;        /* Event Callback Function                  */
+    #ifdef PARAVIRT_GUEST
+    qot_timeline_t virt_info;             /* Virtual (host) timeline information      */
+    #endif
 } timeline_t;
 
 /* Is the given timeline a valid one */
@@ -152,6 +160,30 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     if (DEBUG) 
         printf("Bound to timeline %s\n", uuid);
 
+    // Virtualization-specific Guest extensions -> Send TIMELINE_CREATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->info;
+    virt_msg.msg_type = TIMELINE_CREATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        timeline->virt_info = virt_msg.info;
+        printf("Host replied with %d retval, host timeline id is %d\n",virt_msg.retval, virt_msg.info.index);
+    }
+    #endif
+
     // This was there in the old api code
     // if (DEBUG) std::cout << "Start polling " << std::endl;
 
@@ -187,6 +219,29 @@ qot_return_t timeline_unbind(timeline_t *timeline)
        if(DEBUG)
           printf("Timeline %d not destroyed\n", timeline->info.index);
     }
+
+    // Virtualization-specific Guest extensions -> Send TIMELINE_DESTROY Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msg_type = TIMELINE_DESTROY;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
 
     if (timeline->qotusr_fd)
         close(timeline->qotusr_fd);
@@ -240,6 +295,28 @@ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    // Virtualization-specific Guest extensions -> Send TIMELINE_UPDATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msg_type = TIMELINE_UPDATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending updated timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
     *acc = timeline->binding.demand.accuracy;
     return QOT_RETURN_TYPE_OK;
 }
@@ -257,6 +334,28 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    // Virtualization-specific Guest extensions -> Send TIMELINE_UPDATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msg_type = TIMELINE_UPDATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending updated timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
     *res = timeline->binding.demand.resolution;
     return QOT_RETURN_TYPE_OK;
 }

@@ -187,7 +187,7 @@ back_to_open:
             continue;
 
         ret = saferead(cfd, message, sizeof(qot_virtmsg_t), false);
-        if (ret < sizeof(gpkt)) {
+        if (ret < sizeof(qot_virtmsg_t)) {
             /*
              * Out of sync with host. Close port and start over.
              * For us to get back in sync with host, this port

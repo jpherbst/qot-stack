@@ -67,10 +67,17 @@ IF (BUILD_EXAMPLE)
 	ADD_SUBDIRECTORY(examples)
 ENDIF (BUILD_EXAMPLE)
 
+# Build Virtdaemon for Host
 OPTION(BUILD_VIRT "Build QEMU-KVM virtualization functionality" OFF)
 IF (BUILD_VIRT)
 	ADD_SUBDIRECTORY(virt)
 ENDIF (BUILD_VIRT)
+
+# Build API with Paravirtual extensions for QEMU-KVM Linux Guest (Build Virt Should also be turned on)
+option(BUILD_VIRT_GUEST "Build API with Paravirtual extensions for QEMU-KVM Linux Guest" OFF)
+IF (BUILD_VIRT_GUEST)
+  add_definitions(-DPARAVIRT_GUEST)
+ENDIF (BUILD_VIRT_GUEST)
 
 # Build the unit tests (doesn't make sense for cross-compilation)
 IF (NOT CROSS_AM335X)
@@ -79,3 +86,5 @@ IF (NOT CROSS_AM335X)
 		ADD_SUBDIRECTORY(test)
 	ENDIF (BUILD_UNITEST)
 ENDIF (NOT CROSS_AM335X)
+
+
