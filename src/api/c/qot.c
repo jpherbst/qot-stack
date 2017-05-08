@@ -41,12 +41,14 @@
 
 #include <linux/ptp_clock.h>
 
-/* This file includes function definitions */
+/* Header for function definitions */
 #include "qot.h"
 
 #ifdef PARAVIRT_GUEST
-/* This file guest to host communication for a PV QEMU-KVM guest */
+/* Header for guest to host virtserial-based communication for a PV QEMU-KVM guest */
 #include "../../virt/qot_virtguest.h"
+/* Header for file host to guest ivshmem-based communication for a PV QEMU-KVM guest */
+#include "../../virt/pci_mmio/qot_pci_ivshmem.h"
 #endif
 
 #define DEBUG 0
@@ -61,6 +63,8 @@ typedef struct timeline {
     qot_callback_t event_callback;        /* Event Callback Function                  */
     #ifdef PARAVIRT_GUEST
     qot_timeline_t virt_info;             /* Virtual (host) timeline information      */
+    int pci_dataregion;                   /* PCI IVSHMEM data region                  */
+    tl_clockparams_t *timeline_clock;     /* Pointer to timeline clock parameters     */
     #endif
 } timeline_t;
 
@@ -165,7 +169,7 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     // Populate the timeline+binding metadata
     qot_virtmsg_t virt_msg;
     virt_msg.info = timeline->info;
-    virt_msg.msg_type = TIMELINE_CREATE;
+    virt_msg.msgtype = TIMELINE_CREATE;
     virt_msg.demand = timeline->binding.demand;
     virt_msg.retval = QOT_RETURN_TYPE_ERR;
     if (DEBUG) 
@@ -180,8 +184,26 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     {
         // Add error handling -> retry
         timeline->virt_info = virt_msg.info;
-        printf("Host replied with %d retval, host timeline id is %d\n",virt_msg.retval, virt_msg.info.index);
+        if (DEBUG) 
+            printf("Host replied with %d retval, host timeline id is %d\n",virt_msg.retval, virt_msg.info.index);
     }
+    // Setup Memory mapping to read timeline clock parameters (mapping, uncertainty)
+    timeline->pci_dataregion = setup_pci_mmio();
+    if (timeline->pci_dataregion < 0)
+    {
+        if (DEBUG) 
+            printf("Failed to open PCI IVSHMEM region\n");
+        return QOT_RETURN_TYPE_ERR;
+    } 
+    // Get pointer to memory region corresponding to timeline clock parameters
+    __u32 offset = timeline->virt_info.index*sizeof(tl_clockparams_t);
+    timeline->timeline_clock = read_timeline_clock_parameters(timeline->pci_dataregion, offset);
+    if (timeline->timeline_clock == NULL)
+    {
+        if (DEBUG) 
+            printf("Failed to get a pointer to PCI IVSHMEM region\n");
+        return QOT_RETURN_TYPE_ERR;
+    } 
     #endif
 
     // This was there in the old api code
@@ -225,7 +247,7 @@ qot_return_t timeline_unbind(timeline_t *timeline)
     // Populate the timeline+binding metadata
     qot_virtmsg_t virt_msg;
     virt_msg.info = timeline->virt_info;
-    virt_msg.msg_type = TIMELINE_DESTROY;
+    virt_msg.msgtype = TIMELINE_DESTROY;
     virt_msg.demand = timeline->binding.demand;
     virt_msg.retval = QOT_RETURN_TYPE_ERR;
     if (DEBUG) 
@@ -300,7 +322,7 @@ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc)
     // Populate the timeline+binding metadata
     qot_virtmsg_t virt_msg;
     virt_msg.info = timeline->virt_info;
-    virt_msg.msg_type = TIMELINE_UPDATE;
+    virt_msg.msgtype = TIMELINE_UPDATE;
     virt_msg.demand = timeline->binding.demand;
     virt_msg.retval = QOT_RETURN_TYPE_ERR;
     if (DEBUG) 
@@ -339,7 +361,7 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
     // Populate the timeline+binding metadata
     qot_virtmsg_t virt_msg;
     virt_msg.info = timeline->virt_info;
-    virt_msg.msg_type = TIMELINE_UPDATE;
+    virt_msg.msgtype = TIMELINE_UPDATE;
     virt_msg.demand = timeline->binding.demand;
     virt_msg.retval = QOT_RETURN_TYPE_ERR;
     if (DEBUG) 
@@ -392,18 +414,32 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
     return QOT_RETURN_TYPE_OK;
 }
 
+#ifdef PARAVIRT_GUEST
+void timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
+{
+    // This function should be populated (use timeline->timeline_clock to translate from core time): URGENT
+    timeline_getcoretime(timeline, est);
+    return;
+}
+#endif
+
 qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
 {    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-    
+
+    #ifdef PARAVIRT_GUEST
+    // Virtualization-specific Guest extensions -> Get Timeline Clock Time
+    timeline_getvtime(timeline, est);
+    #else
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    #endif
     
     return QOT_RETURN_TYPE_OK;
 }

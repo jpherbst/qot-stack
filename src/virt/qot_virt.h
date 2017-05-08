@@ -36,10 +36,10 @@
 /**
  * @brief QoT Virt Message Types
  */
-typedef enum {
-    TIMELINE_CREATE    = (0),      /* Create a timeline                    */
-    TIMELINE_DESTROY   = (1),      /* Destroy a timeline                   */
-    TIMELINE_UPDATE    = (2),      /* Update timeline parameters           */
+typedef enum {   
+    TIMELINE_CREATE    = (0),            /* Create a timeline                        */
+    TIMELINE_DESTROY   = (1),            /* Destroy a timeline                       */
+    TIMELINE_UPDATE    = (2),            /* Update timeline parameters               */
 } virtmsg_type_t;
 
 /**
@@ -59,5 +59,26 @@ typedef struct timeline_virt {
 	int index;
 	int bind_count;
 } timeline_virt_t;
+
+/**
+ * @brief Virt Timeline Clockparams Data Structure (may need to be modified)
+ */
+typedef struct timeline_translation {
+	int64_t last;                   	     /* Discipline: last cycle count of     */
+    int64_t mult;                            /* Discipline: ppb multiplier          */
+    int64_t nsec;                            /* Discipline: global time offset      */
+    int64_t u_nsec;                          /* Discipline: global time for master  */
+    int64_t l_nsec;                          /* Discipline: global time for master  */
+    int64_t u_mult;                          /* Discipline: upper bound on ppb      */
+    int64_t l_mult;                          /* Discipline: lower bound on ppb      */
+} tl_translation_t;
+
+/**
+ * @brief Virt Timeline Clockparams Data Structure
+ */
+typedef struct timeline_clockparams {
+	tl_translation_t translation;       /* Translation parameters (core to timeline)  */
+	timequality_t quality;               /* Contains resolution and chieved accuracy   */
+} tl_clockparams_t;
 
 #endif
