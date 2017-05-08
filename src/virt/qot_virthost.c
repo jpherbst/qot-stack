@@ -145,10 +145,7 @@ int main(int argc , char *argv[])
     // QoT Binding (qot_virtd)
     qot_binding_t binding;
     
-    sprintf(binding.name, "qot_virtd");
-        
-    //a message 
-    char *message = "Quartz-V Host Daemon v1.0 \r\n";  
+    sprintf(binding.name,  "qot_virtd");
 
     // Open the /dev/qotusr file
     qotusr_fd = open("/dev/qotusr", O_RDWR);
@@ -254,15 +251,7 @@ int main(int argc , char *argv[])
             }  
             
             //inform user of socket number - used in send and receive commands 
-            printf("New connection , socket fd is %d\n", new_socket);  
-          
-            //send new connection greeting message 
-            if(send(new_socket, message, strlen(message), 0) != strlen(message))  
-            {  
-                perror("send");  
-            }  
-                
-            puts("Welcome message sent successfully");  
+            printf("New connection, socket fd is %d\n", new_socket);   
                 
             //add new socket to array of sockets 
             for (i = 0; i < max_clients; i++)  
@@ -300,9 +289,13 @@ int main(int argc , char *argv[])
                 else
                 {  
                     // Try to create a new timeline if none exists
+                    virtmsg.retval = QOT_RETURN_TYPE_OK;
+                    printf("Message Received\n");
+                    printf("Type           : %d\n", virtmsg.msgtype);
+                    printf("Guest TL ID    : %d\n", virtmsg.info.index);
+                    printf("Guest TL Name  : %s\n", virtmsg.info.name);
                     switch(virtmsg.msgtype)
                     {
-                        virtmsg.retval = QOT_RETURN_TYPE_OK;
                         case TIMELINE_CREATE:
                             // If timeline exists try to get information
                             if(ioctl(qotusr_fd, QOTUSR_GET_TIMELINE_INFO, &virtmsg.info) < 0)
@@ -323,8 +316,12 @@ int main(int argc , char *argv[])
                                         add_timeline_to_list(&virtmsg.info);
                                         increment_bind_count(&virtmsg.info);
                                         // Bind the qot_virt daemon to the new timeline
-                                        sprintf(qot_timeline_filename, "/dev/timeline%d", virtmsg.info.index);
                                         timeline_fd = open(qot_timeline_filename, O_RDWR);
+                                        if (!timeline_fd)
+                                        {
+                                            printf("Cant open /dev/timeline%d\n", virtmsg.info.index);
+                                        }
+                                        printf("%s %s %d\n", binding.name, qot_timeline_filename, timeline_fd);
                                         binding.demand = virtmsg.demand;
                                         if(ioctl(timeline_fd, TIMELINE_BIND_JOIN, &binding) < 0)
                                         {
@@ -353,6 +350,7 @@ int main(int argc , char *argv[])
                             {
                                 // Timeline is valid, check if all reference to it are done
                                 decrement_bind_count(&virtmsg.info);
+                                printf("Bind count is %d\n", get_bind_count(&virtmsg.info));
                                 if(get_bind_count(&virtmsg.info) == 0)
                                 {
                                     // If all bindings are gone, destroy the timeline
@@ -398,6 +396,11 @@ int main(int argc , char *argv[])
                             break;
                     }
                     // Send Populated message struct back to the user
+                    printf("Generated Reply\n");
+                    printf("Type          : %d\n", virtmsg.msgtype);
+                    printf("Host TL ID    : %d\n", virtmsg.info.index);
+                    printf("Host TL Name  : %s\n", virtmsg.info.name);
+                    printf("Retval        : %d\n", virtmsg.retval);
                     send(sd, &virtmsg , sizeof(virtmsg), 0); 
                 }  
             }  
