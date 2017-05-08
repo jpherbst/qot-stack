@@ -58,7 +58,7 @@
 #include "qot_virtguest.h"
 
 // Filename of Virtioserial control port
-#define VIRTIO_SERIAL_PORT "/dev/virtio-serial/qot_virthost"
+#define VIRTIO_SERIAL_PORT "/dev/virtio-ports/qot_virthost"
 
 /********************* VirtIO Serial File Operations  **************************************/
 static ssize_t safewrite(int fd, const void *buf, size_t count, bool eagain_ret)
@@ -198,6 +198,7 @@ back_to_open:
         }
         else
         {
+            close(cfd);
             break;
         }
     }
