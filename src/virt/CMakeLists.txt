@@ -3,7 +3,7 @@ IF (NOT BUILD_VIRT_GUEST)
 	ADD_EXECUTABLE(qot_virtd
 		qot_virthost.c
 	)
-	TARGET_LINK_LIBRARIES(qot_virtd -lrt -lm)
+	TARGET_LINK_LIBRARIES(qot_virtd -lrt -lm -lpthread)
 
 	# Install the executables to the given prefix
 	INSTALL(

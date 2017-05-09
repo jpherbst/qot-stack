@@ -58,20 +58,8 @@ typedef struct qot_virtmsg {
 typedef struct timeline_virt {
 	int index;
 	int bind_count;
+	char filename[15];
 } timeline_virt_t;
-
-/**
- * @brief Virt Timeline Clockparams Data Structure (may need to be modified)
- */
-typedef struct timeline_translation {
-	int64_t last;                   	     /* Discipline: last cycle count of     */
-    int64_t mult;                            /* Discipline: ppb multiplier          */
-    int64_t nsec;                            /* Discipline: global time offset      */
-    int64_t u_nsec;                          /* Discipline: global time for master  */
-    int64_t l_nsec;                          /* Discipline: global time for master  */
-    int64_t u_mult;                          /* Discipline: upper bound on ppb      */
-    int64_t l_mult;                          /* Discipline: lower bound on ppb      */
-} tl_translation_t;
 
 /**
  * @brief Virt Timeline Clockparams Data Structure
