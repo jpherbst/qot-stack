@@ -466,6 +466,19 @@ typedef struct qot_event {
 } qot_event_t;
 
 /**
+ * @brief Timeline Clockparams Data Structure (may need to be modified)
+ */
+typedef struct timeline_translation {
+	int64_t last;                   	     /* Discipline: last cycle count of     */
+    int64_t mult;                            /* Discipline: ppb multiplier          */
+    int64_t nsec;                            /* Discipline: global time offset      */
+    int64_t u_nsec;                          /* Discipline: global time for master  */
+    int64_t l_nsec;                          /* Discipline: global time for master  */
+    int64_t u_mult;                          /* Discipline: upper bound on ppb      */
+    int64_t l_mult;                          /* Discipline: lower bound on ppb      */
+} tl_translation_t;
+
+/**
  * @brief Ioctl messages supported by /dev/qotusr
  */
 #define QOTUSR_MAGIC_CODE  0xED
@@ -570,5 +583,6 @@ typedef void (*qot_node_callback_t)(qot_node_t *node);
 #define TIMELINE_SET_SYNC_UNCERTAINTY   _IOR(TIMELINE_MAGIC_CODE, 10, qot_bounds_t*)
 #define TIMELINE_CREATE_TIMER    		_IOWR(TIMELINE_MAGIC_CODE, 11, qot_timer_t*)
 #define TIMELINE_DESTROY_TIMER    		_IOWR(TIMELINE_MAGIC_CODE, 12, qot_timer_t*)
+#define TIMELINE_GET_PARAMETERS    		_IOR(TIMELINE_MAGIC_CODE, 13, tl_translation_t*)
 
 #endif

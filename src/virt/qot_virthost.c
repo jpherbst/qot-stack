@@ -37,6 +37,9 @@
 #include <sys/un.h> 
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
 #include <fcntl.h>
+#include <signal.h> // SIGINT
+#include <poll.h>
+#include <pthread.h>
 
 // Virtualization Datatypes
 #include "qot_virt.h"
@@ -44,22 +47,50 @@
 #define TRUE   1 
 #define FALSE  0 
 #define MAX_TIMELINES 10
+#define SOCKET_PATH "/tmp/qot_virthost"
 
 // Binding Count per timeline
 timeline_virt_t vtimeline[MAX_TIMELINES];
 
-void add_timeline_to_list(qot_timeline_t *timeline)
+static int running = 1;
+
+static void exit_handler(int s)
+{
+    printf("Exit requested \n");
+    running = 0;
+}
+
+int get_timeline_list_id(qot_timeline_t *timeline)
 {
     int i;
+    int retval = -1;
+    for (i=0; i < MAX_TIMELINES; i++)
+    {
+        if (vtimeline[i].index == timeline->index)
+        {
+            retval = i;
+            break;
+        }
+    }
+    return retval;
+}
+
+int add_timeline_to_list(qot_timeline_t *timeline)
+{
+    int i;
+    int retval;
     for (i=0; i < MAX_TIMELINES; i++)
     {
         if (vtimeline[i].index == -1)
         {
             vtimeline[i].index = timeline->index;
             vtimeline[i].bind_count = 0;
+            sprintf(vtimeline[i].filename, "/dev/timeline%d", timeline->index);
+            retval = i;
             break;
         }
     }
+    return retval;
 }
 
 void remove_timeline_from_list(qot_timeline_t *timeline)
@@ -115,6 +146,48 @@ int get_bind_count(qot_timeline_t *timeline)
         }
     }   
 }
+
+/* Thread function which writes timeline parameters to shared memory */
+void *write_timeline_params(void *data)
+{
+    int i;
+    int retval;
+    int timeline_fd;
+    char qot_timeline_filename[15];
+    struct pollfd poll_tl[1];
+    tl_translation_t parameters;
+    timeline_virt_t *tl_ptr = (timeline_virt_t*) data;
+
+    // Open timeline file descriptor (/dev/timelineX)
+    timeline_fd = open(tl_ptr->filename, O_RDWR);
+    if (!timeline_fd)
+    {
+        printf("Thread: Unable to open thread\n");
+        return NULL;
+    }
+
+    // Polling data structures
+    poll_tl[0].fd = timeline_fd;
+    poll_tl[0].events = POLLIN;
+
+    printf("Thread: New thread spawned polling %s\n", qot_timeline_filename);
+    while(running)
+    {
+        // Poll the timeline character device
+        retval = poll(poll_tl, 1, 1000);
+        if (retval > 0)
+        {
+            if (poll_tl[0].revents & POLLIN)
+            {
+                ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters);
+                // Write code to write new params to shared memory :TODO
+                printf("New parameters are %lld %lld\n", parameters.mult, parameters.last);
+            }
+        }
+    }
+    close(timeline_fd);
+    return NULL;
+}
     
 int main(int argc , char *argv[])  
 {  
@@ -122,7 +195,9 @@ int main(int argc , char *argv[])
     int master_socket , addrlen , new_socket , client_socket[30] , 
           max_clients = 30 , activity, i , valread , sd;  
     int max_sd;  
-    struct sockaddr_un address;  
+    struct sockaddr_un address;
+
+    int tl_id;  
         
     char buffer[1025];  //data buffer of 1K 
 
@@ -146,6 +221,9 @@ int main(int argc , char *argv[])
     qot_binding_t binding;
     
     sprintf(binding.name,  "qot_virtd");
+
+    /* Thread which will write timeline parameters to shared memory */
+    pthread_t tl_shmem_thread[MAX_TIMELINES];
 
     // Open the /dev/qotusr file
     qotusr_fd = open("/dev/qotusr", O_RDWR);
@@ -186,7 +264,7 @@ int main(int argc , char *argv[])
     //type of socket created 
     address.sun_family = AF_UNIX;  
     //socket path
-    snprintf(address.sun_path, sizeof(address.sun_path), "/tmp/qot_virthost");
+    snprintf(address.sun_path, sizeof(address.sun_path), SOCKET_PATH);
         
     //bind the socket to localhost port 8888 
     if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)  
@@ -206,8 +284,11 @@ int main(int argc , char *argv[])
     //accept the incoming connection 
     addrlen = sizeof(address);  
     puts("Waiting for connections ...");  
-        
-    while(TRUE)  
+
+    // Install SIGINT Signal Handler for exit
+    signal(SIGINT, exit_handler);
+       
+    while(running)  
     {  
         //clear the socket set 
         FD_ZERO(&readfds);  
@@ -313,9 +394,10 @@ int main(int argc , char *argv[])
                                         // New timeline created
                                         if(tl_count < MAX_TIMELINES)
                                             tl_count++;
-                                        add_timeline_to_list(&virtmsg.info);
+                                        tl_id = add_timeline_to_list(&virtmsg.info);
                                         increment_bind_count(&virtmsg.info);
                                         // Bind the qot_virt daemon to the new timeline
+                                        sprintf(qot_timeline_filename, "/dev/timeline%d", virtmsg.info.index);
                                         timeline_fd = open(qot_timeline_filename, O_RDWR);
                                         if (!timeline_fd)
                                         {
@@ -328,6 +410,10 @@ int main(int argc , char *argv[])
                                             virtmsg.retval = QOT_RETURN_TYPE_ERR;
                                         }
                                         close(timeline_fd);
+                                        if(pthread_create(&tl_shmem_thread[tl_id], NULL, write_timeline_params, (void*)&vtimeline[tl_id])) 
+                                        {
+                                            printf("Error creating thread\n");
+                                        }
                                     }
                                 }
                                 else
@@ -354,6 +440,11 @@ int main(int argc , char *argv[])
                                 if(get_bind_count(&virtmsg.info) == 0)
                                 {
                                     // If all bindings are gone, destroy the timeline
+                                    tl_id = get_timeline_list_id(&virtmsg.info);
+                                    if(pthread_cancel(tl_shmem_thread[tl_id])) 
+                                    {
+                                        printf("Error cancelling thread\n");
+                                    }
                                     if(ioctl(qotusr_fd, QOTUSR_DESTROY_TIMELINE, &virtmsg.info) < 0)
                                     {
                                         virtmsg.retval = QOT_RETURN_TYPE_ERR;
@@ -406,6 +497,17 @@ int main(int argc , char *argv[])
             }  
         }  
     }  
-    close(qotusr_fd);   
+
+    /* wait for the tl_shmem_thread to finish */
+    for (i-0; i < MAX_TIMELINES; i++)
+    {
+        if(pthread_join(tl_shmem_thread[i], NULL)) 
+        {
+            printf("Error joining thread\n");
+            return -1;
+        }
+    }
+    close(qotusr_fd);  
+    unlink(SOCKET_PATH);
     return 0;  
 }
