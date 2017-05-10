@@ -66,7 +66,7 @@ typedef struct timeline_virt {
  */
 typedef struct timeline_clockparams {
 	tl_translation_t translation;       /* Translation parameters (core to timeline)  */
-	timequality_t quality;               /* Contains resolution and chieved accuracy   */
+	timequality_t quality;               /* Contains resolution and achieved accuracy   */
 } tl_clockparams_t;
 
 #endif

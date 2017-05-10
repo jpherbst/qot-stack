@@ -40,6 +40,9 @@
 #include <signal.h> // SIGINT
 #include <poll.h>
 #include <pthread.h>
+#include <sys/shm.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 // Virtualization Datatypes
 #include "qot_virt.h"
@@ -153,10 +156,12 @@ void *write_timeline_params(void *data)
     int i;
     int retval;
     int timeline_fd;
+    int shm_fd;
     char qot_timeline_filename[15];
     struct pollfd poll_tl[1];
-    tl_translation_t parameters;
+    tl_clockparams_t *parameters;
     timeline_virt_t *tl_ptr = (timeline_virt_t*) data;
+    void *shmem_ptr;
 
     // Open timeline file descriptor (/dev/timelineX)
     timeline_fd = open(tl_ptr->filename, O_RDWR);
@@ -165,6 +170,33 @@ void *write_timeline_params(void *data)
         printf("Thread: Unable to open thread\n");
         return NULL;
     }
+
+    // Open Shared Memory Location -> Created by ivshmem server
+    shm_fd = shm_open("/dev/shm/ivshmem", O_RDWR, S_IRWXU);
+    if (shm_fd < 0) {
+        printf("Thread: Unable to open shared memory region\n");
+         goto err_close_timeline;
+    }
+
+    // added by Sandeep
+    if (ftruncate(shm_fd, MAX_TIMELINES*sizeof(tl_clockparams_t)) < 0) {
+        printf("ftruncate failed shm: %s\n", strerror(errno));
+        goto err_close_shm;
+    }
+
+    // Map memory to a pointer
+    shmem_ptr = mmap(0, MAX_TIMELINES*sizeof(tl_clockparams_t), PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shmem_ptr == MAP_FAILED)
+    {
+        printf("Thread: Memory Mapping failed\n");
+        goto err_close_shm;
+    }
+
+    // Increment pointer to correct location (based on timeline index)
+    shmem_ptr = shmem_ptr + tl_ptr->index*(sizeof(tl_clockparams_t));
+
+    // Typecast void pointer to tl_clockparams_t pointer
+    parameters = (tl_clockparams_t*) shmem_ptr;
 
     // Polling data structures
     poll_tl[0].fd = timeline_fd;
@@ -179,12 +211,19 @@ void *write_timeline_params(void *data)
         {
             if (poll_tl[0].revents & POLLIN)
             {
-                ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters);
+                ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters->translation);
                 // Write code to write new params to shared memory :TODO
-                printf("New parameters are %lld %lld\n", parameters.mult, parameters.last);
+                parameters->translation.mult = 1;
+                printf("New parameters are %lld %lld\n", parameters->translation.mult, parameters->translation.last);
+
             }
+            parameters->translation.mult = 1;
+            printf("New parameters are %lld %lld\n", parameters->translation.mult, parameters->translation.last);
         }
     }
+err_close_shm:
+    close(shm_fd);
+err_close_timeline:
     close(timeline_fd);
     return NULL;
 }
