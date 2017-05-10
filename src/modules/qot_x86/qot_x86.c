@@ -92,8 +92,8 @@ static int qot_x86_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
     	ptp, struct qot_x86_data, info);
 	raw_spin_lock_irqsave(&pdata->lock, flags);
 	// Grab a raw monotonic timestamp from the clocksource
-	getrawmonotonic(&raw_monotonic_ts);
-	//ktime_get_ts(&monotonic_ts);
+	//getrawmonotonic(&raw_monotonic_ts);
+	ktime_get_ts(&raw_monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	*ts = timespec_to_timespec64(raw_monotonic_ts);
 	return 0;
