@@ -54,6 +54,9 @@ struct qot_x86_data;
 // Global Pointer for quick access
 static struct qot_x86_data *qot_x86_data_ptr = NULL;
 
+// Global starting offset of core clock
+s64 offset;
+
 // Scheduler Interface
 struct qot_x86_sched_interface {
 	struct qot_x86_data *parent;					/* Pointer to parent      */
@@ -95,7 +98,7 @@ static int qot_x86_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	//getrawmonotonic(&raw_monotonic_ts);
 	ktime_get_ts(&raw_monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
-	*ts = timespec_to_timespec64(raw_monotonic_ts);
+	*ts = timespec_to_timespec64(timespec_add(raw_monotonic_ts, ns_to_timespec(offset)));
 	return 0;
 }
 
@@ -171,7 +174,7 @@ static timepoint_t qot_x86_read_time(void)
 	//getrawmonotonic(&raw_monotonic_ts);
 	ktime_get_ts(&raw_monotonic_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
-	ns = timespec_to_ns(&raw_monotonic_ts);
+	ns = offset + timespec_to_ns(&raw_monotonic_ts);
 	TP_FROM_nSEC(time_now, (s64)ns);
 	return time_now;
 }
@@ -209,7 +212,7 @@ static long qot_x86_program_sched_interrupt(timepoint_t expiry, int force, long 
 	}
 	interface->callback = callback;
 	// May need to consider using pinned timers
-	hrtimer_start_range_ns(&interface->timer, ns_to_ktime(expiry_ns), 0ULL, HRTIMER_MODE_ABS);
+	hrtimer_start_range_ns(&interface->timer, ns_to_ktime(expiry_ns-offset), 0ULL, HRTIMER_MODE_ABS);
 	return 0;
 }
 
@@ -318,6 +321,9 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 
 	qot_x86_properties.phc_id = ptp_clock_index(pdata->clock);
 	pr_info("qot_x86: PTP clock id is %d\n", qot_x86_properties.phc_id);
+	
+	// Setting a global offset w.r.t clock_realtime (synced up to UTC if NTP is running)
+	offset = ktime_to_ns(ktime_sub(ktime_get_real(),ktime_get())); // Set this to 0 to remove
 	/* Return the platform data */
 	return pdata;
 
