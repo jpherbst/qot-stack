@@ -415,9 +415,58 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
 }
 
 #ifdef PARAVIRT_GUEST
-void timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
+// BASIC TIME PROJECTION FUNCTIONS /////////////////////////////////////////////
+qot_return_t qot_loc2rem(timeline_t *timeline, utimepoint_t *est, int period)
+{    
+    int64_t val;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    val = TP_TO_nSEC(est->estimate);
+
+    // Check if this is correct
+    if (period)
+        val += (timeline->timeline_clock->translation.mult*val)/1000000000L;
+    else
+    {
+        val -= timeline->timeline_clock->translation.last;
+        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.last*val)/1000000000L);
+    }
+    TP_FROM_nSEC(est->estimate, val); 
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_rem2loc(timeline_t *timeline, utimepoint_t *est, int period)
+{
+    int64_t val;
+    int64_t rem;
+
+    if(!timeline || !timeline->timeline_clock)
+        return QOT_RETURN_TYPE_ERR;
+    val = TP_TO_nSEC(est->estimate);
+
+    if (period)
+    {
+        //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
+        val = (val/(timeline->timeline_clock->translation.mult + 1000000000LL))*1000000000LL;
+        rem = val % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val += rem;
+    }
+    else
+    {
+        int64_t diff = (val - timeline->timeline_clock->translation.nsec);
+        int64_t quot = diff/(timeline->timeline_clock->translation.mult + 1000000000LL);
+        rem = diff % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val = timeline->timeline_clock->translation.last + (quot * 1000000000LL) + rem; 
+    }
+    TP_FROM_nSEC(est->estimate, val); 
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
 {
     // This function should be populated (use timeline->timeline_clock to translate from core time): URGENT
+    qot_return_t retval;
     timeline_getcoretime(timeline, est);
     if (DEBUG)
     {
@@ -426,7 +475,8 @@ void timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
     		timeline->timeline_clock->translation.mult, 
     		timeline->timeline_clock->translation.last);
     }
-    return;
+    retval = qot_loc2rem(timeline, est, 0);
+    return retval;
 }
 #endif
 
@@ -439,7 +489,7 @@ qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est)
 
     #ifdef PARAVIRT_GUEST
     // Virtualization-specific Guest extensions -> Get Timeline Clock Time
-    timeline_getvtime(timeline, est);
+    return timeline_getvtime(timeline, est);
     #else
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
