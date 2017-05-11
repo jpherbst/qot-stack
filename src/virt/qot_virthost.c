@@ -155,7 +155,7 @@ void *write_timeline_params(void *data)
     int timeline_fd;
     char qot_timeline_filename[15];
     struct pollfd poll_tl[1];
-    tl_translation_t parameters;
+    tl_clockparams_t parameters;
     timeline_virt_t *tl_ptr = (timeline_virt_t*) data;
 
     printf("Thread: New thread spawned for timeline %d\n", tl_ptr->index);
@@ -202,7 +202,7 @@ void *write_timeline_params(void *data)
         {
             if (poll_tl[0].revents & POLLIN)
             {
-                ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters);
+                ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters->translation);
                 // Write code to write new params to shared memory :TODO
                 // parameters->translation.mult = 1;
                 // parameters->translation.last = 1;

@@ -426,11 +426,11 @@ qot_return_t qot_loc2rem(timeline_t *timeline, utimepoint_t *est, int period)
 
     // Check if this is correct
     if (period)
-        val += (timeline->timeline_clock->tranlation.mult*val)/1000000000L;
+        val += (timeline->timeline_clock->translation.mult*val)/1000000000L;
     else
     {
-        val -= timeline->timeline_clock->tranlation.last;
-        val  = timeline->timeline_clock->tranlation.nsec + val + ((timeline->timeline_clock->tranlation.last*val)/1000000000L);
+        val -= timeline->timeline_clock->translation.last;
+        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.last*val)/1000000000L);
     }
     TP_FROM_nSEC(est->estimate, val); 
     return QOT_RETURN_TYPE_OK;
@@ -447,16 +447,16 @@ qot_return_t qot_rem2loc(timeline_t *timeline, utimepoint_t *est, int period)
     if (period)
     {
         //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
-        val = (val/(timeline->timeline_clock->tranlation.mult + 1000000000LL))*1000000000LL;
-        rem = val % (timeline->timeline_clock->tranlation.mult + 1000000000LL);
+        val = (val/(timeline->timeline_clock->translation.mult + 1000000000LL))*1000000000LL;
+        rem = val % (timeline->timeline_clock->translation.mult + 1000000000LL);
         val += rem;
     }
     else
     {
-        int64_t diff = (val - timeline->timeline_clock->tranlation.nsec);
-        int64_t quot = diff/(timeline->timeline_clock->tranlation.mult + 1000000000LL);
-        rem = diff % (timeline->timeline_clock->tranlation.mult + 1000000000LL);
-        val = timeline->timeline_clock->tranlation.last + (quot * 1000000000LL) + rem; 
+        int64_t diff = (val - timeline->timeline_clock->translation.nsec);
+        int64_t quot = diff/(timeline->timeline_clock->translation.mult + 1000000000LL);
+        rem = diff % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val = timeline->timeline_clock->translation.last + (quot * 1000000000LL) + rem; 
     }
     TP_FROM_nSEC(est->estimate, val); 
     return QOT_RETURN_TYPE_OK;
