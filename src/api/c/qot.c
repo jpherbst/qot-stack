@@ -419,6 +419,13 @@ void timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
 {
     // This function should be populated (use timeline->timeline_clock to translate from core time): URGENT
     timeline_getcoretime(timeline, est);
+    if (DEBUG)
+    {
+    	printf("reading time using ivshmem\n");
+    	printf("Timeline Parameters are mult:%lld last:%lld\n", 
+    		timeline->timeline_clock->translation.mult, 
+    		timeline->timeline_clock->translation.last);
+    }
     return;
 }
 #endif
