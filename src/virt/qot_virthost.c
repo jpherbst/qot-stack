@@ -40,6 +40,9 @@
 #include <signal.h> // SIGINT
 #include <poll.h>
 #include <pthread.h>
+#include <sys/shm.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 // Virtualization Datatypes
 #include "qot_virt.h"
@@ -153,10 +156,12 @@ void *write_timeline_params(void *data)
     int i;
     int retval;
     int timeline_fd;
+    int shm_fd;
     char qot_timeline_filename[15];
     struct pollfd poll_tl[1];
-    tl_clockparams_t parameters;
+    tl_clockparams_t *parameters;
     timeline_virt_t *tl_ptr = (timeline_virt_t*) data;
+    void *shmem_ptr;
 
     printf("Thread: New thread spawned for timeline %d\n", tl_ptr->index);
     // Open timeline file descriptor (/dev/timelineX)
@@ -210,6 +215,9 @@ void *write_timeline_params(void *data)
             }
         }
     }
+err_close_shm:
+    close(shm_fd);
+err_close_timeline:
     close(timeline_fd);
     printf("Thread for timeline%d terminating\n", tl_ptr->index);
     return NULL;
