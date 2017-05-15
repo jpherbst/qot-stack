@@ -55,6 +55,7 @@
 #define OFFSET_MSEC      1000
 
 #define DEBUG 1
+#define FILE_ANALYZE 1
 
 static int running = 1;
 
@@ -81,6 +82,11 @@ int main(int argc, char *argv[])
 	int i;
 
 	int step_size_ms = OFFSET_MSEC;
+	
+	#ifdef FILE_ANALYZE
+	FILE* sched_jitter_file;
+	sched_jitter_file = fopen("sched_jitter", "w");
+	#endif
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
@@ -165,7 +171,9 @@ int main(int argc, char *argv[])
 			printf("Uncertainity below         %llu %llu\n", est_now.interval.below.sec, est_now.interval.below.asec);
 			printf("Uncertainity above         %llu %llu\n", est_now.interval.above.sec, est_now.interval.above.asec);
 			printf("WAITING FOR %d ms\n", step_size_ms);
-
+			#ifdef FILE_ANALYZE
+			fprintf(sched_jitter_file, "%llu\n", wake_now.estimate.asec);
+			#endif
 		}
 		timepoint_add(&wake, &step_size);
 		wake_now.estimate = wake;
@@ -184,5 +192,8 @@ int main(int argc, char *argv[])
 
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline);
+	#ifdef FILE_ANALYZE
+	fclose(sched_jitter_file);
+	#endif
 	return 0;
 }

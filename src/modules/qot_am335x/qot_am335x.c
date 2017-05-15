@@ -1035,7 +1035,7 @@ static struct qot_am335x_data *qot_am335x_of_parse(struct platform_device *pdev)
 	pdata->cc.mult = 2796202667UL;
 	pdata->cc.shift = 26;
 	raw_spin_lock_irqsave(&pdata->lock, flags);
-	timecounter_init(&pdata->tc, &pdata->cc, 0);//ktime_to_ns(ktime_get_real()));
+	timecounter_init(&pdata->tc, &pdata->cc, ktime_to_ns(ktime_get_real()));
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 
 	/* Register a Timer to drive the Scheduler Interface */

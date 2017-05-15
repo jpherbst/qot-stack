@@ -41,6 +41,8 @@
 #include <linux/uaccess.h>
 #include <linux/spinlock.h>
 #include <linux/sched.h>
+#include <linux/wait.h>
+#include <linux/poll.h>
 
 #include "qot_admin.h"
 #include "qot_clock.h"
@@ -48,6 +50,8 @@
 #include "qot_scheduler.h"
 
 #define DEVICE_NAME "timeline"
+
+static DECLARE_WAIT_QUEUE_HEAD(timeline_wait);
 
 /* PRIVATE */
 
@@ -81,6 +85,8 @@ typedef struct timeline_impl {
     struct list_head head_low;  /* Head pointing to accuracy (low) */
     struct list_head head_upp;  /* Head pointing to accuracy (upp) */
     struct rb_root root;        /* Root of the RB-Tree of bindings */
+    // Added for virt-host support
+    int sync_update_flag;
 } timeline_impl_t;
 
 /* Private data for a binding, not visible outside this code       */
@@ -371,6 +377,8 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
     timeline_impl->mult = ppb;
     timeline_impl->last  = ns;
+    // Added for virt-host support
+    timeline_impl->sync_update_flag = 1;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     qot_scheduler_update(timeline_impl->info);
     return 0;
@@ -393,6 +401,8 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
     timeline_impl->nsec += (ns - timeline_impl->last)
         + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
     timeline_impl->last = ns;
+    // Added for virt-host support
+    timeline_impl->sync_update_flag = 1;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     qot_scheduler_update(timeline_impl->info);
     return 0;
@@ -433,8 +443,12 @@ static int qot_timeline_chdev_settime(struct posix_clock *pc,
     ns = TP_TO_nSEC(utp.estimate);
     timeline_impl->last = ns;
     timeline_impl->nsec = timespec_to_ns(tp);
+    // Added for virt-host support
+    timeline_impl->sync_update_flag = 1;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     qot_scheduler_update(timeline_impl->info);
+    // Wakeup tasks waiting for timeline parameters updates
+    wake_up_interruptible(&timeline_wait);
     return 0;
 }
 
@@ -488,6 +502,8 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
         tx->freq = timeline_impl->dialed_frequency;
         err = 0;
     }
+    // Wakeup tasks waiting for timeline parameters updates
+    wake_up_interruptible(&timeline_wait);
     return err;
 }
 
@@ -521,6 +537,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
 
     utimelength_t sync_uncertainty; //Fatima
     qot_timer_t timer;
+
+    tl_translation_t timeline_params; //Sandeep
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -754,16 +772,37 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         // Create the Timer
         if (qot_timer_destroy(binding_impl->timer, timeline_impl->info))
             return -EACCES;
-        break;   
+        break;  
+    /* Get timeline parameters (mapping and uncertainty) */
+    case TIMELINE_GET_PARAMETERS:
+        timeline_params.last   = timeline_impl->last;                            /* Discipline: last cycle count of     */
+        timeline_params.mult   = timeline_impl->mult;                            /* Discipline: ppb multiplier          */
+        timeline_params.nsec   = timeline_impl->nsec;                            /* Discipline: global time offset      */
+        timeline_params.u_nsec = timeline_impl->u_nsec;                          /* Discipline: global time for master  */
+        timeline_params.l_nsec = timeline_impl->l_nsec;                          /* Discipline: global time for master  */
+        timeline_params.u_mult = timeline_impl->u_mult;                          /* Discipline: upper bound on ppb      */
+        timeline_params.l_mult = timeline_impl->l_mult;                          /* Discipline: lower bound on ppb      */
+        if (copy_to_user((tl_translation_t*)arg, &timeline_params, sizeof(tl_translation_t)))
+            return -EACCES;
+        break; 
     default:
         return -EINVAL;
     }
     return 0;
 }
 
+// Poll to know if the sync daemon has made some changes
 static unsigned int qot_timeline_chdev_poll(struct posix_clock *pc, struct file *fp,
     poll_table *wait)
 {
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    // Wait for an event (timeline sycnhronization update) to occur
+    poll_wait(fp, &timeline_wait, wait);
+    if(timeline_impl->sync_update_flag)
+    {
+        timeline_impl->sync_update_flag = 0;  // May cause a race but seems to be harmless (consider using spinlock)
+        return POLLIN | POLLRDNORM;
+    }
     return 0;
 }
 
@@ -863,6 +902,9 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
     timeline_impl->dialed_frequency = 0;
     timeline_impl->max_adj = 1000000;
     /* added by Fatima END */
+
+    // Added for virt-host management (sync update)
+    timeline_impl->sync_update_flag = 0;
 
     timeline_impl->info->index = timeline_impl->index;
 

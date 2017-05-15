@@ -41,10 +41,17 @@
 
 #include <linux/ptp_clock.h>
 
-/* This file includes */
+/* Header for function definitions */
 #include "qot.h"
 
-#define DEBUG 0
+#ifdef PARAVIRT_GUEST
+/* Header for guest to host virtserial-based communication for a PV QEMU-KVM guest */
+#include "../../virt/qot_virtguest.h"
+/* Header for file host to guest ivshmem-based communication for a PV QEMU-KVM guest */
+#include "../../virt/pci_mmio/qot_pci_ivshmem.h"
+#endif
+
+#define DEBUG 1
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -54,6 +61,11 @@ typedef struct timeline {
     int qotusr_fd;                        /* File descriptor to /dev/qotusr ioctl     */
     int clock_fd;                         /* File Descriptor to /dev/ptpY             */
     qot_callback_t event_callback;        /* Event Callback Function                  */
+    #ifdef PARAVIRT_GUEST
+    qot_timeline_t virt_info;             /* Virtual (host) timeline information      */
+    int pci_dataregion;                   /* PCI IVSHMEM data region                  */
+    tl_clockparams_t *timeline_clock;     /* Pointer to timeline clock parameters     */
+    #endif
 } timeline_t;
 
 /* Is the given timeline a valid one */
@@ -112,7 +124,11 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     // Try to create a new timeline if none exists
     if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
     {
-        return QOT_RETURN_TYPE_ERR;
+        // If it exists try to get information
+        if(ioctl(timeline->qotusr_fd, QOTUSR_GET_TIMELINE_INFO, &timeline->info) < 0)
+        {
+            return QOT_RETURN_TYPE_ERR;
+        }    
     }
     // Construct the file handle to the posix clock /dev/timelineX
     sprintf(qot_timeline_filename, "/dev/timeline%d", timeline->info.index);
@@ -147,6 +163,48 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     }
     if (DEBUG) 
         printf("Bound to timeline %s\n", uuid);
+
+    // Virtualization-specific Guest extensions -> Send TIMELINE_CREATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->info;
+    virt_msg.msgtype = TIMELINE_CREATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        timeline->virt_info = virt_msg.info;
+        if (DEBUG) 
+            printf("Host replied with %d retval, host timeline id is %d\n",virt_msg.retval, virt_msg.info.index);
+    }
+    // Setup Memory mapping to read timeline clock parameters (mapping, uncertainty)
+    timeline->pci_dataregion = setup_pci_mmio();
+    if (timeline->pci_dataregion < 0)
+    {
+        if (DEBUG) 
+            printf("Failed to open PCI IVSHMEM region\n");
+        return QOT_RETURN_TYPE_ERR;
+    } 
+    // Get pointer to memory region corresponding to timeline clock parameters
+    __u32 offset = timeline->virt_info.index*sizeof(tl_clockparams_t);
+    timeline->timeline_clock = read_timeline_clock_parameters(timeline->pci_dataregion, offset);
+    if (timeline->timeline_clock == NULL)
+    {
+        if (DEBUG) 
+            printf("Failed to get a pointer to PCI IVSHMEM region\n");
+        return QOT_RETURN_TYPE_ERR;
+    } 
+    #endif
 
     // This was there in the old api code
     // if (DEBUG) std::cout << "Start polling " << std::endl;
@@ -183,6 +241,29 @@ qot_return_t timeline_unbind(timeline_t *timeline)
        if(DEBUG)
           printf("Timeline %d not destroyed\n", timeline->info.index);
     }
+
+    // Virtualization-specific Guest extensions -> Send TIMELINE_DESTROY Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msgtype = TIMELINE_DESTROY;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
 
     if (timeline->qotusr_fd)
         close(timeline->qotusr_fd);
@@ -236,6 +317,28 @@ qot_return_t timeline_set_accuracy(timeline_t *timeline, timeinterval_t *acc)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    // Virtualization-specific Guest extensions -> Send TIMELINE_UPDATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msgtype = TIMELINE_UPDATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending updated timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
     *acc = timeline->binding.demand.accuracy;
     return QOT_RETURN_TYPE_OK;
 }
@@ -253,6 +356,28 @@ qot_return_t timeline_set_resolution(timeline_t *timeline, timelength_t *res)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    // Virtualization-specific Guest extensions -> Send TIMELINE_UPDATE Message
+    #ifdef PARAVIRT_GUEST
+    // Populate the timeline+binding metadata
+    qot_virtmsg_t virt_msg;
+    virt_msg.info = timeline->virt_info;
+    virt_msg.msgtype = TIMELINE_UPDATE;
+    virt_msg.demand = timeline->binding.demand;
+    virt_msg.retval = QOT_RETURN_TYPE_ERR;
+    if (DEBUG) 
+        printf("Sending updated timeline metadata to host\n");
+    if(send_message(&virt_msg) == QOT_RETURN_TYPE_ERR)
+    {
+        if (DEBUG) 
+            printf("Failed to send timeline metadata to host\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+    else
+    {
+        // Add error handling -> retry
+        printf("Host replied with retval %d\n",virt_msg.retval);
+    }
+    #endif
     *res = timeline->binding.demand.resolution;
     return QOT_RETURN_TYPE_OK;
 }
@@ -289,18 +414,89 @@ qot_return_t timeline_getcoretime(timeline_t *timeline, utimepoint_t *core_now)
     return QOT_RETURN_TYPE_OK;
 }
 
+#ifdef PARAVIRT_GUEST
+// BASIC TIME PROJECTION FUNCTIONS /////////////////////////////////////////////
+qot_return_t qot_loc2rem(timeline_t *timeline, utimepoint_t *est, int period)
+{    
+    int64_t val;
+    if(!timeline)
+        return QOT_RETURN_TYPE_ERR;
+
+    val = TP_TO_nSEC(est->estimate);
+
+    // Check if this is correct
+    if (period)
+        val += (timeline->timeline_clock->translation.mult*val)/1000000000L;
+    else
+    {
+        val -= timeline->timeline_clock->translation.last;
+        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.last*val)/1000000000L);
+    }
+    TP_FROM_nSEC(est->estimate, val); 
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t qot_rem2loc(timeline_t *timeline, utimepoint_t *est, int period)
+{
+    int64_t val;
+    int64_t rem;
+
+    if(!timeline || !timeline->timeline_clock)
+        return QOT_RETURN_TYPE_ERR;
+    val = TP_TO_nSEC(est->estimate);
+
+    if (period)
+    {
+        //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
+        val = (val/(timeline->timeline_clock->translation.mult + 1000000000LL))*1000000000LL;
+        rem = val % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val += rem;
+    }
+    else
+    {
+        int64_t diff = (val - timeline->timeline_clock->translation.nsec);
+        int64_t quot = diff/(timeline->timeline_clock->translation.mult + 1000000000LL);
+        rem = diff % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val = timeline->timeline_clock->translation.last + (quot * 1000000000LL) + rem; 
+    }
+    TP_FROM_nSEC(est->estimate, val); 
+    return QOT_RETURN_TYPE_OK;
+}
+
+qot_return_t timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
+{
+    // This function should be populated (use timeline->timeline_clock to translate from core time): URGENT
+    qot_return_t retval;
+    timeline_getcoretime(timeline, est);
+    if (DEBUG)
+    {
+    	printf("reading time using ivshmem\n");
+    	printf("Timeline Parameters are mult:%lld last:%lld\n", 
+    		timeline->timeline_clock->translation.mult, 
+    		timeline->timeline_clock->translation.last);
+    }
+    retval = qot_loc2rem(timeline, est, 0);
+    return retval;
+}
+#endif
+
 qot_return_t timeline_gettime(timeline_t *timeline, utimepoint_t *est) 
 {    
     if(!timeline)
         return QOT_RETURN_TYPE_ERR;
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
-    
+
+    #ifdef PARAVIRT_GUEST
+    // Virtualization-specific Guest extensions -> Get Timeline Clock Time
+    return timeline_getvtime(timeline, est);
+    #else
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_GET_TIME_NOW, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
+    #endif
     
     return QOT_RETURN_TYPE_OK;
 }
@@ -348,88 +544,88 @@ qot_return_t timeline_disable_output_compare(timeline_t *timeline,
 qot_return_t timeline_config_pin_timestamp(timeline_t *timeline, qot_extts_t *request, int enable) 
 {
     qot_clock_t core_clock;
-    char ptp_device[QOT_MAX_NAMELEN];           /* File Name              */
-    int fd;                                     /* device file descriptor */
-    int index = 1;                              /* Channel index, 'corresponding to the pin */
-    struct ptp_clock_caps caps;                 /* Clock capabilities */
-    struct ptp_pin_desc desc;                   /* Pin configuration */
-    struct ptp_extts_request extts_request;     /* External timestamp req */
+    // char ptp_device[QOT_MAX_NAMELEN];           /* File Name              */
+    // int fd;                                     /* device file descriptor */
+    // int index = 1;                              /* Channel index, 'corresponding to the pin */
+    // struct ptp_clock_caps caps;                 /* Clock capabilities */
+    // struct ptp_pin_desc desc;                   /* Pin configuration */
+    // struct ptp_extts_request extts_request;     /* External timestamp req */
 
 
-    if(!timeline)
-        return QOT_RETURN_TYPE_ERR;
-    if (fcntl(timeline->fd, F_GETFD)==-1)
-        return QOT_RETURN_TYPE_ERR;
+    // if(!timeline)
+    //     return QOT_RETURN_TYPE_ERR;
+    // if (fcntl(timeline->fd, F_GETFD)==-1)
+    //     return QOT_RETURN_TYPE_ERR;
     
-    // Get the presiding core clock
-    if(ioctl(timeline->qotusr_fd, QOTUSR_GET_CORE_CLOCK_INFO, &core_clock) < 0)
-    {
-        return QOT_RETURN_TYPE_ERR;
-    }
+    // // Get the presiding core clock
+    // if(ioctl(timeline->qotusr_fd, QOTUSR_GET_CORE_CLOCK_INFO, &core_clock) < 0)
+    // {
+    //     return QOT_RETURN_TYPE_ERR;
+    // }
 
-    // Create the file name
-    sprintf(ptp_device, "/dev/ptp%d", core_clock.phc_id);
+    // // Create the file name
+    // sprintf(ptp_device, "/dev/ptp%d", core_clock.phc_id);
 
-    if(enable)
-    {
-        /* Open the core clock ptp character device */
-        fd = open(ptp_device, O_RDWR);
-        if (fd < 0) {
-            printf("Failed to open ptp device %s\n", ptp_device);
-            return QOT_RETURN_TYPE_ERR;
-        }
-        printf("Opened ptp device %s with fd = %d\n", ptp_device, fd);
-        timeline->clock_fd = fd;
+    // if(enable)
+    // {
+    //     /* Open the core clock ptp character device */
+    //     fd = open(ptp_device, O_RDWR);
+    //     if (fd < 0) {
+    //         printf("Failed to open ptp device %s\n", ptp_device);
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    //     printf("Opened ptp device %s with fd = %d\n", ptp_device, fd);
+    //     timeline->clock_fd = fd;
 
-        /* Pin to perform external time stamping */
-        index = request->pin_index;
+    //     /* Pin to perform external time stamping */
+    //     index = request->pin_index;
 
-        /* Check if clock supports external timestamps */
-        if (ioctl(fd, PTP_CLOCK_GETCAPS, &caps)) {
-            printf("cannot get capabilities of clock");
-            return QOT_RETURN_TYPE_ERR;
-        }
-        if(caps.n_ext_ts < 1)
-        {
-            printf("clock cannot perform external timestamping\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
+    //     /* Check if clock supports external timestamps */
+    //     if (ioctl(fd, PTP_CLOCK_GETCAPS, &caps)) {
+    //         printf("cannot get capabilities of clock");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    //     if(caps.n_ext_ts < 1)
+    //     {
+    //         printf("clock cannot perform external timestamping\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
 
-        /* Configure the pin to support external timestamps */
-        memset(&desc, 0, sizeof(desc));
-        desc.index = index;
-        desc.func = 1;                              /* '1' corresponds to external timestamp */
-        desc.chan = index;
-        if (ioctl(fd, PTP_PIN_SETFUNC, &desc)) {
-            printf("Set pin func failed for\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
+    //     /* Configure the pin to support external timestamps */
+    //     memset(&desc, 0, sizeof(desc));
+    //     desc.index = index;
+    //     desc.func = 1;                              /* '1' corresponds to external timestamp */
+    //     desc.chan = index;
+    //     if (ioctl(fd, PTP_PIN_SETFUNC, &desc)) {
+    //         printf("Set pin func failed for\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
         
-        /* Request timestamps from the pin */ 
-        memset(&extts_request, 0, sizeof(extts_request));
-        extts_request.index = index;
-        extts_request.flags = PTP_ENABLE_FEATURE;
-        if (ioctl(fd, PTP_EXTTS_REQUEST, &extts_request)) {
-            printf("Requesting timestamps failed for\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
-    }
-    else
-    {
-        /* Disable the pin */
-        if (fcntl(timeline->clock_fd, F_GETFD)==-1)
-            return QOT_RETURN_TYPE_ERR;
-        memset(&desc, 0, sizeof(desc));
-        desc.index = request->pin_index;
-        desc.func = 0;              // '0' corresponds to no function 
-        desc.chan = request->pin_index;
-        if (ioctl(timeline->clock_fd, PTP_PIN_SETFUNC, &desc)) {
-            perror("PTP_PIN_SETFUNC Disable");
-        }
+    //     /* Request timestamps from the pin */ 
+    //     memset(&extts_request, 0, sizeof(extts_request));
+    //     extts_request.index = index;
+    //     extts_request.flags = PTP_ENABLE_FEATURE;
+    //     if (ioctl(fd, PTP_EXTTS_REQUEST, &extts_request)) {
+    //         printf("Requesting timestamps failed for\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    // }
+    // else
+    // {
+    //     /* Disable the pin */
+    //     if (fcntl(timeline->clock_fd, F_GETFD)==-1)
+    //         return QOT_RETURN_TYPE_ERR;
+    //     memset(&desc, 0, sizeof(desc));
+    //     desc.index = request->pin_index;
+    //     desc.func = 0;              // '0' corresponds to no function 
+    //     desc.chan = request->pin_index;
+    //     if (ioctl(timeline->clock_fd, PTP_PIN_SETFUNC, &desc)) {
+    //         perror("PTP_PIN_SETFUNC Disable");
+    //     }
         
-        /* Close the character device */
-        close(timeline->clock_fd);
-    }
+    //     /* Close the character device */
+    //     close(timeline->clock_fd);
+    // }
     return QOT_RETURN_TYPE_OK;
 }
 

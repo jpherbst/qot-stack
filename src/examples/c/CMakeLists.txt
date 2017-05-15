@@ -7,20 +7,23 @@ ADD_EXECUTABLE(helloworld
 )
 TARGET_LINK_LIBRARIES(helloworld qot)
 
-ADD_EXECUTABLE(helloworld_capture
-	helloworld_capture.c
-)
-TARGET_LINK_LIBRARIES(helloworld_capture qot)
+IF (NOT BUILD_VIRT_GUEST)
+	ADD_EXECUTABLE(helloworld_capture
+		helloworld_capture.c
+	)
+	TARGET_LINK_LIBRARIES(helloworld_capture qot)
 
-ADD_EXECUTABLE(helloworld_compare
-	helloworld_compare.c
-)
-TARGET_LINK_LIBRARIES(helloworld_compare qot)
+	ADD_EXECUTABLE(helloworld_compare
+		helloworld_compare.c
+	)
+	TARGET_LINK_LIBRARIES(helloworld_compare qot)
 
-ADD_EXECUTABLE(helloworld_gpio
-	helloworld_gpio.c
-)
-TARGET_LINK_LIBRARIES(helloworld_gpio qot)
+	ADD_EXECUTABLE(helloworld_gpio
+		helloworld_gpio.c
+	)
+	TARGET_LINK_LIBRARIES(helloworld_gpio qot)
+ENDIF (NOT BUILD_VIRT_GUEST)
+
 
 ADD_EXECUTABLE(helloworld_end2end
 	helloworld_end2end.c
@@ -76,33 +79,35 @@ INSTALL(
 	COMPONENT 
 		applications
 )
+IF (NOT BUILD_VIRT_GUEST)
+	INSTALL(
+		TARGETS 
+			helloworld_capture
+		DESTINATION 
+			bin 
+		COMPONENT 
+			applications
+	)
 
-INSTALL(
-	TARGETS 
-		helloworld_capture
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
+	INSTALL(
+		TARGETS 
+			helloworld_gpio
+		DESTINATION 
+			bin 
+		COMPONENT 
+			applications
+	)
 
-INSTALL(
-	TARGETS 
-		helloworld_gpio
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
+	INSTALL(
+		TARGETS 
+			helloworld_compare
+		DESTINATION 
+			bin 
+		COMPONENT 
+			applications
+	)
+ENDIF (NOT BUILD_VIRT_GUEST)
 
-INSTALL(
-	TARGETS 
-		helloworld_compare
-	DESTINATION 
-		bin 
-	COMPONENT 
-		applications
-)
 
 INSTALL(
 	TARGETS 

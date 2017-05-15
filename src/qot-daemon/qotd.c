@@ -123,7 +123,7 @@ void deltaT(const char* name, uint64_t *x, int calc_hist)
    median = (double)min + ((double)(max - min) / 2);
    temp = (double)((count  * sum2 - (sum * sum)) / (count * count));
    stdev =  sqrt(temp);
-
+   printf("Avg = %f, Median = %f, Min = %lld, Max = %llu", avg, median, min, max);
    // Program the uncertainities -> Needs to be refined still primitive
    TL_FROM_nSEC(uncertainity.estimate, (sum/count)+1);
    TL_FROM_nSEC(uncertainity.interval.below, (uint64_t)stdev);
