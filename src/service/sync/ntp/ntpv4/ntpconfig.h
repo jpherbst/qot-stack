@@ -24,8 +24,8 @@
 #define RATIO_SCALE 0.8
 
 // Used for debugging
-#define DEBUG true
-#define CLOCK_REAL true
+#define DEBUG FALSE
+#define CLOCK_REAL FALSE
 
 #define  DEF_PSEC        1  // Period of NTP sync
 #define  DEF_TIMEOUT     1  // ntp packet timeout (s)

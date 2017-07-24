@@ -8,7 +8,7 @@
 
 #include "ntpclient.h"
 
-#define DEBUG true
+#define DEBUG FALSE
 
 Clock local_clock;
 
@@ -32,7 +32,7 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
   int i;
   Response resp;
 
-#ifdef DEBUG
+/*#ifdef DEBUG
   printf("\nTotal is: %d\n", total);
   for(i = 0; i < total; i++){
     resp = resp_list[i];
@@ -41,6 +41,7 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
   }
   printf("\n");
 #endif
+*/
   
   Interval interv_list[total];
   filter(resp_list, interv_list, total);
@@ -109,13 +110,13 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
     surv_list[i_min] = surv_tem;
   }
   
-#ifdef DEBUG
+/*#ifdef DEBUG
   printf("\n Survivors:\n");
   for(i = 0; i < n_survivor; i++){
     printf("%d %lld %lld %lld\n", surv_list[i].stratum, surv_list[i].offset, surv_list[i].weight, surv_list[i].rootDist);
   }
 #endif
-  
+ */ 
   long long maxJitter = 0, minJitter = 0, phi, s_i, s_j;
   int maxIndex = 0, minIndex = 0;
   while(true){
@@ -145,19 +146,18 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
     n_survivor--; 
   }
 
-#ifdef DEBUG
+/*#ifdef DEBUG
   printf("\n Rest Survivors:\n");
   for(i = 0; i < n_survivor; i++){
     printf("%d %lld %lld %lld\n", surv_list[i].stratum, surv_list[i].offset, surv_list[i].weight, surv_list[i].rootDist);
   }
-  /*struct timeval tv_real;
+  struct timeval tv_real;
   gettimeofday(&tv_real, NULL); // real time clock
   long long t_real = TTLUSEC(tv_real.tv_sec, tv_real.tv_usec);
   long long t_sync = gettime();
   printf("Compare clock: real %lld, sync %lld, diff %lld\n\n", t_real, t_sync, t_real-t_sync);
-  */
 #endif
-
+*/
   // =============== combination ==============
   long long offset0 = surv_list[0].offset;
   Survivor *surv;
@@ -172,9 +172,6 @@ void ntp_process(int timelinefd, Response resp_list[], const int total)
   local_clock.offset = (long long) (z/y);
   local_clock.jitter = (long long) sqrt(w/y);
   local_clock.index ++; 
-
-  // QOT, adjusting timelines
-  adjust_clock(timelinefd);
 
 /*
 clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
@@ -202,6 +199,8 @@ clock_gettime(CLOCK_MONOTONIC_RAW, &ts_raw);
   printf("Rseult: ratio = %lf, offset = %lld, low = %lld, up = %lld, jitter = %lld\n\n", \
 	 local_clock.ratio, local_clock.offset, local_clock.low, local_clock.up, local_clock.jitter);
 
+  // QOT, adjusting timelines
+  adjust_clock(timelinefd);
 /*
 #ifdef RECORD
   if(i_sample == NUM_SAMPLE) {
@@ -250,11 +249,11 @@ void filter(Response resp_list[], Interval *interv_list, const int total)
   }
   long long jitter = (long long) sqrt(sum/total);
   
-#ifdef DEBUG
+/*#ifdef DEBUG
   printf("peer_disp: %lld\n", peer_disp);
   printf("jitter: %lld\n", jitter);
 #endif
-
+*/
   // calculate root distance
   long long root_dist;
   Interval interval;
@@ -303,13 +302,13 @@ int select_clock(const Interval *interv_list, const int total)
     point_list[i_min] = point_tem;
   }
   
-#ifdef DEBUG
+/*#ifdef DEBUG
   printf("\n");
   for(i = 0; i < 3*total; i++){
     printf("point: %d, %lld\n", point_list[i].type, point_list[i].offset);
   }
 #endif
-  
+*/ 
   int m = total, f = 0, d = 0, c = 0, l = 0, u = 0;
   Point *p;
   while(true){
@@ -378,6 +377,8 @@ void clockadj_set_freq(clockid_t clkid, double freq)
   tx.freq = (long) (freq * 65.536);
   if (clock_adjtime(clkid, &tx) < 0)
     printf("failed to adjust the clock");
+
+  printf("CLOCK ADJ\n");
 }
 
 void clockadj_step(clockid_t clkid, int64_t step)
@@ -402,19 +403,60 @@ void clockadj_step(clockid_t clkid, int64_t step)
   }
   if (clock_adjtime(clkid, &tx) < 0)
     printf("failed to step clock");
+
+  printf("CLOCK JUMP\n");
 }
 
 void adjust_clock(int fd)
 {
+  struct timex tx;
+  int sign = 1;
+  int64_t step;
+  double freq;
+  memset(&tx, 0, sizeof(tx));
+
   clockid_t tml_id = FD_TO_CLOCKID(fd);
-  double adj = (local_clock.ratio - 1) * nSEC_PER_SEC;
-  int64_t offset = local_clock.offset * nSEC_PER_SEC;
+  double adj = (local_clock.ratio * nSEC_PER_SEC ) - nSEC_PER_SEC; // adj is in ppb, divide by 1000000000 to get seconds
+  int64_t offset = local_clock.offset * 1000ULL; //Offset is in microsecond, multiply by 1000 to get nanoseconds
+
+  printf("Adjust timeline, offset: %lld, ppb: %+7.0f\n", offset, adj);
+
+  step = offset;
+  freq = adj;
 
   // Adjust offset gradually within one period
-  if(adj > MAXFREQADJ || adj < -MAXFREQADJ)
-    clockadj_step(tml_id, -offset);
-  // Offset is too big to be gradually adjusted, jump clock instead
-  else
-    clockadj_set_freq(tml_id, -adj);    
+  if(adj > MAXFREQADJ || adj < -MAXFREQADJ){ // Offset is too big to be gradually adjusted, jump clock instead
+    //clockadj_step(tml_id, -offset); 
+
+    if (step < 0) {
+      sign = -1;
+      step *= -1;
+    }
+    
+    tx.modes = ADJ_SETOFFSET | ADJ_NANO;
+    tx.time.tv_sec  = sign * (step / nSEC_PER_SEC);
+    tx.time.tv_usec = sign * (step % nSEC_PER_SEC);
+  /*
+   * The value of a timeval is the sum of its fields, but the
+   * field tv_usec must always be non-negative.
+   */
+    if (tx.time.tv_usec < 0) {
+      tx.time.tv_sec  -= 1;
+      tx.time.tv_usec += 1000000000;
+    }
+    if (clock_adjtime(tml_id, &tx) < 0)
+      printf("failed to step clock %d\n", tml_id);
+
+    printf("CLOCK JUMP\n");
+
+  }else{
+    //clockadj_set_freq(tml_id, -adj);    
+    tx.modes |= ADJ_FREQUENCY;
+    tx.freq = (long) (freq * 65.536);
+    if (clock_adjtime(tml_id, &tx) < 0)
+      printf("failed to adjust the clock %d\n", tml_id);
+
+    printf("CLOCK ADJ\n");
+  }
 }
 
