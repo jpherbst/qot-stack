@@ -399,7 +399,7 @@ Use the following command to install the dependencies necessary for installing Q
 ```
 $> sudo apt-get install git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev flex bison
 ```
-You can now install QEMU-KVM from source:
+You can now install QEMU from source:
 ```
 # Clone the QEMU repository
 $> git clone git://git.qemu-project.org/qemu.git
@@ -408,21 +408,26 @@ $> git submodule update --init dtc
 # Build DTC
 $> cd dtc
 $> make
-# Build and configure QEMU-KVM for x86-64 machines
+# Build and configure QEMU for x86-64 machines
 $> cd ..
 $> mkdir bin
 $> cd bin
 $> ../configure --target-list=x86_64-softmmu --enable-debug
 $> make
 $> sudo make install
-# Check if QEMU-KVM qorks
+# Check if QEMU works
 $> qemu-system-x86_64 --version
 ```
-We reccomend you use a version of KVM which uses a QEMU version > 2.5. The instructions have been tested to work on QEMU 2.8
+We reccomend you use a version of QEMU > 2.5. The instructions have been tested to work on QEMU 2.8
 
-Install supporting packages such as `libvirtd` and `virt-manager`. Virt-Manager is a graphical application for managing your virtual machines — you can use the kvm command directly, but libvirt and Virt-Manager simplify the process.
+Install supporting packages such as `qemu-kvm`, `libvirtd` and `virt-manager`. Virt-Manager is a graphical application for managing your virtual machines — you can use the kvm command directly, but libvirt and Virt-Manager simplify the process.
 ```
-$> sudo apt-get install libvirt-bin bridge-utils virt-manager
+$> sudo apt-get install qemu-kvm libvirt-bin bridge-utils virt-manager
+```
+
+Check that the version of QEMU used by KVM is same as the version of QEMU installed from source:
+```
+$> kvm --version
 ```
 
 Only the root user and users in the libvirtd group have permission to use KVM virtual machines. Run the following command to add your user account to the libvirtd group:
