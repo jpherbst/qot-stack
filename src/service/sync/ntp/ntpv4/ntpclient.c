@@ -91,32 +91,33 @@ void send_packet(int fd, int timelinefd)
 		  | (STRATUM << 16) | (POLL << 8) | (PREC & 0xff));
   data[1] = htonl(1 << 16);
   data[2] = htonl(1 << 16);
-
+/*
 #ifdef CLOCK_REAL     // test real clock
   struct timeval now;
   gettimeofday(&now, NULL); // get timestamp =====> change to TSC!
   data[10] = htonl(now.tv_sec + JAN_1970);
   data[11] = htonl(NTPFRAC(now.tv_usec));
 #else    
-  //todo: fix finding core time 
+*/
   struct timespec ts_now;
   if(gettime(timelinefd, &ts_now)){
     printf( "timestamping error" );
     exit(1);
   }
   t_now = TTLUSEC(ts_now.tv_sec, ts_now.tv_nsec/1000);
+  printf("timeline initiating timestamp (should be t1): %lld\n", t_now);
 
   //printf("new: %lld, %lld\n", t_now / MILLION, t_now % MILLION);
   //printf("old: %lld, %lld\n", (long long) now.tv_sec, (long long) now.tv_usec);
   data[10] = htonl(t_now / MILLION + JAN_1970);
   data[11] = htonl(NTPFRAC(t_now % MILLION));  
-#endif
+//#endif
   
   ret = send(fd, data, 48, 0);
   
-#ifdef DEBUG
+//#ifdef DEBUG
   printf("send packet to ntp server, ret: %d\n", ret);
-#endif
+//#endif
 }
 
 //Acquire and Analyze NTP packet
@@ -132,21 +133,21 @@ bool get_server_time(int sock, Response *resp, int timelinefd)
   
   ret = recvfrom(sock, data, sizeof (data), 0, NULL, 0);
   
-#ifdef CLOCK_REAL
+/*#ifdef CLOCK_REAL
   struct timeval now;
   gettimeofday(&now, NULL);
 #else
-  //todo: fix finding core time 
+ */
   struct timespec ts_now;
   if(gettime(timelinefd, &ts_now)){
     printf( "timestamping error" );
     exit(1);
   }
   t_now = TTLUSEC(ts_now.tv_sec, ts_now.tv_nsec/1000);
-
+  //printf("timeline timestamp: %lld\n", t_now);
   //printf("new: %lld, %lld\n", t_now / MILLION + JAN_1970, t_now % MILLION);
   //printf("old: %lld, %lld\n", (long long) now.tv_sec + JAN_1970, (long long) now.tv_usec);
-#endif
+//#endif
   
   if(ret < 0){
     if(ret == EWOULDBLOCK || ret== EAGAIN){ // timeout
@@ -186,21 +187,25 @@ bool get_server_time(int sock, Response *resp, int timelinefd)
   long long t1 = TTLUSEC(MKSEC(oritime), MKUSEC(oritime));
   long long t2 = TTLUSEC(MKSEC(rectime), MKUSEC(rectime));
   long long t3 = TTLUSEC(MKSEC(tratime), MKUSEC(tratime));
-#ifdef CLOCK_REAL
-  long long t4 = TTLUSEC(now.tv_sec, now.tv_usec);
-#else
+//#ifdef CLOCK_REAL
+ // long long t4 = TTLUSEC(now.tv_sec, now.tv_usec);
+//#else
   long long t4 = t_now;
-#endif
+//#endif
+  printf("timeline timestamp t1: %lld\n", t1);
+  printf("server   timestamp t2: %lld\n", t2);
+  printf("server   timestamp t3: %lld\n", t3);
+  printf("timeline timestamp t4: %lld\n", t4);
 
   //rtt = (T2 - T1) + (T4 - T3); offset = [(T2 - T1) + (T3 - T4)] / 2;
   resp->delay  = (t2 - t1) + (t4 - t3);
   resp->offset = ((t2 - t1) + (t3 - t4)) / 2;
 
-#ifdef DEBUG
+//#ifdef DEBUG
   printf("Server response:\n");
   printf("stratum: %d, rootDelay: %lld, rootDisp: %lld\n", resp->stratum, resp->rootDelay, resp->rootDisp);
   printf("delay: %lld, offset: %lld\n\n", resp->delay, resp->offset);
-#endif
+//#endif
 
   double server_prec = LOG2D(resp->precision)*1000000;
   double local_prec = LOG2D(PREC)*1000000;
@@ -213,19 +218,19 @@ bool get_server_time(int sock, Response *resp, int timelinefd)
 
 int gettime(int fd, struct timespec *tml_ts)
 {
-  struct timespec ts;
+  //struct timespec ts;
 
   // todo: how to read core time?
   //if(read_core_time(corefd, &ts))
-      return -1;
+   //   return -1;
 
   // Project core timestamp to timeline reference
-  timepoint_t tp;
-  timepoint_from_timespec(&tp, &ts); 
+  utimepoint_t utp;
+  //timepoint_from_timespec(&tp, &ts); 
 
-  if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &tp)){
-    tml_ts->tv_sec = tp.sec;
-    tml_ts->tv_nsec= tp.asec / nSEC_PER_SEC;
+  if(ioctl(fd, TIMELINE_GET_TIME_NOW, &utp) == 0){
+    tml_ts->tv_sec = utp.estimate.sec;
+    tml_ts->tv_nsec= utp.estimate.asec / nSEC_PER_SEC;
     return 0;
   }
   return -1;

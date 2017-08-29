@@ -135,4 +135,6 @@ void reset_clock();
 unsigned long longnative_read_tsc(void);
 int gettime(int fd, struct timespec *tml_ts);
 void adjust_clock(int fd);
+void clockadj_set_freq(clockid_t clkid, double freq);
+void clockadj_step(clockid_t clkid, int64_t step);
 void reset_ratio();
