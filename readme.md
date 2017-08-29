@@ -72,8 +72,8 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 
 * Anthony Rowe
 * Raj Rajkumar
-* Adwait Dongare
 * Sandeep Dsouza
+* Adwait Dongare
 
 **University of California San Diego (UCSD)**
 
@@ -96,12 +96,15 @@ Please refer to the [wiki](https://bitbucket.org/rose-line/qot-stack/wiki).
 * Joaquim Dias Garcia
 
 =======
-# Overview #
+# Installation Overview #
 
-This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. The general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes.
-In case, a more simpler version of the setup is desired, please refer to the section on the controller setup and then directly refer to the section on the Standalone SD card setup. For the NFS based setup, please skip the section on the standalone setup.
+This project is intended for developers, and so it presumes a certain working knowledge of embedded Linux. We provide setup instructions for the ARM-based Beablebone Black (BBB) embedded Linux platform, x86-based machines, and x86-based virtualized environments. For the BBB we describe two types of development setup scenarios: (1) an NFS-TFTP-based setup, and (2) a standalone SD-card based setup.
+
+For the BBB NFS-based setup, the general idea is to have BeagleBones fetch a Linux kernel and device tree over TFTP from a controller, and then mount an NFS share at the root file system. In this was we don't have to insert and eject many microsd cards, and we are guaranteed to have a consistent version of firmware across all nodes. Most of this documentation is dedicated to explaining this setup. For the BBB, in case, a more simpler version of the setup is desired, please refer to the section on the controller setup and then directly refer to the section on the Standalone SD card setup. For the NFS-based setup, please skip the section on the standalone setup. If you are interested in setting up the stack for an x86-based machine, please skip to the x86 section. For setting up the QoT Stack for Linux in a virtualized environment (QEMU-KVM), please skip to the vitualization-setup section.
 
 ![qot-setup.png](https://bitbucket.org/repo/5Eg8za/images/2069891140-qot-setup.png)
+
+# BBB NFS-TFTP-based development setup #
 
 There are three key devices in the system:
 
