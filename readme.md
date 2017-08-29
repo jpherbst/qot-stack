@@ -425,6 +425,12 @@ Install supporting packages such as `qemu-kvm`, `libvirtd` and `virt-manager`. V
 $> sudo apt-get install qemu-kvm libvirt-bin bridge-utils virt-manager
 ```
 
+Perform the following steps to ensure `libvirtd` and `kvm` use the latest versions of `QEMU`:
+```
+$> sudo rm /usr/bin/qemu*
+$> sudo cp /usr/local/bin/qemu-* /usr/bin
+```
+
 Check that the version of QEMU used by KVM is same as the version of QEMU installed from source:
 ```
 $> kvm --version
