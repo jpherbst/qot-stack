@@ -540,12 +540,12 @@ $> popd
 
 You now have a working OpenSplice distribution with C++11 support. This basically provides a fully-distributed publish-subscribe messaging middleware with quality of service support. This mechanism will be used to advertise timelines across the network. We now elaborate the process to install opensplice
 
-### (i) For the BBB ###
+### (i) For the BBB 
 The slaves (NFS-based or SD card-based) have their own arm versions of Java, ROS and OpenSplice 6.4 in the `/opt` directory of the rootfs, and whenever you SSH into a slave the `/etc/profile` script initializes all three for you. 
 
 Note that whenever you run an OpenSplice-driven app you will need to set an environment variable `OSPL_URI` that configures the domain for IPC communication. This is described by an XML file, which is usually placed somewhere in your OpenSplice source tree. There are some default files. For the NFS-based BBB setup, the slave rootfs is configured by default to find the XML configuration in /mnt/openxplice/ospl.xml, as the configuration needs to be different for each slave -- they have different IPs and thus different`<NetworkInterfaceAddress>` tag values. You may already have executed the instructions for installing and configuring this XML file for unique BBB IP address in Step 6 of Controller Preparation above.
 
-### (ii) For x86-based machines ### 
+### (ii) For x86-based machines 
 Follow the following steps:
 ```
 $> cd /opt
@@ -563,7 +563,7 @@ $> vim ~/.bashrc
 ```
 Once you re-login to the shell (or re-run bashrc) you should now have a working opensplice distribution with all the environment variables set. 
 
-### (iii) For x86-based virtual machines ### 
+### (iii) For x86-based virtual machines  
 Follow the following steps on the virtual machine (VM) as well as the VM host machine:
 ```
 $> cd /opt
