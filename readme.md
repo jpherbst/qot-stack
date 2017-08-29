@@ -594,10 +594,10 @@ $> ccmake ..
 ```
 You should now see a cmake screen in your terminal with multiple configuration options. The configuration options you choose will depend on the target build. The different configuration options are elaborated below:
 
-### (i) Build configuration options ### 
+### (i) Build configuration options 
 The following configuration options can be configured in the QoT Stack:
 
-#### (a) Library and Installation Path Configuration Options ####
+#### (a) Library and Installation Path Configuration Options 
 **Note**: These options should be set automatically, change only if you have problems while configuring the options. If you are missing some dependencies (such as Boost), you may need to manually install the missing dependencies.
 ```
 1. BOOST_THREAD_LIBRARY          - Path to the Boost Library (Boost 1.55 Required and must be installed)
@@ -608,7 +608,7 @@ The following configuration options can be configured in the QoT Stack:
 6. KERNEL_LIBRARY                - Location of the opensplice kernel Library
 7. OpenSplice_INCLUDE_DIR        - Location of the opensplice headers
 ```
-#### (b) Component configuration ####
+#### (b) Component configuration 
 **Note**: These options decde which components get compiled and installed to the target.
 ```
 1. BUILD_CPP_API                    - Build the C++ API and Libraries                                    
@@ -641,7 +641,7 @@ The following configuration options can be configured in the QoT Stack:
    
 Once the options are configures press `c` to generate the configuration. If the configuration is succesful, press `g` to generate the makefiles and exit the CMake Configuration screen. You are now ready to build the stack.
 
-### (ii) Build and Install ### 
+### (ii) Build and Install 
 ```
 $> make
 ```
