@@ -395,31 +395,46 @@ $> egrep -c ‘(svm|vmx)’ /proc/cpuinfo
 ```
 A 0 indicates that your CPU doesn’t support hardware virtualization, while a 1 or more indicates that it does. You may still have to enable hardware virtualization support in your computer’s BIOS, even if this command returns a 1 or more
 
-Use the following command to install KVM and supporting packages. Virt-Manager is a graphical application for managing your virtual machines — you can use the kvm command directly, but libvirt and Virt-Manager simplify the process.
+Use the following command to install the dependencies necessary for installing QEMU-KVM:
 ```
-$> sudo apt-get install qemu-kvm libvirt-bin bridge-utils virt-manager
+$> sudo apt-get install git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev flex bison
 ```
+You can now install QEMU-KVM from source:
+```
+# Clone the QEMU repository
+$> git clone git://git.qemu-project.org/qemu.git
+# Initialize the DTC submodule (necessary to build QEMU-KVM)
+$> git submodule update --init dtc
+# Build DTC
+$> cd dtc
+$> make
+# Build and configure QEMU-KVM for x86-64 machines
+$> cd ..
+$> mkdir bin
+$> cd bin
+$> ../configure --target-list=x86_64-softmmu --enable-debug
+$> make
+$> sudo make install
+# Check if QEMU-KVM qorks
+$> qemu-system-x86_64 --version
+```
+We reccomend you use a version of KVM which uses a QEMU version > 2.5. The instructions have been tested to work on QEMU 2.8
 
-We reccomend you use a version of KVM which uses a QEMU version > 2.5. The instructions have been tested to work on QEMU 2.8. To check you QEMU-KVM version use the following command:
+Install supporting packages such as `libvirtd` and `virt-manager`. Virt-Manager is a graphical application for managing your virtual machines — you can use the kvm command directly, but libvirt and Virt-Manager simplify the process.
 ```
-$> kvm --version
+$> sudo apt-get install libvirt-bin bridge-utils virt-manager
 ```
 
 Only the root user and users in the libvirtd group have permission to use KVM virtual machines. Run the following command to add your user account to the libvirtd group:
 ```
 $> sudo adduser <username> libvirtd
+# Restart the daemon 
+$> sudo /etc/init.d/libvirt-bin restart
 ```
 
 After running this command, log out and log back in. Run this command after logging back in and you should see an empty list of virtual machines. This indicates that everything is working correctly.
 ```
 $> virsh -c qemu:///system list
-```
-```
-tar xzf qemu-kvm-release.tar.gz
-cd qemu-kvm-release
-./configure --prefix=/usr/local/kvm
-make
-sudo make install
 ```
 
 ### Step 2: Create a Debian-based VM ###
@@ -627,6 +642,7 @@ The following configuration options can be configured in the QoT Stack:
 14. GENERIC_BUILD                   - Generic software-based clock driver (x86 host, non-PV guest, BBB ..)
 ```
 **Important Configuration Notes**:
+
 1. Component Configuration
    - Options 1 to 9 (in the list) dictate which modules will be built. We reccomend that you build all. 
    - Options 6, 7 and 8 are essential to compile the kernel modules and system services and are key to running all QoT stack functionality.
@@ -780,7 +796,7 @@ The modprobe command should automatically load both the QoT module as well as th
 
 Now run the `ivshmem server` which provides the shared memory space used to transfer QoT information and timeline mappings from the host to the guests (this needs to be checked)
 ```
-$> ./ivshmem-server -F -v
+$> ivshmem-server -F -v
 ```
 NOTE: If the above command fails, the following command may have to be executed:
 ```
