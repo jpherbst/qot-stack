@@ -360,7 +360,7 @@ $> ssh-keygen -t rsa
 
 Now you have a working kernel setup. Skip the standalone SD card setup, and proceed to the QoT Stack Build Instructions section on building and configuring the QoT Stack.
 
-# BBB Standalone SD Card Setup #
+## BBB Standalone SD Card Setup ##
 
 Skip this section, if you are setting up an NFS-based setup.
 1. Download the SD card image from this [link](https://drive.google.com/file/d/0B5sYz4zKsYSaQk1MWTlicGdFcU0/view?usp=sharing). 
@@ -370,7 +370,7 @@ Skip this section, if you are setting up an NFS-based setup.
 
 You now have a working kernel and you should be able to boot and ssh into the node over a network. Skip to the QoT Stack Build Instructions section.
 
-# x86 Standalone Setup #
+## x86 Standalone Setup ##
 Skip this section, if you are setting up a Beaglebone Black. Setting up an x86 machine is very straightforward. 
 
 1. Install your favourite Debian-based distribution on your machine (preferred Ubuntu 14.04, as the setup instructions have been tested). 
@@ -383,10 +383,10 @@ $> sudo apt-get install nfs-kernel-server tftpd-hpa isc-dhcp-server ufw
 
 You should now have a working x86-based machine with a debian distribution and Linux kernel version of choice. Note that, the controller can also be used as a test-bed for the QoT Stack (assuming an x86-based controller).
 
-# QEMU-KVM Virtual Machine-based Setup #
+## QEMU-KVM Virtual Machine-based Setup ##
 Skip this section, if you are setting up a Beaglebone Black or an x86 Native Machine. This section describes how to setup QEMU-KVM on an x86 hosts, and follows up with the basic steps required to install a Linux virtual machine which is capable of supporting QoT functionality. 
 
-## Step 1: Install QEMU-KVM ##
+### Step 1: Install QEMU-KVM ###
 QEMU-KVM (for Kernel-based Virtual Machine) is a full virtualization solution for Linux on x86 hardware containing virtualization extensions (Intel VT or AMD-V). It consists of a loadable kernel module, kvm.ko, that provides the core virtualization infrastructure and a processor specific module, kvm-intel.ko or kvm-amd.ko. QEMU-KVM uses the QEMU emulator as an hypervisor to run virtual machines, while the KVM kernel module provides the ability to utilize the hardware-accelerated virtualization features provided by the nost CPU. QEMU-KVM also supports paravirtual access to hardware devices such as networks, disk drives and clocks. We reccomend that you utilize Ubuntu on your host machine. However, KVM should work on any Linux-based distribution. Learn more about KVM at https://www.linux-kvm.org/ .
 
 Note: KVM only works if your CPU has hardware virtualization support – either Intel VT-x or AMD-V. To determine whether your CPU includes these features, run the following command:
@@ -422,7 +422,7 @@ make
 sudo make install
 ```
 
-## Step 2: Create a Debian-based VM ##
+### Step 2: Create a Debian-based VM ###
 Once you’ve got KVM installed, the easiest way to use it is with the Virtual Machine Manager application, which provides a GUI to do so. You’ll find it in your Dash (in Ubuntu, for other Distributions use the appropriate "start-button" like feature). Search for Virtual Machine Manager.Alternately, the Virtual Machine Manager can be launched from a terminal by:
 ```
 $> virt-manager
