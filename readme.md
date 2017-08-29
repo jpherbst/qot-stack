@@ -460,6 +460,7 @@ You should now have a working virtual machine with a debian-based distribution a
 Assuming that you have successfully built and net-booted the kernel and a debian-based distribution (or installed the kernel on an SD card), you can now setup your host environment to cross-compile kernel modules and applications for the BeagleBone. The same instructions are applicable to the x86 setup or setup inside a virtual machine as well.
 
 NOTE YOUR SETUP TYPE BEFORE GOING AHEAD:
+
 1. FOR THE BBB SETUP, EVERYTHING IN THIS SECTION SHOULD BE CARRIED OUT ON THE HOST. IF YOU WANT, YOU CAN USE YOUR CONTROLLER TO BE THE HOST AS WELL (In this case, jump to Step 2). 
 2. For the BBB SD card-based setup skip to STEP 2 of the Build Instructions
 3. FOR x86 MACHINES, THE MACHINE ITSELF CAN BE THE HOST/CONTROLLER (In this case, jump to Step 2 as well).
@@ -644,16 +645,16 @@ The following configuration options can be configured in the QoT Stack:
 **Important Configuration Notes**:
 
 1. Component Configuration
-- Options 1 to 9 (in the list) dictate which modules will be built. We reccomend that you build all. 
-- Options 6, 7 and 8 are essential to compile the kernel modules and system services and are key to running all QoT stack functionality.
-- Options 1 and 2 are needed to build the C++ QoT application libraries and the C++ example applications.
-- Options 3 and 4 are needed to build the C QoT application libraries and the C example applications
+  - Options 1 to 9 (in the list) dictate which modules will be built. We reccomend that you build all. 
+  - Options 6, 7 and 8 are essential to compile the kernel modules and system services and are key to running all QoT stack functionality.
+  - Options 1 and 2 are needed to build the C++ QoT application libraries and the C++ example applications.
+  - Options 3 and 4 are needed to build the C QoT application libraries and the C example applications
 2. For the BBB: 
-- make sure that CROSS_AM335x is ON and that your INSTALL_PREFIX is `/export/rootfs/usr/local`. This will build the dedicated QoT clock driver for the QoT Stack and ensure that the proper ARM cross compiler is utilized for compilation.
-- set GENERIC_BUILD and CROSS_AM335x to ON if you want a generic software QoT clock driver on the Beaglebone Black (not reccomended)
+  - make sure that CROSS_AM335x is ON and that your INSTALL_PREFIX is `/export/rootfs/usr/local`. This will build the dedicated QoT clock driver for the QoT Stack and ensure that the proper ARM cross compiler is utilized for compilation.
+  - set GENERIC_BUILD and CROSS_AM335x to ON if you want a generic software QoT clock driver on the Beaglebone Black (not reccomended)
 3. For the x86 platform (native or virtualization host/guest) set X86_64 to ON. Depending on the machine type (virtual/native), please turn on the additional configuration options:
-- For an x86 host, which will host Virtual Machines with paravirtual support set BUILD_VIRT to ON.
-- For x86-based Virtual Machines (guest) with paravirtual support set BUILD_VIRT_GUEST to ON.
+  - For an x86 host, which will host Virtual Machines with paravirtual support set BUILD_VIRT to ON.
+  - For x86-based Virtual Machines (guest) with paravirtual support set BUILD_VIRT_GUEST to ON.
    
 Once the options are configures press `c` to generate the configuration. If the configuration is succesful, press `g` to generate the makefiles and exit the CMake Configuration screen. You are now ready to build the stack.
 
