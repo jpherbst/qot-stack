@@ -95,9 +95,9 @@ int NTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 		sock[j] = ntp_conn_server(NtpCfg.servaddr[j], NtpCfg.port); // connect to ntp server
 	}
 
-	#ifdef DEBUG
+	//#ifdef DEBUG
 	printf("\n");
-	#endif
+	//#endif
 	
 	while (true) {
 		i++;
@@ -116,9 +116,9 @@ int NTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 				resp_list[cursor++] = resp;
 			}
 
-			#ifdef DEBUG
+			//#ifdef DEBUG
 			printf("cursor: %d, total: %d\n\n", cursor, total);
-			#endif
+			//#endif
 
 			if (cursor == total) {
 				cursor = 0;

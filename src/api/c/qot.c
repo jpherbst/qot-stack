@@ -51,7 +51,7 @@
 #include "../../virt/pci_mmio/qot_pci_ivshmem.h"
 #endif
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* Timeline implementation */
 typedef struct timeline {
@@ -426,11 +426,11 @@ qot_return_t qot_loc2rem(timeline_t *timeline, utimepoint_t *est, int period)
 
     // Check if this is correct
     if (period)
-        val += (timeline->timeline_clock->tranlation.mult*val)/1000000000L;
+        val += (timeline->timeline_clock->translation.mult*val)/1000000000L;
     else
     {
-        val -= timeline->timeline_clock->tranlation.last;
-        val  = timeline->timeline_clock->tranlation.nsec + val + ((timeline->timeline_clock->tranlation.last*val)/1000000000L);
+        val -= timeline->timeline_clock->translation.last;
+        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.last*val)/1000000000L);
     }
     TP_FROM_nSEC(est->estimate, val); 
     return QOT_RETURN_TYPE_OK;
@@ -440,6 +440,7 @@ qot_return_t qot_rem2loc(timeline_t *timeline, utimepoint_t *est, int period)
 {
     int64_t val;
     int64_t rem;
+
     if(!timeline || !timeline->timeline_clock)
         return QOT_RETURN_TYPE_ERR;
     val = TP_TO_nSEC(est->estimate);
@@ -447,16 +448,16 @@ qot_return_t qot_rem2loc(timeline_t *timeline, utimepoint_t *est, int period)
     if (period)
     {
         //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
-        val = (val/(timeline->timeline_clock->tranlation.mult + 1000000000LL))*1000000000LL;
-        rem = val % (timeline->timeline_clock->tranlation.mult + 1000000000LL);
+        val = (val/(timeline->timeline_clock->translation.mult + 1000000000LL))*1000000000LL;
+        rem = val % (timeline->timeline_clock->translation.mult + 1000000000LL);
         val += rem;
     }
     else
     {
-        int64_t diff = (val - timeline->timeline_clock->tranlation.nsec);
-        int64_t quot = diff/(timeline->timeline_clock->tranlation.mult + 1000000000LL);
-        rem = diff % (timeline->timeline_clock->tranlation.mult + 1000000000LL);
-        val = timeline->timeline_clock->tranlation.last + (quot * 1000000000LL) + rem; 
+        int64_t diff = (val - timeline->timeline_clock->translation.nsec);
+        int64_t quot = diff/(timeline->timeline_clock->translation.mult + 1000000000LL);
+        rem = diff % (timeline->timeline_clock->translation.mult + 1000000000LL);
+        val = timeline->timeline_clock->translation.last + (quot * 1000000000LL) + rem; 
     }
     TP_FROM_nSEC(est->estimate, val); 
     return QOT_RETURN_TYPE_OK;
@@ -467,6 +468,13 @@ qot_return_t timeline_getvtime(timeline_t *timeline, utimepoint_t *est)
     // This function should be populated (use timeline->timeline_clock to translate from core time): URGENT
     qot_return_t retval;
     timeline_getcoretime(timeline, est);
+    if (DEBUG)
+    {
+    	printf("reading time using ivshmem\n");
+    	printf("Timeline Parameters are mult:%lld last:%lld\n", 
+    		timeline->timeline_clock->translation.mult, 
+    		timeline->timeline_clock->translation.last);
+    }
     retval = qot_loc2rem(timeline, est, 0);
     return retval;
 }
@@ -536,88 +544,88 @@ qot_return_t timeline_disable_output_compare(timeline_t *timeline,
 qot_return_t timeline_config_pin_timestamp(timeline_t *timeline, qot_extts_t *request, int enable) 
 {
     qot_clock_t core_clock;
-    char ptp_device[QOT_MAX_NAMELEN];           /* File Name              */
-    int fd;                                     /* device file descriptor */
-    int index = 1;                              /* Channel index, 'corresponding to the pin */
-    struct ptp_clock_caps caps;                 /* Clock capabilities */
-    struct ptp_pin_desc desc;                   /* Pin configuration */
-    struct ptp_extts_request extts_request;     /* External timestamp req */
+    // char ptp_device[QOT_MAX_NAMELEN];           /* File Name              */
+    // int fd;                                     /* device file descriptor */
+    // int index = 1;                              /* Channel index, 'corresponding to the pin */
+    // struct ptp_clock_caps caps;                 /* Clock capabilities */
+    // struct ptp_pin_desc desc;                   /* Pin configuration */
+    // struct ptp_extts_request extts_request;     /* External timestamp req */
 
 
-    if(!timeline)
-        return QOT_RETURN_TYPE_ERR;
-    if (fcntl(timeline->fd, F_GETFD)==-1)
-        return QOT_RETURN_TYPE_ERR;
+    // if(!timeline)
+    //     return QOT_RETURN_TYPE_ERR;
+    // if (fcntl(timeline->fd, F_GETFD)==-1)
+    //     return QOT_RETURN_TYPE_ERR;
     
-    // Get the presiding core clock
-    if(ioctl(timeline->qotusr_fd, QOTUSR_GET_CORE_CLOCK_INFO, &core_clock) < 0)
-    {
-        return QOT_RETURN_TYPE_ERR;
-    }
+    // // Get the presiding core clock
+    // if(ioctl(timeline->qotusr_fd, QOTUSR_GET_CORE_CLOCK_INFO, &core_clock) < 0)
+    // {
+    //     return QOT_RETURN_TYPE_ERR;
+    // }
 
-    // Create the file name
-    sprintf(ptp_device, "/dev/ptp%d", core_clock.phc_id);
+    // // Create the file name
+    // sprintf(ptp_device, "/dev/ptp%d", core_clock.phc_id);
 
-    if(enable)
-    {
-        /* Open the core clock ptp character device */
-        fd = open(ptp_device, O_RDWR);
-        if (fd < 0) {
-            printf("Failed to open ptp device %s\n", ptp_device);
-            return QOT_RETURN_TYPE_ERR;
-        }
-        printf("Opened ptp device %s with fd = %d\n", ptp_device, fd);
-        timeline->clock_fd = fd;
+    // if(enable)
+    // {
+    //     /* Open the core clock ptp character device */
+    //     fd = open(ptp_device, O_RDWR);
+    //     if (fd < 0) {
+    //         printf("Failed to open ptp device %s\n", ptp_device);
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    //     printf("Opened ptp device %s with fd = %d\n", ptp_device, fd);
+    //     timeline->clock_fd = fd;
 
-        /* Pin to perform external time stamping */
-        index = request->pin_index;
+    //     /* Pin to perform external time stamping */
+    //     index = request->pin_index;
 
-        /* Check if clock supports external timestamps */
-        if (ioctl(fd, PTP_CLOCK_GETCAPS, &caps)) {
-            printf("cannot get capabilities of clock");
-            return QOT_RETURN_TYPE_ERR;
-        }
-        if(caps.n_ext_ts < 1)
-        {
-            printf("clock cannot perform external timestamping\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
+    //     /* Check if clock supports external timestamps */
+    //     if (ioctl(fd, PTP_CLOCK_GETCAPS, &caps)) {
+    //         printf("cannot get capabilities of clock");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    //     if(caps.n_ext_ts < 1)
+    //     {
+    //         printf("clock cannot perform external timestamping\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
 
-        /* Configure the pin to support external timestamps */
-        memset(&desc, 0, sizeof(desc));
-        desc.index = index;
-        desc.func = 1;                              /* '1' corresponds to external timestamp */
-        desc.chan = index;
-        if (ioctl(fd, PTP_PIN_SETFUNC, &desc)) {
-            printf("Set pin func failed for\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
+    //     /* Configure the pin to support external timestamps */
+    //     memset(&desc, 0, sizeof(desc));
+    //     desc.index = index;
+    //     desc.func = 1;                              /* '1' corresponds to external timestamp */
+    //     desc.chan = index;
+    //     if (ioctl(fd, PTP_PIN_SETFUNC, &desc)) {
+    //         printf("Set pin func failed for\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
         
-        /* Request timestamps from the pin */ 
-        memset(&extts_request, 0, sizeof(extts_request));
-        extts_request.index = index;
-        extts_request.flags = PTP_ENABLE_FEATURE;
-        if (ioctl(fd, PTP_EXTTS_REQUEST, &extts_request)) {
-            printf("Requesting timestamps failed for\n");
-            return QOT_RETURN_TYPE_ERR;
-        }
-    }
-    else
-    {
-        /* Disable the pin */
-        if (fcntl(timeline->clock_fd, F_GETFD)==-1)
-            return QOT_RETURN_TYPE_ERR;
-        memset(&desc, 0, sizeof(desc));
-        desc.index = request->pin_index;
-        desc.func = 0;              // '0' corresponds to no function 
-        desc.chan = request->pin_index;
-        if (ioctl(timeline->clock_fd, PTP_PIN_SETFUNC, &desc)) {
-            perror("PTP_PIN_SETFUNC Disable");
-        }
+    //     /* Request timestamps from the pin */ 
+    //     memset(&extts_request, 0, sizeof(extts_request));
+    //     extts_request.index = index;
+    //     extts_request.flags = PTP_ENABLE_FEATURE;
+    //     if (ioctl(fd, PTP_EXTTS_REQUEST, &extts_request)) {
+    //         printf("Requesting timestamps failed for\n");
+    //         return QOT_RETURN_TYPE_ERR;
+    //     }
+    // }
+    // else
+    // {
+    //     /* Disable the pin */
+    //     if (fcntl(timeline->clock_fd, F_GETFD)==-1)
+    //         return QOT_RETURN_TYPE_ERR;
+    //     memset(&desc, 0, sizeof(desc));
+    //     desc.index = request->pin_index;
+    //     desc.func = 0;              // '0' corresponds to no function 
+    //     desc.chan = request->pin_index;
+    //     if (ioctl(timeline->clock_fd, PTP_PIN_SETFUNC, &desc)) {
+    //         perror("PTP_PIN_SETFUNC Disable");
+    //     }
         
-        /* Close the character device */
-        close(timeline->clock_fd);
-    }
+    //     /* Close the character device */
+    //     close(timeline->clock_fd);
+    // }
     return QOT_RETURN_TYPE_OK;
 }
 
