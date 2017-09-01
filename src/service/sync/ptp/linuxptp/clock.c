@@ -1182,7 +1182,8 @@ struct clock *clock_create(int phc_index, struct interfaces_head *ifaces,
 		/* Due to a bug in older kernels, the reading may silently fail
 		   and return 0. Set the frequency back to make sure fadj is
 		   the actual frequency of the clock. */
-		clockadj_set_freq(c->clkid, fadj);
+		/* QOT: Commented out by Sandeep*/
+		//clockadj_set_freq(c->clkid, fadj);
 	}
 
 	/* QOT, Creating individual servos for all the timelines */
@@ -1715,7 +1716,8 @@ int clock_switch_phc(struct clock *c, int phc_index)
 		return -1;
 	}
 	fadj = (int) clockadj_get_freq(clkid);
-	clockadj_set_freq(clkid, fadj);
+	/* QOT: commented out by sandeep */
+	//clockadj_set_freq(clkid, fadj);
 
 	/* QOT, destroying servos for all timelines */
 	destroy_timelines_servos(c);
