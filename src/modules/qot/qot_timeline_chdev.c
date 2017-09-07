@@ -1,7 +1,7 @@
 /*
- * @file qot_core.h
- * @brief Interfaces used by clocks to interact with core
- * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
+ * @file qot_timeline_chdev.c
+ * @brief Timeline Clock and Character Device Driver 
+ * @author Sandeep D'souza, Andrew Symington and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -63,28 +63,29 @@ static DEFINE_IDR(qot_timelines_map);
 
 static spinlock_t qot_timelines_lock;
 
-/* Private data for a timeline, not visible outside this code      */
+/* Private data for a timeline, not visible outside this code */
 typedef struct timeline_impl {
-    qot_timeline_t *info;       /* Timeline info                   */
-    int index;                  /* IDR index for timeline          */
-    dev_t devid;                /* Device ID                       */
-    struct device *dev;         /* Device                          */
-    struct posix_clock clock;   /* POSIX clock for this timeline   */
-    u32 max_adj;                /* Discipline: maximum adjust      */
-    s32 dialed_frequency;       /* Discipline: dialed frequency    */
-    s64 last;                   /* Discipline: last cycle count of */
-    s64 mult;                   /* Discipline: ppb multiplier      */
-    s64 nsec;                   /* Discipline: global time offset  */
-    s64 u_nsec;                 /* Discipline: global time for master  */
-    s64 l_nsec;                 /* Discipline: global time for master  */
-    s64 u_mult;                 /* Discipline: upper bound on ppb  */
-    s64 l_mult;                 /* Discipline: lower bound on ppb  */
-    spinlock_t lock;            /* Protects driver time registers  */
-    //struct idr idr_bindings;    /* IDR for trackng bindings        */
-    struct list_head head_res;  /* Head pointing to resolution     */
-    struct list_head head_low;  /* Head pointing to accuracy (low) */
-    struct list_head head_upp;  /* Head pointing to accuracy (upp) */
-    struct rb_root root;        /* Root of the RB-Tree of bindings */
+    qot_timeline_t *info;       /* Timeline info                                 */
+    int index;                  /* IDR index for timeline                        */
+    dev_t devid;                /* Device ID                                     */
+    struct device *dev;         /* Device                                        */
+    struct posix_clock clock;   /* POSIX clock for this timeline                 */
+    u32 max_adj;                /* Discipline: maximum adjust                    */
+    s32 dialed_frequency;       /* Discipline: dialed frequency                  */
+    s64 last;                   /* Discipline: last cycle count of               */
+    s64 mult;                   /* Discipline: ppb multiplier                    */     
+    s64 nsec;                   /* Discipline: global time offset                */
+    s64 u_nsec;                 /* Discipline: global time for master            */
+    s64 l_nsec;                 /* Discipline: global time for master            */
+    s64 u_mult;                 /* Discipline: upper bound on ppb                */
+    s64 l_mult;                 /* Discipline: lower bound on ppb                */
+    u32 mult_adj;               /* Adjustment: mult to prevent precision loss    */
+    u32 shift_adj;              /* Adjustment: shift to prevent precision loss   */
+    spinlock_t lock;            /* Protects driver time registers                */
+    struct list_head head_res;  /* Head pointing to resolution                   */
+    struct list_head head_low;  /* Head pointing to accuracy (low)               */
+    struct list_head head_upp;  /* Head pointing to accuracy (upp)               */
+    struct rb_root root;        /* Root of the RB-Tree of bindings               */
     // Added for virt-host support
     int sync_update_flag;
 } timeline_impl_t;
@@ -226,14 +227,6 @@ static binding_impl_t *qot_binding_add(timeline_impl_t *timeline_impl,
     memcpy(&binding_impl->info,info,sizeof(qot_binding_t));
     binding_impl->parent = timeline_impl;
 
-    // /* Allocate an ID for this binding */
-    // idr_preload(GFP_KERNEL);
-    // spin_lock_irqsave(&timeline_impl->lock, flags);
-    // binding_impl->info.id = idr_alloc(&timeline_impl->idr_bindings,
-    //     (void*) binding_impl,0,0,GFP_NOWAIT);
-    // spin_unlock_irqrestore(&timeline_impl->lock, flags);
-    // idr_preload_end();
-
     /* Store the context (pid of the task) from which this binding has been invoked -> Sandeep*/
     binding_impl->pid = current->pid;
     binding_impl->timer = NULL;
@@ -266,9 +259,7 @@ static void qot_binding_del(binding_impl_t *binding_impl)
     list_del(&binding_impl->list_res);
     list_del(&binding_impl->list_low);
     list_del(&binding_impl->list_upp);
-    /* Remove the IDR reservation */
-    // if (binding_impl->parent)
-    //     idr_remove(&binding_impl->parent->idr_bindings,binding_impl->info.id);
+    
     /* Remove the binding from the RB-Tree */
     if (binding_impl->parent)
     {
@@ -316,7 +307,6 @@ qot_return_t qot_remove_binding_timer(int pid, qot_timeline_t *timeline)
 */
 
 // BASIC TIME PROJECTION FUNCTIONS /////////////////////////////////////////////
-
 qot_return_t qot_loc2rem(int index, int period, s64 *val)
 {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
@@ -344,23 +334,55 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
     if (period)
     {
         //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
-        *val = div_u64_rem((u64)(*val), (u64) (timeline_impl->mult + 1000000000LL), &rem)*1000000000LL ;
-        *val += rem;
+        *val = (s64) div_u64_rem((u64)(*val), (u32) (timeline_impl->mult + 1000000000LL), &rem)*1000000000LL ; // replace u64 with u32 and add s64 typecast
+        *val += (s64) rem; // add s64 typecast
     }
     else
     {
         u64 diff = (u64)(*val - timeline_impl->nsec);
-        u64 quot = div_u64_rem(diff, (timeline_impl->mult + 1000000000ULL), &rem);
-        *val = timeline_impl->last + (quot * 1000000000ULL) + rem; 
+        u64 quot = div_u64_rem(diff, (u32)(timeline_impl->mult + 1000000000LL), &rem); // add u32 typecast, replace ULL with LL
+        *val = timeline_impl->last + (s64)(quot * 1000000000ULL) + (s64) rem; // add s64 typecast
     }
 
     return QOT_RETURN_TYPE_OK;
 }
 
+/* Helper Function to calculate mult and shift for preventing loss of precision during time conversion */ 
+void clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
+{
+    u64 tmp;
+    u32 sft, sftacc= 32;
 
-/* Discipline operations */
+    /*
+     * Calculate the shift factor which is limiting the conversion
+     * range:
+     */
+    tmp = ((u64)maxsec * from) >> 32;
+    while (tmp) {
+        tmp >>=1;
+        sftacc--;
+    }
 
-static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
+    /*
+     * Find the conversion shift/mult pair which has the best
+     * accuracy and fits the maxsec conversion range:
+     */
+    for (sft = 32; sft > 0; sft--) {
+        tmp = (u64) to << sft;
+        tmp += from / 2;
+        do_div(tmp, from);
+        if ((tmp >> sftacc) == 0)
+            break;
+    }
+    *mult = tmp;
+    *shift = sft;
+    pr_info("qot_timeline_chdev: Timeline adjustment Mult = %lu, Shift = %lu\n", *mult, *shift);
+}
+
+
+// /* Discipline operations */
+
+static int qot_timeline_clock_adjfreq(struct posix_clock *pc, s32 ppb)
 {
     utimepoint_t utp;
     s64 ns;
@@ -369,14 +391,15 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
     {
-    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
     }
     ns = TP_TO_nSEC(utp.estimate);
+    // The order of the next two statements is interchanged -> Sandeep
     timeline_impl->nsec += (ns - timeline_impl->last)
-        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
-    timeline_impl->mult = ppb;
+        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000L); // ULL Changed to L -> Sandeep
     timeline_impl->last  = ns;
+    timeline_impl->mult = (s64) ppb; // typecast added to s64
     // Added for virt-host support
     timeline_impl->sync_update_flag = 1;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
@@ -384,7 +407,7 @@ static int qot_timeline_chdev_adj_adjfreq(struct posix_clock *pc, s32 ppb)
     return 0;
 }
 
-static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
+static int qot_timeline_clock_adjtime(struct posix_clock *pc, s64 delta)
 {
     utimepoint_t utp;
     s64 ns;
@@ -398,9 +421,7 @@ static int qot_timeline_chdev_adj_adjtime(struct posix_clock *pc, s64 delta)
     }
 
     ns = TP_TO_nSEC(utp.estimate);
-    timeline_impl->nsec += (ns - timeline_impl->last)
-        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL) + delta;
-    timeline_impl->last = ns;
+    timeline_impl->nsec += delta; 
     // Added for virt-host support
     timeline_impl->sync_update_flag = 1;
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
@@ -457,20 +478,20 @@ static int qot_timeline_chdev_gettime(struct posix_clock *pc,
 {
     utimepoint_t utp;
     s64 ns;
+    s64 now;
     unsigned long flags;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     spin_lock_irqsave(&timeline_impl->lock, flags);
     if (qot_clock_get_core_time(&utp))
     {
-    	spin_unlock_irqrestore(&timeline_impl->lock, flags);
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return 1;
     }
 
     ns = TP_TO_nSEC(utp.estimate);
-    timeline_impl->nsec += (ns - timeline_impl->last)
-        + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000ULL);
-    timeline_impl->last = ns;
-    *tp = ns_to_timespec(timeline_impl->nsec);
+    now = timeline_impl->nsec + (ns - timeline_impl->last)
+          + div_s64(timeline_impl->mult * (ns - timeline_impl->last),1000000000L); // Changed from ULL to L
+    *tp = ns_to_timespec(now);
     spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return 0;
 }
@@ -491,12 +512,12 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
             return -EINVAL;
         kt = timespec_to_ktime(ts);
         delta = ktime_to_ns(kt);
-        err = qot_timeline_chdev_adj_adjtime(pc, delta);
+        err = qot_timeline_clock_adjtime(pc, delta);
     } else if (tx->modes & ADJ_FREQUENCY) {
         s32 ppb = qot_timeline_chdev_ppm_to_ppb(tx->freq);
         //if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
             //return -ERANGE;
-        err = qot_timeline_chdev_adj_adjfreq(pc, ppb);
+        err = qot_timeline_clock_adjfreq(pc, ppb);
         timeline_impl->dialed_frequency = tx->freq;
     } else if (tx->modes == 0) {
         tx->freq = timeline_impl->dialed_frequency;
@@ -600,7 +621,6 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
             return -EACCES;
         /* Try and find the binding associated with this id */
-        //binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
         binding_impl = find_binding(&timeline_impl->root, current->pid);
         if (!binding_impl)
             return -EACCES;
@@ -612,7 +632,6 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_from_user(&msgb, (qot_binding_t*)arg, sizeof(qot_binding_t)))
             return -EACCES;
         /* Try and find the binding associated with this id */
-        //binding_impl = idr_find(&timeline_impl->idr_bindings, msgb.id);
         binding_impl = find_binding(&timeline_impl->root, current->pid);
 
         if (!binding_impl)
@@ -861,7 +880,7 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
         goto fail_memoryalloc;
     }
     timeline_impl->info = info;
-    //memcpy(&timeline_impl->info,info,sizeof(qot_timeline_t));
+
     /* Draw the next integer X for /dev/timelineX */
     idr_preload(GFP_KERNEL);
     spin_lock(&qot_timelines_lock);
@@ -890,8 +909,7 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
 		goto fail_sysfs;
 	}
     
-    /* added by Fatima START */
-    // INITIALIZE SYNC PARAMETERS
+    /* Initialize Timeline Mapping Parameters */
     timeline_impl->mult = 0;
     timeline_impl->last = 0;
     timeline_impl->nsec = 0;
@@ -901,11 +919,14 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
     timeline_impl->l_mult = 0;
     timeline_impl->dialed_frequency = 0;
     timeline_impl->max_adj = 1000000;
-    /* added by Fatima END */
 
-    // Added for virt-host management (sync update)
+    /* Initialize mult and shift adjustments to prevent precision loss during translation */
+    clocks_calc_mult_shift(&timeline_impl->mult_adj, &timeline_impl->shift_adj, 1000000000ULL, 1000000000ULL, 600);
+
+    /* Added for virt-host management (sync update) */
     timeline_impl->sync_update_flag = 0;
 
+    /* Copy the Timeline Index */
     timeline_impl->info->index = timeline_impl->index;
 
 	/* Initialize our list heads  to track binding order */

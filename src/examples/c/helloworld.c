@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
-	int i;
+	int i = 0;
 
 	int step_size_ms = OFFSET_MSEC;
 	
