@@ -55,7 +55,7 @@
 #define OFFSET_MSEC      1000
 
 #define DEBUG 1
-#define FILE_ANALYZE 1
+#define FILE_ANALYZE 0
 
 static int running = 1;
 
