@@ -430,7 +430,7 @@ qot_return_t qot_loc2rem(timeline_t *timeline, utimepoint_t *est, int period)
     else
     {
         val -= timeline->timeline_clock->translation.last;
-        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.last*val)/1000000000L);
+        val  = timeline->timeline_clock->translation.nsec + val + ((timeline->timeline_clock->translation.mult*val)/1000000000L);
     }
     TP_FROM_nSEC(est->estimate, val); 
     return QOT_RETURN_TYPE_OK;
