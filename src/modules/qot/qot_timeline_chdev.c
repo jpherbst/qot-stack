@@ -335,13 +335,13 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
     {
         //*val = div_u64((u64)(*val), (u64) (timeline_impl->mult + 1000000000ULL))*1000000000ULL ;
         *val = (s64) div_u64_rem((u64)(*val), (u32) (timeline_impl->mult + 1000000000LL), &rem)*1000000000LL ; // replace u64 with u32 and add s64 typecast
-        *val += (s64) rem; // add s64 typecast
+        *val += (s64) rem; // add s64 typecast think about commenting out
     }
     else
     {
         u64 diff = (u64)(*val - timeline_impl->nsec);
         u64 quot = div_u64_rem(diff, (u32)(timeline_impl->mult + 1000000000LL), &rem); // add u32 typecast, replace ULL with LL
-        *val = timeline_impl->last + (s64)(quot * 1000000000ULL) + (s64) rem; // add s64 typecast
+        *val = timeline_impl->last + (s64)(quot * 1000000000ULL) + (s64) rem; // add s64 typecast think about removing
     }
 
     return QOT_RETURN_TYPE_OK;
@@ -859,6 +859,7 @@ static void qot_timeline_chdev_delete(struct posix_clock *pc)
     }
     /* Remove the timeline_impl */
     idr_remove(&qot_timelines_map, timeline_impl->index);
+    pr_info("qot_timeline: timeline %d removed, posix clock deleted\n", timeline_impl->index);
     kfree(timeline_impl);
 }
 

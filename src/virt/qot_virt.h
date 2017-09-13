@@ -59,6 +59,7 @@ typedef struct timeline_virt {
 	int index;
 	int bind_count;
 	char filename[15];
+    int running;
 } timeline_virt_t;
 
 /**

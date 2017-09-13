@@ -88,6 +88,7 @@ int add_timeline_to_list(qot_timeline_t *timeline)
         {
             vtimeline[i].index = timeline->index;
             vtimeline[i].bind_count = 0;
+            vtimeline[i].running = 1;
             sprintf(vtimeline[i].filename, "/dev/timeline%d", timeline->index);
             retval = i;
             break;
@@ -105,6 +106,7 @@ void remove_timeline_from_list(qot_timeline_t *timeline)
         {
             vtimeline[i].index = -1;
             vtimeline[i].bind_count = 0;
+            vtimeline[i].running = 0;
             break;
         }
     }
@@ -157,7 +159,6 @@ void *write_timeline_params(void *data)
     int retval;
     int timeline_fd;
     int shm_fd;
-    char qot_timeline_filename[15];
     struct pollfd poll_tl[1];
     tl_clockparams_t *parameters;
     timeline_virt_t *tl_ptr = (timeline_virt_t*) data;
@@ -198,8 +199,8 @@ void *write_timeline_params(void *data)
     poll_tl[0].fd = timeline_fd;
     poll_tl[0].events = POLLIN;
 
-    printf("Thread: New thread spawned polling %s\n", qot_timeline_filename);
-    while(running)
+    printf("Thread: New thread spawned polling %s\n", tl_ptr->filename);
+    while(running == 1 && tl_ptr->running == 1)
     {
         // Poll the timeline character device
         retval = poll(poll_tl, 1, 1000);
@@ -342,14 +343,14 @@ int main(int argc , char *argv[])
                 
             //if valid socket descriptor then add to read list 
             if(sd > 0)  
-                FD_SET( sd , &readfds);  
+                FD_SET(sd, &readfds);
                 
             //highest file descriptor number, need it for the select function 
             if(sd > max_sd)  
-                max_sd = sd;  
+                max_sd = sd;
         }  
     
-        //wait for an activity on one of the sockets, timeout is set to 5s (to enable program termination), 
+        // wait for an activity on one of the sockets, timeout is set to 5s (to enable program termination), 
         activity = select(max_sd + 1, &readfds, NULL, NULL, &timeout);  
         // Reset Timeout
         timeout.tv_sec = 5;
@@ -483,9 +484,11 @@ int main(int argc , char *argv[])
                                         // If all bindings are gone, destroy the timeline
                                         tl_id = get_timeline_list_id(&virtmsg.info);
                                         printf("Cancelling thread for timeline %d\n", tl_id);
-                                        if(pthread_cancel(tl_shmem_thread[tl_id])) 
+                                        vtimeline[tl_id].running = 0; // Set running to false to force thread to terminate gracefully
+                                        if(pthread_join(tl_shmem_thread[tl_id], NULL)) 
                                         {
-                                            printf("Error cancelling thread\n");
+                                            printf("Error joining thread\n");
+                                            return -1;
                                         }
                                         printf("Thread cancelled for timeline %d\n", tl_id);
                                         // unbind the qot_virt daemon to the new timeline
