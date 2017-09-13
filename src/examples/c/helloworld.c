@@ -175,8 +175,11 @@ int main(int argc, char *argv[])
 			fprintf(sched_jitter_file, "%llu\n", wake_now.estimate.asec);
 			#endif
 		}
-		timepoint_add(&wake, &step_size);
-		wake_now.estimate = wake;
+		//timepoint_add(&wake, &step_size);
+		//wake_now.estimate = wake;
+		wake_now.estimate.sec = est_now.estimate.sec;
+		wake_now.estimate.asec = 0;
+		timepoint_add(&wake_now, &step_size);
 	 	timeline_waituntil(my_timeline, &wake_now);
 	}
 
