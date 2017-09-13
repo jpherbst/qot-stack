@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
 		//wake_now.estimate = wake;
 		wake_now.estimate.sec = est_now.estimate.sec;
 		wake_now.estimate.asec = 0;
-		timepoint_add(&wake_now, &step_size);
+		timepoint_add(&wake_now.estimate, &step_size);
 	 	timeline_waituntil(my_timeline, &wake_now);
 	}
 

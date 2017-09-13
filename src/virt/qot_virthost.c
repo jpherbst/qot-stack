@@ -195,6 +195,9 @@ void *write_timeline_params(void *data)
     // Typecast void pointer to tl_clockparams_t pointer
     parameters = (tl_clockparams_t*) shmem_ptr;
 
+    // Set Initial Parameters
+    ioctl(timeline_fd, TIMELINE_GET_PARAMETERS, &parameters->translation);
+
     // Polling data structures
     poll_tl[0].fd = timeline_fd;
     poll_tl[0].events = POLLIN;
