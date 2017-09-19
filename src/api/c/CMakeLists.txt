@@ -9,7 +9,7 @@ ADD_LIBRARY(qot SHARED qot.h qot.c
 			../../virt/pci_mmio/upci.c ../../virt/pci_mmio/upci.h
 			../../virt/pci_mmio/qot_pci_ivshmem.c ../../virt/pci_mmio/qot_pci_ivshmem.h)
 ENDIF ()
-TARGET_LINK_LIBRARIES(qot ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qot ${CMAKE_THREAD_LIBS_INIT} -lm)
 INSTALL(FILES qot.h DESTINATION include COMPONENT headers)
 INSTALL(TARGETS qot DESTINATION lib COMPONENT libraries)
 

@@ -397,6 +397,7 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
             return -EACCES;
         if(qot_timeline_remove(&msgt, 0))
             return QOT_RETURN_TYPE_ERR;
+        pr_info("qot_usr_chdev: Timeline %d destroyed name is %s\n", msgt.index, msgt.name);
         break;
     /* Wait until a time on a timeline reference */
     case QOTUSR_WAIT_UNTIL:

@@ -14,4 +14,17 @@ build/
 .tmp_versions/
 qot-stack.sublime-project
 qot-stack.sublime-workspace
+*.log
+
+# CMake Files
+CMakeCache.txt
+*.cmake
+CMakeFiles/
+
+# Kernel Binaries
+*.ko
+*.cmd
+*.symvers
+*.order
+*.mod.c
 
