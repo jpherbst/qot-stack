@@ -18,6 +18,7 @@
 #include <linux/sockios.h>
 #include <linux/ethtool.h>
 #include <net/if.h>
+#include <sys/ioctl.h> 
 
 #define BUFSIZE 1024
 
@@ -132,15 +133,35 @@ int main(int argc, char **argv) {
   int optval; /* flag value for setsockopt */
   int n; /* message byte size */
   char cmsgbuf[BUFSIZE]; /* ancillary info buf */
+  char *iface; /* hadrware interface to receive packets on */
+  int multicast_recvflag = 0; /* multicast receive flag */
+  char* multicast_recvaddr; /* multicast receive address */
+  struct ip_mreq mreq; /* multicast recv request */
 
   /* 
    * check command line arguments 
    */
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <port>\n", argv[0]);
+  if (argc < 4) {
+    fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag>\n", argv[0]);
     exit(1);
   }
   portno = atoi(argv[1]);
+  iface = argv[2];
+  multicast_recvflag = atoi(argv[3]);
+  if(multicast_recvflag)
+  {
+     if(argc != 5)
+     {
+        fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag> <multicast_recvaddr>\n", argv[0]);
+        printf("Multicast address should be valid between 224.0.0.0 and 239.255.255.255");
+        exit(1);
+     }
+     else
+     {
+        multicast_recvaddr = argv[4];
+     }
+
+  }
 
   /* 
    * socket: create the parent socket 
@@ -159,7 +180,7 @@ int main(int argc, char **argv) {
 	     (const void *)&optval , sizeof(int));
 	
   /* Configure timestamping */
-  tstamp_mode_hardware(sockfd, "eth4");
+  tstamp_mode_hardware(sockfd, iface);
 
   /*
    * build the server's Internet address
@@ -176,6 +197,18 @@ int main(int argc, char **argv) {
 	   sizeof(serveraddr)) < 0) 
     error("ERROR on binding");
 
+  if(multicast_recvflag)
+  {
+     /* use setsockopt() to request that the kernel join a multicast group */
+    bzero((char *) &mreq, sizeof(mreq));
+     mreq.imr_multiaddr.s_addr=inet_addr(multicast_recvaddr);
+     mreq.imr_interface.s_addr=htonl(INADDR_ANY);
+     if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("setsockopt");
+        exit(1);
+     }
+  }
+  
   /* Setp message header */
   clientlen = sizeof(clientaddr);
   struct msghdr msg;
@@ -232,12 +265,16 @@ int main(int argc, char **argv) {
         }
     }
     
-    /* 
-     * sendto: echo the input back to the client 
-     */
-    n = sendto(sockfd, buf, strlen(buf), 0, 
-	       (struct sockaddr *) &clientaddr, clientlen);
-    if (n < 0) 
-      error("ERROR in sendto");
+    if(multicast_recvflag == 0)
+    {
+        /* 
+         * sendto: echo the input back to the client 
+         */
+        n = sendto(sockfd, buf, strlen(buf), 0, 
+             (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in sendto");
+    }
   }
+    
 }
