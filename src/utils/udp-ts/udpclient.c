@@ -72,15 +72,18 @@ int main(int argc, char **argv) {
 
     /* set a msg to send */
     bzero(buf, BUFSIZE);
-    sprintf(buf, "QoT Rocks !");
+    int count = 0; /* Message Count */
 
     /* send the message to the server infintely periodically*/
     while(1)
     {
         serverlen = sizeof(serveraddr);
+        sprintf(buf, "QoT Rocks ! %d", count);
         n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
         if (n < 0) 
           error("ERROR in sendto");
+
+        count++;
         
         /* Wait for server to reply if not in multicast mode*/
         if(multicast_flag == 0)

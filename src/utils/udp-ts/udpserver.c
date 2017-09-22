@@ -138,6 +138,9 @@ int main(int argc, char **argv) {
   char* multicast_recvaddr; /* multicast receive address */
   struct ip_mreq mreq; /* multicast recv request */
   char* multicast_bindip; /* IP address of interface on which to receive multicast */
+  int filewrite_flag = 0; /* flag whether data should be written to file */
+  char* timestamp_file;  /* timestamping file */
+  FILE* ts_fd;             /* file descriptor for timestamp file */
 
   /* 
    * check command line arguments 
@@ -151,7 +154,7 @@ int main(int argc, char **argv) {
   multicast_recvflag = atoi(argv[3]);
   if(multicast_recvflag)
   {
-     if(argc != 6)
+     if(argc < 6)
      {
         fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag> <multicast_recvaddr> <multicast_bindip>\n", argv[0]);
         printf("Multicast address should be valid between 224.0.0.0 and 239.255.255.255");
@@ -164,6 +167,21 @@ int main(int argc, char **argv) {
         multicast_bindip = argv[5];
      }
 
+  }
+
+  /* Check for a filename to write timestamps to */
+  if (argc == 7)
+  {
+    filewrite_flag = 1;
+    timestamp_file = argv[6];
+    printf("Writing timestamp data to file %s\n", timestamp_file);
+    ts_fd = fopen(timestamp_file, "w");
+    if(ts_fd < 0)
+    {
+      printf("Unable to open file, terminating ...\n");
+      exit(1);
+    }
+    fprintf(ts_fd, "Message\tHW Timestamp\tSW Timestamp\n");
   }
 
   /* 
@@ -278,6 +296,19 @@ int main(int argc, char **argv) {
         if (n < 0) 
           error("ERROR in sendto");
     }
+
+    if(filewrite_flag)
+    {
+      /* Write message and timestamps to file*/
+      fprintf(ts_fd, "%s\t%ld.%09ld\t%ld.%09ld\n", buf, (long)ts[2].tv_sec, (long)ts[2].tv_nsec, (long)ts[0].tv_sec, (long)ts[0].tv_nsec);
+      fflush(ts_fd);
+    }
+  }
+
+  /* Close Timestamp file */
+  if (filewrite_flag)
+  {
+    fclose(ts_fd);
   }
     
 }
