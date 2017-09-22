@@ -67,6 +67,12 @@ IF (BUILD_EXAMPLE)
 	ADD_SUBDIRECTORY(examples)
 ENDIF (BUILD_EXAMPLE)
 
+# Build example applications
+OPTION(BUILD_UTILS "Build utility applications" OFF)
+IF (BUILD_UTILS)
+	ADD_SUBDIRECTORY(utils)
+ENDIF (BUILD_UTILS)
+
 # Build Virtdaemon for Host
 OPTION(BUILD_VIRT "Build QEMU-KVM virtualization functionality" OFF)
 IF (BUILD_VIRT)
