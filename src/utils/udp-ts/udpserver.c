@@ -137,6 +137,7 @@ int main(int argc, char **argv) {
   int multicast_recvflag = 0; /* multicast receive flag */
   char* multicast_recvaddr; /* multicast receive address */
   struct ip_mreq mreq; /* multicast recv request */
+  char* multicast_bindip; /* IP address of interface on which to receive multicast */
 
   /* 
    * check command line arguments 
@@ -150,15 +151,17 @@ int main(int argc, char **argv) {
   multicast_recvflag = atoi(argv[3]);
   if(multicast_recvflag)
   {
-     if(argc != 5)
+     if(argc != 6)
      {
-        fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag> <multicast_recvaddr>\n", argv[0]);
+        fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag> <multicast_recvaddr> <multicast_bindip>\n", argv[0]);
         printf("Multicast address should be valid between 224.0.0.0 and 239.255.255.255");
+        printf("Multicast Bind IP address should be a valid IP of an interface\n");
         exit(1);
      }
      else
      {
         multicast_recvaddr = argv[4];
+        multicast_bindip = argv[5];
      }
 
   }
@@ -202,7 +205,7 @@ int main(int argc, char **argv) {
      /* use setsockopt() to request that the kernel join a multicast group */
     bzero((char *) &mreq, sizeof(mreq));
      mreq.imr_multiaddr.s_addr=inet_addr(multicast_recvaddr);
-     mreq.imr_interface.s_addr=htonl(INADDR_ANY);
+     mreq.imr_interface.s_addr=inet_addr(multicast_bindip);//htonl(INADDR_ANY);
      if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         perror("setsockopt");
         exit(1);
