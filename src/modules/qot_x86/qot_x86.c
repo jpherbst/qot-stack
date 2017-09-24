@@ -324,6 +324,7 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 	
 	// Setting a global offset w.r.t clock_realtime (synced up to UTC if NTP is running)
 	offset = ktime_to_ns(ktime_sub(ktime_get_real(),ktime_get())); // Set this to 0 to remove
+	pr_info("qot_x86: Start offset is %lld\n", offset);
 	/* Return the platform data */
 	return pdata;
 
