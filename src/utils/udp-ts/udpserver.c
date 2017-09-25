@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
   int filewrite_flag = 0; /* flag whether data should be written to file */
   char* timestamp_file;  /* timestamping file */
   FILE* ts_fd;             /* file descriptor for timestamp file */
+  int64_t offset = 0;    /* timestamp offset */
 
   /* 
    * check command line arguments 
@@ -170,7 +171,7 @@ int main(int argc, char **argv) {
   }
 
   /* Check for a filename to write timestamps to */
-  if (argc == 7)
+  if (argc >= 7)
   {
     filewrite_flag = 1;
     timestamp_file = argv[6];
@@ -182,6 +183,14 @@ int main(int argc, char **argv) {
       exit(1);
     }
     fprintf(ts_fd, "Message\tHW Timestamp\tSW Timestamp\n");
+  }
+
+  /* Check if the timestamp needs to have an offset */
+  if (argc >= 8)
+  {
+    //offset = (int64_t) atoi(argv[7]);
+    sscanf(argv[7], "%lld", &offset);
+    printf("Chosen an offset of %lld\n", offset);
   }
 
   /* 
@@ -277,9 +286,9 @@ int main(int argc, char **argv) {
            struct timespec now, nowreal;
            clock_gettime(CLOCK_MONOTONIC, &now);
            clock_gettime(CLOCK_REALTIME, &nowreal);
-           printf("HW TIMESTAMP    %ld.%09ld\n", (long)ts[2].tv_sec, (long)ts[2].tv_nsec);
-           printf("HWX TIMESTAMP   %ld.%09ld\n", (long)ts[1].tv_sec, (long)ts[1].tv_nsec);
-           printf("SW TIMESTAMP    %ld.%09ld\n", (long)ts[0].tv_sec, (long)ts[0].tv_nsec);
+           printf("HW TIMESTAMP    %ld.%09ld\n", (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000));
+           printf("HWX TIMESTAMP   %ld.%09ld\n", (long)ts[1].tv_sec + (offset/1000000000), (long)ts[1].tv_nsec + (offset%1000000000));
+           printf("SW TIMESTAMP    %ld.%09ld\n", (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000));
            printf("CLOCK_MONOTONIC %ld.%09ld\n", (long)now.tv_sec, (long)now.tv_nsec);
            printf("CLOCK_REALTIME  %ld.%09ld\n", (long)nowreal.tv_sec, (long)nowreal.tv_nsec);
 
@@ -300,7 +309,7 @@ int main(int argc, char **argv) {
     if(filewrite_flag)
     {
       /* Write message and timestamps to file*/
-      fprintf(ts_fd, "%s\t%ld.%09ld\t%ld.%09ld\n", buf, (long)ts[2].tv_sec, (long)ts[2].tv_nsec, (long)ts[0].tv_sec, (long)ts[0].tv_nsec);
+      fprintf(ts_fd, "%s\t%ld.%09ld\t%ld.%09ld\n", buf, (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000), (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000));
       fflush(ts_fd);
     }
   }
