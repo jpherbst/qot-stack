@@ -37,6 +37,15 @@
 #include <linux/clk.h>
 #include <linux/hrtimer.h>
 
+/* Paravirtual Extensions */
+#ifdef PARAVIRT_GUEST
+#include <uapi/linux/kvm_para.h>
+#include <asm/kvm_para.h>
+#include <asm/pvclock.h>
+#include <uapi/asm/kvm_para.h>
+#endif
+
+
 /* We are going to export the whol x86 as a PTP clock */
 #include <linux/ptp_clock_kernel.h>
 
@@ -57,6 +66,14 @@ static struct qot_x86_data *qot_x86_data_ptr = NULL;
 // Global starting offset of core clock
 s64 offset;
 
+// Paravirtual Extensions
+#ifdef PARAVIRT_GUEST
+static struct pvclock_vsyscall_time_info *hv_clock;
+static atomic64_t last_value = ATOMIC64_INIT(0);
+s64 pv_offset;
+#endif
+
+
 // Scheduler Interface
 struct qot_x86_sched_interface {
 	struct qot_x86_data *parent;					/* Pointer to parent      */
@@ -72,6 +89,46 @@ struct qot_x86_data {
 	struct qot_clock_impl *qot_x86_impl_info; 	/* QoT Info */
 	struct qot_x86_sched_interface core_sched;	/* Scheduler Interface */
 };
+
+#ifdef PARAVIRT_GUEST
+cycle_t qot_x86_pvclock_clocksource_read(struct pvclock_vcpu_time_info *src)
+{
+	unsigned version;
+	cycle_t ret;
+	u64 last;
+	u8 flags;
+
+	do {
+		version = __pvclock_read_cycles(src, &ret, &flags);
+	} while ((src->version & 1) || version != src->version);
+
+	if (flags & PVCLOCK_TSC_STABLE_BIT)
+		return ret;
+
+	/*
+	 * Assumption here is that last_value, a global accumulator, always goes
+	 * forward. If we are less than that, we should not be much smaller.
+	 * We assume there is an error marging we're inside, and then the correction
+	 * does not sacrifice accuracy.
+	 *
+	 * For reads: global may have changed between test and return,
+	 * but this means someone else updated poked the clock at a later time.
+	 * We just need to make sure we are not seeing a backwards event.
+	 *
+	 * For updates: last_value = ret is not enough, since two vcpus could be
+	 * updating at the same time, and one of them could be slightly behind,
+	 * making the assumption that last_value always go forward fail to hold.
+	 */
+	last = atomic64_read(&last_value);
+	do {
+		if (ret < last)
+			return last;
+		last = atomic64_cmpxchg(&last_value, last, ret);
+	} while (unlikely(last != ret));
+
+	return ret;
+}
+#endif
 
 // PTP CLOCK FUNCTIONALITY //////////////////////////////////////////////////////////
 static int qot_x86_adjfreq(struct ptp_clock_info *ptp, s32 ppb)
@@ -90,13 +147,29 @@ static int qot_x86_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 {
 	struct timespec raw_monotonic_ts;
 	unsigned long flags;
+	
+	#ifdef PARAVIRT_GUEST
+	struct pvclock_vcpu_time_info *src;
+	u64 ret;
+	int cpu;
+	#endif
 
 	struct qot_x86_data *pdata = container_of(
     	ptp, struct qot_x86_data, info);
+
 	raw_spin_lock_irqsave(&pdata->lock, flags);
+	#ifdef PARAVIRT_GUEST
+	preempt_disable_notrace();
+	cpu = smp_processor_id();
+	src = &hv_clock[cpu].pvti;	
+	ret = qot_x86_pvclock_clocksource_read(src);
+	raw_monotonic_ts = ns_to_timespec(ret);
+	preempt_enable_notrace();
+	#else
 	// Grab a raw monotonic timestamp from the clocksource
 	//getrawmonotonic(&raw_monotonic_ts);
 	ktime_get_ts(&raw_monotonic_ts);
+	#endif
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	*ts = timespec_to_timespec64(timespec_add(raw_monotonic_ts, ns_to_timespec(offset)));
 	return 0;
@@ -167,12 +240,28 @@ static timepoint_t qot_x86_read_time(void)
 	timepoint_t time_now;
 	unsigned long flags;
 	struct qot_x86_data *pdata;
+
+	#ifdef PARAVIRT_GUEST
+	struct pvclock_vcpu_time_info *src;
+	u64 ret;
+	int cpu;
+	#endif
+
 	pdata = qot_x86_data_ptr;
 
 	raw_spin_lock_irqsave(&pdata->lock, flags);
+	#ifdef PARAVIRT_GUEST
+	preempt_disable_notrace();
+	cpu = smp_processor_id();
+	src = &hv_clock[cpu].pvti;	
+	ret = qot_x86_pvclock_clocksource_read(src);
+	raw_monotonic_ts = ns_to_timespec(ret);
+	preempt_enable_notrace();
+	#else
 	// Grab a raw monotonic timestamp from the clocksource
 	//getrawmonotonic(&raw_monotonic_ts);
 	ktime_get_ts(&raw_monotonic_ts);
+	#endif
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = offset + timespec_to_ns(&raw_monotonic_ts);
 	TP_FROM_nSEC(time_now, (s64)ns);
@@ -212,7 +301,11 @@ static long qot_x86_program_sched_interrupt(timepoint_t expiry, int force, long 
 	}
 	interface->callback = callback;
 	// May need to consider using pinned timers
+	#ifdef PARAVIRT_GUEST
+	hrtimer_start_range_ns(&interface->timer, ns_to_ktime(expiry_ns-offset-pv_offset), 0ULL, HRTIMER_MODE_ABS);
+	#else
 	hrtimer_start_range_ns(&interface->timer, ns_to_ktime(expiry_ns-offset), 0ULL, HRTIMER_MODE_ABS);
+	#endif
 	return 0;
 }
 
@@ -319,11 +412,23 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 		goto err;
 	}
 
+	#ifdef PARAVIRT_GUEST
+	hv_clock = pvclock_pvti_cpu0_va();
+
+	if (!hv_clock)
+	{
+		pr_info("qot_x86: Cannot interface with Linux PVclock\n");
+		goto err;
+	}
+	pv_offset = TP_TO_nSEC(qot_x86_read_time()) - ktime_to_ns(ktime_get());
+	pr_info("qot_x86: PV offset with local CLOCK_MONOTONIC is %lld\n", pv_offset);
+	#endif
+
 	qot_x86_properties.phc_id = ptp_clock_index(pdata->clock);
 	pr_info("qot_x86: PTP clock id is %d\n", qot_x86_properties.phc_id);
 	
 	// Setting a global offset w.r.t clock_realtime (synced up to UTC if NTP is running)
-	offset = ktime_to_ns(ktime_sub(ktime_get_real(),ktime_get())); // Set this to 0 to remove
+	offset = 0;//ktime_to_ns(ktime_sub(ktime_get_real(),ktime_get())); // Set this to 0 to remove
 	pr_info("qot_x86: Start offset is %lld\n", offset);
 	/* Return the platform data */
 	return pdata;
