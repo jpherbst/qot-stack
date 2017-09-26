@@ -217,7 +217,7 @@ int main(int argc, char **argv) {
       printf("Unable to open file, terminating ...\n");
       exit(1);
     }
-    fprintf(ts_fd, "Message\t\tSW Timestamp\t\tTL Timestamp\t\tBelowQoT\t\tAboveQoT\n");
+    fprintf(ts_fd, "Message,SW-Timestamp(s),SW-Timestamp(ns),TL-Timestamp(s),TL Timestamp(ns),BelowQoT(s),BelowQoT(ns),AboveQoT(s),AboveQoT(ns)\n");
   }
 
   /* Check if the timestamp needs to have an offset */
@@ -370,7 +370,7 @@ int main(int argc, char **argv) {
     if(filewrite_flag)
     {
       /* Write message and timestamps to file*/
-      fprintf(ts_fd, "%s\t%ld.%09ld\t%lld.%18llu\t%llu.%18llu\t%llu.%18llu\n", buf, (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
+      fprintf(ts_fd, "%s,%ld,%09ld,%lld,%llu,%llu,%llu,%llu,%llu\n", buf, (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
       fflush(ts_fd);
     }
   }
