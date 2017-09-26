@@ -872,9 +872,9 @@ qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est)
     #ifdef PARAVIRT_GUEST
     qot_return_t retval;
     utimepoint_t utp;
-    utp.estimate = est->estimate;
+    utp.estimate = *est;
     retval = qot_rem2loc(timeline, &utp, 0);
-    (*est).estimate = utp.estimate; 
+    *est = utp.estimate; 
     return retval;
     #else
     // Get the timeline time
