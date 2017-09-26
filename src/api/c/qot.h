@@ -249,7 +249,7 @@ qot_return_t timeline_timer_cancel(timeline_t *timeline, qot_timer_t *timer);
  * @param est timepoint to be converted
  * @return A status code indicating success (0) or other
  **/
-qot_return_t timeline_core2rem(timeline_t *timeline, timepoint_t *est); 
+qot_return_t timeline_core2rem(timeline_t *timeline, stimepoint_t *est); 
 
 /**
  * @brief Converts remote timeline time to core time

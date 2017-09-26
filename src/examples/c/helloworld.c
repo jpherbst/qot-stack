@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	if(!my_timeline)
 	{
 		printf("Unable to create the timeline_t data structure\n");
-		QOT_RETURN_TYPE_ERR;
+		return QOT_RETURN_TYPE_ERR;
 	}
 
 	// Bind to a timeline

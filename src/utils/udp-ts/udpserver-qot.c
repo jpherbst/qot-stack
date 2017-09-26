@@ -20,6 +20,13 @@
 #include <net/if.h>
 #include <sys/ioctl.h> 
 
+// Include the QoT API
+#include "../../api/c/qot.h"
+
+// Basic onfiguration
+#define TIMELINE_UUID    "my_test_timeline"
+#define APPLICATION_NAME "udpserver"
+
 #define BUFSIZE 1024
 
 /*
@@ -28,6 +35,15 @@
 void error(char *msg) {
   perror(msg);
   exit(1);
+}
+
+static int running = 1;
+
+/* Exit Handler on Ctrl+C */
+static void exit_handler(int s)
+{
+  printf("Exit requested \n");
+  running = 0;
 }
 
 /**
@@ -143,6 +159,25 @@ int main(int argc, char **argv) {
   FILE* ts_fd;             /* file descriptor for timestamp file */
   int64_t offset = 0;    /* timestamp offset */
 
+  // Timeline-related Variable declaration
+  timeline_t *my_timeline;
+  qot_return_t retval;
+  utimepoint_t nowtl;
+  stimepoint_t tl_stp;
+  tl_translation_t params;
+  char qot_timeline_filename[15];
+  int timeline_fd;
+
+
+  // Timeline Name
+  const char *u = TIMELINE_UUID;
+ 
+  // Application Name
+  const char *m = APPLICATION_NAME;
+
+  timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
+  timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e15, .above.sec = 0, .above.asec = 1e15 }; // 100usec
+
   /* 
    * check command line arguments 
    */
@@ -182,7 +217,7 @@ int main(int argc, char **argv) {
       printf("Unable to open file, terminating ...\n");
       exit(1);
     }
-    fprintf(ts_fd, "Message\tHW Timestamp\tSW Timestamp\n");
+    fprintf(ts_fd, "Message\t\tSW Timestamp\t\tTL Timestamp\t\tBelowQoT\t\tAboveQoT\n");
   }
 
   /* Check if the timestamp needs to have an offset */
@@ -192,6 +227,26 @@ int main(int argc, char **argv) {
     sscanf(argv[7], "%lld", &offset);
     printf("Chosen an offset of %lld\n", offset);
   }
+
+  // Initialize the timeline object
+  my_timeline = timeline_t_create();
+  if(!my_timeline)
+  {
+    printf("Unable to create the timeline_t data structure\n");
+    return QOT_RETURN_TYPE_ERR;
+  }
+
+  // Bind to a timeline
+  printf("Binding to timeline %s ........\n", u);
+  if(timeline_bind(my_timeline, u, m, resolution, accuracy))
+  {
+    printf("Failed to bind to timeline %s\n", u);
+    timeline_t_destroy(my_timeline);
+    return QOT_RETURN_TYPE_ERR;
+  }
+
+  // Register exit signal handler
+  signal(SIGINT, exit_handler);
 
   /* 
    * socket: create the parent socket 
@@ -255,7 +310,7 @@ int main(int argc, char **argv) {
   /* 
    * main loop: wait for a datagram, then echo it
    */
-  while (1) {
+  while (running) {
 
     /*
      * recvfrom: receive a UDP datagram from a client
@@ -286,12 +341,18 @@ int main(int argc, char **argv) {
            struct timespec now, nowreal;
            clock_gettime(CLOCK_MONOTONIC, &now);
            clock_gettime(CLOCK_REALTIME, &nowreal);
-           printf("HW TIMESTAMP    %ld.%09ld\n", (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000));
-           printf("HWX TIMESTAMP   %ld.%09ld\n", (long)ts[1].tv_sec + (offset/1000000000), (long)ts[1].tv_nsec + (offset%1000000000));
-           printf("SW TIMESTAMP    %ld.%09ld\n", (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000));
-           printf("CLOCK_MONOTONIC %ld.%09ld\n", (long)now.tv_sec, (long)now.tv_nsec);
-           printf("CLOCK_REALTIME  %ld.%09ld\n", (long)nowreal.tv_sec, (long)nowreal.tv_nsec);
-
+           timeline_gettime(my_timeline, &nowtl);
+           printf("HW TIMESTAMP        %ld.%09ld\n", (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000));
+           printf("HWX TIMESTAMP       %ld.%09ld\n", (long)ts[1].tv_sec + (offset/1000000000), (long)ts[1].tv_nsec + (offset%1000000000));
+           printf("SW TIMESTAMP        %ld.%09ld\n", (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000));
+           printf("CLOCK_MONOTONIC     %ld.%09ld\n", (long)now.tv_sec, (long)now.tv_nsec);
+           printf("CLOCK_REALTIME      %ld.%09ld\n", (long)nowreal.tv_sec, (long)nowreal.tv_nsec);
+           printf("TIMELINE_TIME       %lld.%18llu\n", nowtl.estimate.sec, nowtl.estimate.asec);
+           printf("Uncertainity below  %llu.%18llu\n", nowtl.interval.below.sec, nowtl.interval.below.asec);
+           printf("Uncertainity above  %llu.%18llu\n", nowtl.interval.above.sec, nowtl.interval.above.asec);
+           tl_stp.estimate.sec = (int64_t)ts[0].tv_sec;
+           tl_stp.estimate.asec = ((uint64_t)ts[0].tv_nsec)*nSEC_PER_SEC;
+           timeline_core2rem(my_timeline, &tl_stp);
         }
     }
     
@@ -309,7 +370,7 @@ int main(int argc, char **argv) {
     if(filewrite_flag)
     {
       /* Write message and timestamps to file*/
-      fprintf(ts_fd, "%s\t%ld.%09ld\t%ld.%09ld\n", buf, (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000), (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000));
+      fprintf(ts_fd, "%s\t%ld.%09ld\t%lld.%18llu\t%llu.%18llu\t%llu.%18llu\n", buf, (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
       fflush(ts_fd);
     }
   }
@@ -319,5 +380,19 @@ int main(int argc, char **argv) {
   {
     fclose(ts_fd);
   }
+
+err:
+  // Unbind from timeline
+  if(timeline_unbind(my_timeline))
+  {
+    printf("Failed to unbind from timeline %s\n", u);
+    timeline_t_destroy(my_timeline);
+    return QOT_RETURN_TYPE_ERR;
+  }
+  
+  printf("Unbound from timeline %s\n", u);
+
+  // Free the timeline data structure
+  timeline_t_destroy(my_timeline);
     
 }
