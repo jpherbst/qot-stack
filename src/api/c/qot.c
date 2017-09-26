@@ -845,13 +845,21 @@ qot_return_t timeline_core2rem(timeline_t *timeline, stimepoint_t *est)
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
     
+    #ifdef PARAVIRT_GUEST
+    qot_return_t retval;
+    utimepoint_t utp;
+    utp.estimate = est->estimate;
+    retval = qot_loc2rem(timeline, &utp, 0);
+    (*est).estimate = utp.estimate; 
+    return retval;
+    #else
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_CORE_TO_REMOTE, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
-    
     return QOT_RETURN_TYPE_OK;
+    #endif
 }
 
 qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est) 
@@ -861,11 +869,19 @@ qot_return_t timeline_rem2core(timeline_t *timeline, timepoint_t *est)
     if (fcntl(timeline->fd, F_GETFD)==-1)
         return QOT_RETURN_TYPE_ERR;
     
+    #ifdef PARAVIRT_GUEST
+    qot_return_t retval;
+    utimepoint_t utp;
+    utp.estimate = est->estimate;
+    retval = qot_rem2loc(timeline, &utp, 0);
+    (*est).estimate = utp.estimate; 
+    return retval;
+    #else
     // Get the timeline time
     if(ioctl(timeline->fd, TIMELINE_REMOTE_TO_CORE, est) < 0)
     {
         return QOT_RETURN_TYPE_ERR;
     }
-    
     return QOT_RETURN_TYPE_OK;
+    #endif
 }
