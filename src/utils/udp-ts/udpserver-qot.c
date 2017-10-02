@@ -29,6 +29,8 @@
 
 #define BUFSIZE 1024
 
+int swts_flag = 0;
+
 /*
  * error - wrapper for perror
  */
@@ -112,6 +114,7 @@ void tstamp_mode_hardware(int sock, char *iface) {
     /* otherwise, try kernel timestamps (socket only) */ 
     printf("Falling back to kernel timestamps\n");
     tstamp_mode_kernel(sock);
+    swts_flag = 1;
     return;
   }
 
@@ -190,6 +193,7 @@ int main(int argc, char **argv) {
   multicast_recvflag = atoi(argv[3]);
   if(multicast_recvflag)
   {
+     printf("Multicast flag present\n");
      if(argc < 6)
      {
         fprintf(stderr, "usage: %s <port> <iface> <multicast_recvflag> <multicast_recvaddr> <multicast_bindip>\n", argv[0]);
@@ -350,8 +354,16 @@ int main(int argc, char **argv) {
            printf("TIMELINE_TIME       %lld.%18llu\n", nowtl.estimate.sec, nowtl.estimate.asec);
            printf("Uncertainity below  %llu.%18llu\n", nowtl.interval.below.sec, nowtl.interval.below.asec);
            printf("Uncertainity above  %llu.%18llu\n", nowtl.interval.above.sec, nowtl.interval.above.asec);
-           tl_stp.estimate.sec = (int64_t)ts[0].tv_sec;
-           tl_stp.estimate.asec = ((uint64_t)ts[0].tv_nsec)*nSEC_PER_SEC;
+           if(swts_flag)
+           {
+             tl_stp.estimate.sec = (int64_t)ts[0].tv_sec;
+             tl_stp.estimate.asec = ((uint64_t)ts[0].tv_nsec)*nSEC_PER_SEC;
+           }
+           else
+           {
+             tl_stp.estimate.sec = (int64_t)ts[2].tv_sec;
+             tl_stp.estimate.asec = ((uint64_t)ts[2].tv_nsec)*nSEC_PER_SEC;
+           }
            timeline_core2rem(my_timeline, &tl_stp);
         }
     }
@@ -367,10 +379,13 @@ int main(int argc, char **argv) {
           error("ERROR in sendto");
     }
 
-    if(filewrite_flag)
+    if(filewrite_flag && ts !=NULL)
     {
       /* Write message and timestamps to file*/
-      fprintf(ts_fd, "%s,%ld,%09ld,%lld,%llu,%llu,%llu,%llu,%llu\n", buf, (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
+      if(swts_flag)
+        fprintf(ts_fd, "%s,%ld,%09ld,%lld,%llu,%llu,%llu,%llu,%llu\n", buf, (long)ts[0].tv_sec + (offset/1000000000), (long)ts[0].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
+      else
+        fprintf(ts_fd, "%s,%ld,%09ld,%lld,%llu,%llu,%llu,%llu,%llu\n", buf, (long)ts[2].tv_sec + (offset/1000000000), (long)ts[2].tv_nsec + (offset%1000000000), tl_stp.estimate.sec, tl_stp.estimate.asec, nowtl.interval.below.sec, nowtl.interval.above.asec, nowtl.interval.below.sec, nowtl.interval.above.asec);
       fflush(ts_fd);
     }
   }
