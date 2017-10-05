@@ -45,6 +45,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
 
 // Include the QoT CPP API
 #include "../../api/cpp/qot.hpp"
@@ -55,6 +60,24 @@
 #define OFFSET_MSEC      1000
 
 #define DEBUG 1
+#define ARM_NAME "arm1"
+
+#define BUFSIZE 1024
+#define SERVER_IP "192.168.1.110"
+#define SERVER_PORT 1200
+
+// Global Timeline Variable
+timeline_t *my_timeline;
+
+// Socket Communication Variables
+int sockfd, portno;
+int serverlen;
+struct sockaddr_in serveraddr;
+struct hostent *server;
+char buf[BUFSIZE];
+
+// Arm Name
+char *arm_name = ARM_NAME;
 
 static int running = 1;
 
@@ -64,14 +87,49 @@ static void exit_handler(int s)
   	running = 0;
 }
 
+static void send_message(std::string message)
+{
+	int n;
+	/* get a message from the user */
+    bzero(buf, BUFSIZE);
+    sprintf(buf, "%s", message.c_str());
+
+    std::cout << "Sending Message " << message << std::endl;
+    /* send the message to the server */
+    serverlen = sizeof(serveraddr);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (n < 0) 
+      printf("ERROR in sendto\n");
+    
+    /* print the server's reply */
+    n = recvfrom(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, (unsigned int*)&serverlen);
+    if (n < 0) 
+      printf("ERROR in recvfrom\n");
+    printf("Echo from server: %s\n", buf);
+}
+
 static void messaging_handler(const qot_message_t *msg)
 {
-    printf("Message Received from %s\n", msg->name);
-    printf("Message Type %d\n", msg->type);
-    if (msg->type == QOT_MSG_SENSOR_VAL)
+    std::string command;
+    std::ostringstream oss;
+    utimepoint_t wake;
+
+    // Check if the message was received from the TaskPlanner
+    if (msg->type == QOT_MSG_SENSOR_VAL && !strcmp(msg->name, "TaskPlanner"))
     {
-    	std::cout << "Received a command from TaskPlanner" << std::endl;
-    	//timeline_publish_message(my_timeline, message);
+    	std::cout << "Received a command " << msg->data << " from TaskPlanner with timestamp " 
+    							<< msg->timestamp.estimate.sec << " " 
+    							<< msg->timestamp.estimate.asec << std::endl;
+		oss << msg->data << "_" << arm_name << ":" << msg->timestamp.estimate.sec << "." << msg->timestamp.estimate.asec;
+		command = oss.str();
+
+		// TODO -> Compare time against current time as a safeguard
+		// Wait until the required time to send the command
+		wake = msg->timestamp;
+		timeline_waituntil(my_timeline, &wake);
+		
+		// Send Command to node
+		send_message(command);	
     }
 }
 
@@ -79,7 +137,6 @@ static void messaging_handler(const qot_message_t *msg)
 int main(int argc, char *argv[])
 {
 	// Variable declarations
-	timeline_t *my_timeline;
 	qot_return_t retval;
 	utimepoint_t est_now;
 	utimepoint_t wake_now;
@@ -121,10 +178,40 @@ int main(int argc, char *argv[])
 	if (argc > 2)
 		m = argv[2];
 
-    // Loop Interval
-    if (argc > 3)
-        step_size_ms = atoi(argv[3]);
+	if (argc > 3) 
+        arm_name = argv[3];
 
+    // Grab Arm Server IP
+    const char *hostname = SERVER_IP;
+    if (argc > 4) 
+        hostname = argv[4];
+    
+    // Grab Server Port
+    portno = SERVER_PORT;
+    if (argc > 5) 
+    	portno = atoi(argv[5]);
+
+    /* socket: create the socket */
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        printf("ERROR opening socket\n");
+        exit(0);
+    }
+
+    /* gethostbyname: get the server's DNS entry */
+    server = gethostbyname(hostname);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+        exit(0);
+    }
+
+    /* build the server's Internet address */
+    bzero((char *) &serveraddr, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+    serveraddr.sin_port = htons(portno);
+    
     strcpy(message.name, m);
     message.type = QOT_MSG_SENSOR_VAL;
 
@@ -187,16 +274,10 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, exit_handler);
 
-	// Periodic Wakeup Loop
+	// Periodic Sleep Till the program is terminated
 	while(running)
 	{
-		if(timeline_gettime(my_timeline, &est_now))
-		{
-			printf("Could not read timeline reference time\n");
-			goto exit_point;
-		}
-		timepoint_add(&est_now.estimate, &step_size);
-		timeline_waituntil(my_timeline, &est_now);
+		sleep(10);
 	}
 
 /** DESTROY TIMELINE **/
