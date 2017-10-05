@@ -1,6 +1,6 @@
 /*
  * @file qot.h
- * @brief A simple CPP application programming interface to the QoT stack
+ * @brief A simple C++ application programming interface to the QoT stack
  * @author Sandeep D'souza
  *
  * Copyright (c) Carnegie Mellon University, 2016.

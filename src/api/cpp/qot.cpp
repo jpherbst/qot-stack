@@ -1,7 +1,7 @@
 /*
  * @file qot.h
- * @brief A simple C application programmer interface to the QoT stack
- * @author Andrew Symington, Sandeep D'souza and Fatima Anwar
+ * @brief A simple C++ application programmer interface to the QoT stack
+ * @author Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
  * Copyright (c) Carnegie Mellon University, 2016.
