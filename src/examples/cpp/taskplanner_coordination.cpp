@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
 		goto exit_point;
 	}
 
+	// Publish tasks for edge nodes
 	for(i = 0; i < task_data.size(); i++)
 	{
     	message.timestamp.estimate = wake_now.estimate;
@@ -211,34 +212,11 @@ int main(int argc, char *argv[])
 		timeline_publish_message(my_timeline, message);
 	}
 
-	// else
-	// {
-	// 	wake = wake_now.estimate;
-	// 	timepoint_add(&wake, &step_size);
- //        wake.asec = 0;
-	// }
+	// Tell edge nodes to stop
+	message.type = QOT_MSG_COORD_STOP;
+	timeline_publish_message(my_timeline, message);
 
-	// signal(SIGINT, exit_handler);
-
-	// // Periodic Wakeup Loop
-	// while(i < task_data.size())
-	// {
-	// 	message.timestamp.estimate = task_timestamp[i];    // Timestamp associated with task action
- //    	strcpy(message.data, task_data[i].c_str());        // Task action
- //    	i++;
-	// 	if(timeline_gettime(my_timeline, &est_now))
-	// 	{
-	// 		printf("Could not read timeline reference time\n");
-	// 		goto exit_point;
-	// 	}
-	// 	timepoint_add(&est_now.estimate, &step_size);
-	// 	timeline_waituntil(my_timeline, &est_now);
-	// 	std::cout << "Sending Command " << message.data << " with timestamp " 
-	// 	                                << message.timestamp.estimate.sec << " " 
-	// 	                                << message.timestamp.estimate.asec << std::endl;
-	// 	timeline_publish_message(my_timeline, message);
-	// }
-
+	
 /** DESTROY TIMELINE **/
 exit_point:
 	// Unbind from timeline
