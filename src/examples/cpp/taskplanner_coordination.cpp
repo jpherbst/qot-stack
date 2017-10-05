@@ -52,7 +52,7 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define OFFSET_MSEC      1000
+#define OFFSET_MSEC      20000
 
 #define DEBUG 1
 
@@ -129,23 +129,23 @@ int main(int argc, char *argv[])
     strcpy(message.name, m);
     message.type = QOT_MSG_SENSOR_VAL;
     std::vector<std::string> task_data;
-    std::vector<timepoint_t> task_timestamp;
-    timepoint_t action_timestamp;
+    std::vector<timelength_t> task_timestamp;
+    timelength_t action_timestamp;
 
-    // Add Messages and timestamps to vectors
-    TP_FROM_SEC(action_timestamp, 0);
+    // Add Messages and timestamps (offsets) to vectors
+    TL_FROM_SEC(action_timestamp, 0);
     task_timestamp.push_back(action_timestamp);
     task_data.push_back("GripReady");
 
-    TP_FROM_SEC(action_timestamp, 10);
+    TL_FROM_SEC(action_timestamp, 10);
     task_timestamp.push_back(action_timestamp);
     task_data.push_back("ArmGripPos");
 
-    TP_FROM_SEC(action_timestamp, 20);
+    TL_FROM_SEC(action_timestamp, 20);
     task_timestamp.push_back(action_timestamp);
     task_data.push_back("GripObject");
 
-    TP_FROM_SEC(action_timestamp, 30);
+    TL_FROM_SEC(action_timestamp, 30);
     task_timestamp.push_back(action_timestamp);
     task_data.push_back("ArmLift");
 
@@ -185,13 +185,13 @@ int main(int argc, char *argv[])
 		goto exit_point;
 	}
 
-	// Wait for Peers to Join
+	// Wait for Peers to Join -> Debug and uncomment out
 	printf("Waiting for peers to join ...\n");
-	if(timeline_wait_for_peers(my_timeline))
-	{
-		printf("Failed to wait for peers\n");
-		goto exit_point;
-	}
+	// if(timeline_wait_for_peers(my_timeline))
+	// {
+	// 	printf("Failed to wait for peers\n");
+	// 	goto exit_point;
+	// }
 
 	// Read Initial Time
     if(timeline_gettime(my_timeline, &wake_now))
@@ -199,33 +199,45 @@ int main(int argc, char *argv[])
 		printf("Could not read timeline reference time\n");
 		goto exit_point;
 	}
-	else
-	{
-		wake = wake_now.estimate;
-		timepoint_add(&wake, &step_size);
-        wake.asec = 0;
-	}
 
-	signal(SIGINT, exit_handler);
-
-	// Periodic Wakeup Loop
-	while(i < task_data.size())
+	for(i = 0; i < task_data.size(); i++)
 	{
-		message.timestamp.estimate = task_timestamp[i];    // Timestamp associated with task action
-    	strcpy(message.data, task_data[i].c_str());        // Task action
-    	i++;
-		if(timeline_gettime(my_timeline, &est_now))
-		{
-			printf("Could not read timeline reference time\n");
-			goto exit_point;
-		}
-		timepoint_add(&est_now.estimate, &step_size);
-		timeline_waituntil(my_timeline, &est_now);
+    	message.timestamp.estimate = wake_now.estimate;
+    	strcpy(message.data, task_data[i].c_str());        					// Task action
+		timepoint_add(&message.timestamp.estimate, &task_timestamp[i]);		// Timestamp associated with task action
 		std::cout << "Sending Command " << message.data << " with timestamp " 
 		                                << message.timestamp.estimate.sec << " " 
 		                                << message.timestamp.estimate.asec << std::endl;
 		timeline_publish_message(my_timeline, message);
 	}
+
+	// else
+	// {
+	// 	wake = wake_now.estimate;
+	// 	timepoint_add(&wake, &step_size);
+ //        wake.asec = 0;
+	// }
+
+	// signal(SIGINT, exit_handler);
+
+	// // Periodic Wakeup Loop
+	// while(i < task_data.size())
+	// {
+	// 	message.timestamp.estimate = task_timestamp[i];    // Timestamp associated with task action
+ //    	strcpy(message.data, task_data[i].c_str());        // Task action
+ //    	i++;
+	// 	if(timeline_gettime(my_timeline, &est_now))
+	// 	{
+	// 		printf("Could not read timeline reference time\n");
+	// 		goto exit_point;
+	// 	}
+	// 	timepoint_add(&est_now.estimate, &step_size);
+	// 	timeline_waituntil(my_timeline, &est_now);
+	// 	std::cout << "Sending Command " << message.data << " with timestamp " 
+	// 	                                << message.timestamp.estimate.sec << " " 
+	// 	                                << message.timestamp.estimate.asec << std::endl;
+	// 	timeline_publish_message(my_timeline, message);
+	// }
 
 /** DESTROY TIMELINE **/
 exit_point:
