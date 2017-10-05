@@ -131,6 +131,11 @@ static void messaging_handler(const qot_message_t *msg)
 		// Send Command to node
 		send_message(command);	
     }
+    else if (msg->type == QOT_MSG_COORD_STOP)
+    {
+    	// If stop message received then nodes will terminate
+    	running = 0;
+    }
 }
 
 // Main entry point of application
@@ -163,6 +168,7 @@ int main(int argc, char *argv[])
 	std::set<qot_msg_type_t> MsgTypes;
 	MsgTypes.insert(QOT_MSG_COORD_START);
 	MsgTypes.insert(QOT_MSG_SENSOR_VAL);
+	MsgTypes.insert(QOT_MSG_COORD_STOP);
 
 	int i = 0;
 
