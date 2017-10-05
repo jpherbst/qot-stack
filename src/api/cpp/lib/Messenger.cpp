@@ -127,11 +127,14 @@ void Messenger::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingT
         {
             strcpy(qot_msg.name, (message->data().name()).c_str());
             qot_msg.type = (qot_msg_type_t) message->data().type();
+            strcpy(qot_msg.data, (message->data().data()).c_str());
+            TP_FROM_nSEC(qot_msg.timestamp.estimate, message->data().utimestamp().timestamp());
+            TL_FROM_nSEC(qot_msg.timestamp.interval.above, message->data().utimestamp().uncertainty_u());
+            TL_FROM_nSEC(qot_msg.timestamp.interval.below, message->data().utimestamp().uncertainty_l());
             if(msg_callback != NULL)
 			{
 				msg_callback(&qot_msg);
 			}
-            //BOOST_LOG_TRIVIAL(info) << "Message Received from " << message->data().name() << " says " << message->data().type();
         }
     }
 }

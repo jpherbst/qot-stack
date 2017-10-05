@@ -70,7 +70,7 @@ static void messaging_handler(const qot_message_t *msg)
     printf("Message Type %d\n", msg->type);
     if (msg->type == QOT_MSG_SENSOR_VAL)
     {
-    	std::cout << "Received a command from TaskPlanner" << std::endl;
+    	std::cout << "Received a Response from TaskPlanner" << std::endl;
     	//timeline_publish_message(my_timeline, message);
     }
 }
@@ -125,8 +125,29 @@ int main(int argc, char *argv[])
     if (argc > 3)
         step_size_ms = atoi(argv[3]);
 
+    // Define Messaging Parameters
     strcpy(message.name, m);
     message.type = QOT_MSG_SENSOR_VAL;
+    std::vector<std::string> task_data;
+    std::vector<timepoint_t> task_timestamp;
+    timepoint_t action_timestamp;
+
+    // Add Messages and timestamps to vectors
+    TP_FROM_SEC(action_timestamp, 0);
+    task_timestamp.push_back(action_timestamp);
+    task_data.push_back("GripReady");
+
+    TP_FROM_SEC(action_timestamp, 10);
+    task_timestamp.push_back(action_timestamp);
+    task_data.push_back("ArmGripPos");
+
+    TP_FROM_SEC(action_timestamp, 20);
+    task_timestamp.push_back(action_timestamp);
+    task_data.push_back("GripObject");
+
+    TP_FROM_SEC(action_timestamp, 30);
+    task_timestamp.push_back(action_timestamp);
+    task_data.push_back("ArmLift");
 
 	// Initialize stepsize
 	TL_FROM_mSEC(step_size, step_size_ms);
@@ -188,8 +209,11 @@ int main(int argc, char *argv[])
 	signal(SIGINT, exit_handler);
 
 	// Periodic Wakeup Loop
-	while(running)
+	while(i < task_data.size())
 	{
+		message.timestamp.estimate = task_timestamp[i];    // Timestamp associated with task action
+    	strcpy(message.data, task_data[i].c_str());        // Task action
+    	i++;
 		if(timeline_gettime(my_timeline, &est_now))
 		{
 			printf("Could not read timeline reference time\n");
@@ -197,6 +221,9 @@ int main(int argc, char *argv[])
 		}
 		timepoint_add(&est_now.estimate, &step_size);
 		timeline_waituntil(my_timeline, &est_now);
+		std::cout << "Sending Command " << message.data << " with timestamp " 
+		                                << message.timestamp.estimate.sec << " " 
+		                                << message.timestamp.estimate.asec << std::endl;
 		timeline_publish_message(my_timeline, message);
 	}
 
