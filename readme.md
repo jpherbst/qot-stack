@@ -885,9 +885,9 @@ Try booting your VM again.
 # Performing QoT-based Clock Synchronization on the QoT Stack #
 The QoT Stack supports clock sycnhronization based on the Precision Time Protocol (PTP) and Network Time Protocol (NTP). We first talk about running the PTP-based clock synchronization service, and subsequently talk about NTP.
 
-# Running PTP Synchronization on the QoT stack #
+## Running PTP-based Clock Synchronization on the QoT Stack ##
 
-The QoT Stack's PTP service is based on the open-source Linux PTP project (http://linuxptp.sourceforge.net/) performs two-step clock synchronization. It first aligns the local core clock to the network interface clock. Subsequently it performs timeline-based feed-forward synchronization over the network. Note that to run the PTP-based service, it is reccomended that the test platform contain an IEEE 1588 (PTP)-compliant network interface with support for hardware timestamping. To find a non-exhaustive list of PTP-compliant network interfaces please check the following link: http://linuxptp.sourceforge.net/ . Additionally, the kernel should also be enabled to support PTP. This is true for most mainline Linux kernel. However, if your kernel does not support PTP, follow the instructions at http://linuxptp.sourceforge.net/ .
+The QoT Stack's PTP service is based on the open-source Linux PTP project (http://linuxptp.sourceforge.net/), and performs two-step clock synchronization. It first aligns the local core clock to the network interface clock. Subsequently it performs timeline-based feed-forward synchronization over the network. Note that to run the PTP-based service, it is reccomended that the test platform contain an IEEE 1588 (PTP)-compliant network interface with support for hardware timestamping. To find a non-exhaustive list of PTP-compliant network interfaces please check the following link: http://linuxptp.sourceforge.net/ . Additionally, the kernel should also be enabled to support PTP. This is true for most mainline Linux kernel. However, if your kernel does not support PTP, follow the instructions at http://linuxptp.sourceforge.net/ .
 
 We assume that the PTP-compliant network interface is `/dev/ethX` where `X` is the interface number. To check if your interface supports hardware timestamping run the following command:
 ```
@@ -936,7 +936,7 @@ $> helloworld
 ```
 Repeat the synchronization step for other nodes as well, and then you will see multiple nodes -- bound to same timeline -- synchronize to each other.
 
-## Using Hardware Support on the BBB ##
+### Using Hardware Support on the BBB ###
 On the BBB platform, we need to perform a few configurations to make the PTP-based service to work. Additionally, inplace of `phc2sys`, we can use the more precise `phc2phc` service to align the core clock with the network interface clock.
 We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
 ```
@@ -985,7 +985,7 @@ This should precisely (with hardware PPS support) synchronize the network interf
 $> qotdaemon -v
 ```
 
-# Running NTP Synchronization on the QoT stack #
+## Running NTP-based Clock Synchronization on the QoT stack ##
 To be added soon ....
 
 # Development #
