@@ -77,7 +77,7 @@ struct hostent *server;
 char buf[BUFSIZE];
 
 // Arm Name
-char *arm_name = ARM_NAME;
+const char *arm_name = ARM_NAME;
 
 static int running = 1;
 
