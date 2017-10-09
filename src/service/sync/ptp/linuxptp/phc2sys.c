@@ -455,6 +455,7 @@ static void update_clock(struct node *node, struct clock *clock,
 {
 	enum servo_state state;
 	double ppb;
+	double max_drift, min_drift; /* QOT */
 
 	if (clock_handle_leap(node, clock, offset, ts))
 		return;
@@ -464,7 +465,9 @@ static void update_clock(struct node *node, struct clock *clock,
 	if (clock->sanity_check && clockcheck_sample(clock->sanity_check, ts))
 		servo_reset(clock->servo);
 
-	ppb = servo_sample(clock->servo, offset, ts, &state);
+	//ppb = servo_sample(clock->servo, offset, ts, &state);
+	// Servo may not be CLOCK_SERVO_PI, just added to make code compatible
+	ppb = servo_sample(CLOCK_SERVO_PI, clock->servo, offset, ts, &state, &max_drift, &min_drift); /*QOT*/
 	clock->servo_state = state;
 
 	switch (state) {

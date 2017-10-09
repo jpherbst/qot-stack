@@ -166,6 +166,13 @@ ADD_EXECUTABLE(qotdaemon
 )
 TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
+ADD_EXECUTABLE(phc2sys
+	sync/ptp/linuxptp/phc2sys.c
+	sync/ptp/linuxptp/pmc_common.c
+	sync/ptp/linuxptp/pmc_common.h
+)
+TARGET_LINK_LIBRARIES(phc2sys ptp ${CMAKE_THREAD_LIBS_INIT})
+
 IF (NOT BUILD_VIRT_GUEST)
 	ADD_EXECUTABLE(phc2phc
 		phc2phc.c
@@ -209,6 +216,17 @@ INSTALL(
 	COMPONENT
 		applications
 )
+
+# Install the phc2sys to the given prefix
+INSTALL(
+	TARGETS
+		phc2sys
+	DESTINATION
+		bin
+	COMPONENT
+		applications
+)
+
 
 IF (NOT BUILD_VIRT_GUEST)
 	# Install the phc2phc to the given prefix
