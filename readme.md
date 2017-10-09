@@ -374,7 +374,7 @@ You now have a working kernel and you should be able to boot and ssh into the no
 Skip this section, if you are setting up a Beaglebone Black. Setting up an x86 machine is very straightforward. 
 
 1. Install your favourite Debian-based distribution on your machine (preferred Ubuntu 14.04, as the setup instructions have been tested). 
-2. Upgrade the kernel to your preferred version (v4.1 + preferred). (Instructions to do so can be found here https://askubuntu.com/questions/119080/how-to-update-kernel-to-the-latest-mainline-version-without-any-distro-upgrade)
+2. Upgrade the kernel to your preferred version (v4.1 + preferred). Instructions to do so can be found here https://askubuntu.com/questions/119080/how-to-update-kernel-to-the-latest-mainline-version-without-any-distro-upgrade . If you want to build your own kernel from source, follow the instructions at https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel .
 3. Install the necessary system applications
 ```
 $> sudo apt-get install build-essential git cmake cmake-curses-gui gawk flex bison perl doxygen u-boot-tools 
@@ -636,7 +636,7 @@ The following configuration options can be configured in the QoT Stack:
 7. OpenSplice_INCLUDE_DIR        - Location of the opensplice headers
 ```
 #### (b) Component configuration 
-**Note**: These options decde which components get compiled and installed to the target.
+**Note**: These options decide which components get compiled and installed to the target.
 ```
 1. BUILD_CPP_API                    - Build the C++ API and Libraries                                    
 2. BUILD_CPP_EXAMPLE                - Build the C++ examples (C++ API and lib must also be built)       
@@ -652,6 +652,7 @@ The following configuration options can be configured in the QoT Stack:
 12. CROSS_AM335X                    - Cross-compile using an ARM compiler for the Beaglebone Black 
 13. X86_64                          - Compile the stack using the Native x86 compilers
 14. GENERIC_BUILD                   - Generic software-based clock driver (x86 host, non-PV guest, BBB ..)
+15. BUILD_UTILS                     - Build test utilities for userspace interospection
 ```
 **Important Configuration Notes**:
 
@@ -807,9 +808,9 @@ $> modprobe qot_x86.ko
 ```
 The modprobe command should automatically load both the QoT module as well as the x86 QoT clock driver. If it succeeds, running the `lsmod` command should list two modules `qot` and `qot_x86`. If this does not work you can use `insmod` to load both the kernel modules manually from the path to contains their respective .ko files. See the Makefile (used in the previous section) for the path to where the kernel module binaries are installed. 
 
-Now run the `ivshmem server` which provides the shared memory space used to transfer QoT information and timeline mappings from the host to the guests (this needs to be checked)
+Now run the `ivshmem server` which provides the shared memory space used to transfer QoT information and timeline mappings from the host to the guests.
 ```
-$> ivshmem-server -F -v
+$> sudo ivshmem-server -F -v
 ```
 NOTE: If the above command fails, the following command may have to be executed:
 ```
@@ -819,7 +820,7 @@ This needs to be done to delete any stale UNIX domain socket that might be prese
 
 Next, run the QoT Virtualization Daemon, which enables Paravirtual Guest VMs to access the QoT functionality (clock sync, timeline management and QoT estimation) provided by the host:
 ```
-$> qot_virtd
+$> sudo qot_virtd
 ```
 If the above command fails, pleasue ensure the QoT Stack installation path is there in the `PATH` environment variable. 
 
@@ -853,8 +854,32 @@ Next, we need to add the following XML tag block inside the `<domain>` block (pr
 ```
 These command line parameters are necessary to configure the VM to access the read-only shared memory and the VirtIO-Serial socket required for communication with the QoT Stack components on the host.
 
-You can now boot up your VM using the `virt-manager` GUI.
-
+You can now boot up your VM using the `virt-manager` GUI. While booting virt-manager may complain about not being able to access the socket created by the `ivshmem_server`. QEMU will try to access `/tmp/ivshmem_socket`, and because of apparmor (libvirt uses apparmor in Ubuntu, but it may as well use SeLinux), the access will be denied, and an error similar to the following will be shown.
+```
+error starting domain: internal error: process exited while connecting to monitor:
+  ...
+virt-manager Failed to connect socket: Permission denied
+AppArmor
+```
+To fix this error, the following steps are required:
+Make qemu run as root (This step is optional, and may not be required for you, continue to second step)
+```
+$> vim /etc/libvirt/qemu.conf
+```
+change the lines user =, and group = , to the following
+```
+user = "root" 
+group = "root"
+```
+Restart PC or libvirt daemon. Now to allow access to the socket, we need to configure AppArmor. First, find the uuid of guest from its xml configuration file (use virsh edit and look for tag)
+```
+cd /etc/apparmor.d/libvirt
+```
+check if libvirt-<uuid> file is present, replace <uuid> with uuid of vm. Change AppArmor mode to complain, instead of enforcing, which will allow all actions of the VM, and log those which should have been blocked.
+```
+sudo aa-complain libvirt-<uuid> //replace <uuid> with uuid of vm
+```
+Try booting your VM again. 
 **Note**: To succesfully boot your VM you should have the daemons `qotvirtd` and `ivshmem-server` running on the host.
 
 # Running PTP Synchronization on the QoT stack #
@@ -931,4 +956,4 @@ This code is maintained by University of California Los Angeles (UCLA) and Carne
 
 # Support #
 
-Questions can be directed to Fatima Anwar (fatimanwar@ucla.edu).
+Questions can be directed to Sandeep Dsouza (sandeepd@andrew.cmu.edu) or Fatima Anwar (fatimanwar@ucla.edu).
