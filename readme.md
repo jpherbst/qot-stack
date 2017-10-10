@@ -11,8 +11,8 @@ The stack works by constructing a timing subsystem in Linux that runs parallel t
 
 # License #
 
-Copyright (c) Regents of the University of California, 2015. <br/>
-Copyright (c) Carnegie Mellon University, 2017. <br/>
+Copyright (c) Regents of the University of California, 2015. 
+Copyright (c) Carnegie Mellon University, 2017. 
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -879,7 +879,8 @@ check if libvirt-<uuid> file is present, replace <uuid> with uuid of vm. Change 
 ```
 sudo aa-complain libvirt-<uuid> //replace <uuid> with uuid of vm
 ```
-Try booting your VM again. <br/>
+Try booting your VM again.
+
 **Note**: To succesfully boot your VM you should have the daemons `qotvirtd` and `ivshmem-server` running on the host.
 
 # Performing QoT-based Clock Synchronization on the QoT Stack #
