@@ -11,8 +11,8 @@ The stack works by constructing a timing subsystem in Linux that runs parallel t
 
 # License #
 
-Copyright (c) Regents of the University of California, 2015.
-Copyright (c) Carnegie Mellon University, 2017.
+Copyright (c) Regents of the University of California, 2015. 
+Copyright (c) Carnegie Mellon University, 2017. 
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -879,22 +879,74 @@ check if libvirt-<uuid> file is present, replace <uuid> with uuid of vm. Change 
 ```
 sudo aa-complain libvirt-<uuid> //replace <uuid> with uuid of vm
 ```
-Try booting your VM again. 
+Try booting your VM again.
+
 **Note**: To succesfully boot your VM you should have the daemons `qotvirtd` and `ivshmem-server` running on the host.
+
+# Performing QoT-based Clock Synchronization on the QoT Stack #
+The QoT Stack supports clock sycnhronization based on the Precision Time Protocol (PTP) and Network Time Protocol (NTP). We first talk about running the PTP-based clock synchronization service, and subsequently talk about NTP.
 
 # Running PTP Synchronization on the QoT stack #
 
-QoT Stack does synchronization in two steps. It first aligns the local core clock to the network interface clock. 
-We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
+The QoT Stack's PTP service is based on the open-source Linux PTP project (http://linuxptp.sourceforge.net/) performs two-step clock synchronization. It first aligns the local core clock to the network interface clock. Subsequently it performs timeline-based feed-forward synchronization over the network. Note that to run the PTP-based service, it is reccomended that the test platform contain an IEEE 1588 (PTP)-compliant network interface with support for hardware timestamping. To find a non-exhaustive list of PTP-compliant network interfaces please check the following link: http://linuxptp.sourceforge.net/ . Additionally, the kernel should also be enabled to support PTP. This is true for most mainline Linux kernel. However, if your kernel does not support PTP, follow the instructions at http://linuxptp.sourceforge.net/ .
 
+We assume that the PTP-compliant network interface is `/dev/ethX` where `X` is the interface number. To check if your interface supports hardware timestamping run the following command:
+```
+$> ethtool -T ethX
+```
+
+If your network interface supports hardware timestamping, then you should get output which looks like
+```
+Time stamping parameters for ethX:
+Capabilities:
+        hardware-transmit     (SOF_TIMESTAMPING_TX_HARDWARE)
+        software-transmit     (SOF_TIMESTAMPING_TX_SOFTWARE)
+        hardware-receive      (SOF_TIMESTAMPING_RX_HARDWARE)
+        software-receive      (SOF_TIMESTAMPING_RX_SOFTWARE)
+        software-system-clock (SOF_TIMESTAMPING_SOFTWARE)
+        hardware-raw-clock    (SOF_TIMESTAMPING_RAW_HARDWARE)
+PTP Hardware Clock: Y
+Hardware Transmit Timestamp Modes:
+        off                   (HWTSTAMP_TX_OFF)
+        on                    (HWTSTAMP_TX_ON)
+Hardware Receive Filter Modes:
+        none                  (HWTSTAMP_FILTER_NONE)
+        all                   (HWTSTAMP_FILTER_ALL)
+```
+Here, `X` is the interface number and `Y` is the number of the PTP Hardware Clock. If you check the `/dev` directory you should be able to spot the character device `/dev/ptpY` which is the PTP clock corresponding to the interface `/dev/ethX`.
+
+Additionally, when you load the QoT Stack core clock module (either `qot_am335x` for the BBB or the `qot_x86` for generic/x86 platforms), it also creates a PTP clock `/dev/ptpZ` where `Z` is its PTP clock number. To properly perform clock synchronization using the QoT Stack using PTP it is essential that the QoT core clock `/dev/ptpZ` and the network interface clock `/dev/ptpY` be tightly synchronized to each other. To do so we utilize the `phc2sys` service from the Linux PTP project. To start `phc2sys` run the following command:
+```
+$> sudo phc2sys -c /dev/ptpY -s /dev/ptpZ -O 0 -m
+```
+
+This chooses the core clock (`/dev/ptpZ`) as the master, and uses it to discipline the network interface clock `/dev/ptpY`. 
+
+Once the on-board Core clock and NIC are properly aligned (follow the logs of `phc2sys` to verify), we now need to synchronize clocks across different devices.
+
+The `qotdaemon` application monitors the `/dev` directory for the creation and destruction of `timelineX` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over `eth0`. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master. To start the timeline-based synchronization service run the following commands in a new terminal:
+```
+$> sudo su
+$> qotdaemon -v -i ethX
+```
+where, `X` is the network interface you are using. Keep both `phc2sys` and `qotdaemon` running for the entire time
+
+To see the synchronization in action, we need to create a timeline first. In order to create a timeline first, run helloworld application in a separate terminal,
+```
+$> helloworld
+```
+Repeat the synchronization step for other nodes as well, and then you will see multiple nodes -- bound to same timeline -- synchronize to each other.
+
+## Using Hardware Support on the BBB ##
+On the BBB platform, we need to perform a few configurations to make the PTP-based service to work. Additionally, inplace of `phc2sys`, we can use the more precise `phc2phc` service to align the core clock with the network interface clock.
+We need to enable ptp pin capabilities in order for this to work. You can check pin capabilities of various ptp devices using,
 ```
 $> testptp -d /dev/ptp0 -c % This is the ethernet controller driver exposed as ptp clock %
 $> testptp -d /dev/ptp1 -c % qot_am335x driver exposes the core as a ptp clock %
 ```
-
 In the output, see that pin functionalities like external timestamping and interrupt trigger are enabled.
 
-For the onboard ptp device for the ethernet controller (/dev/ptp0), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (`/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c`) to enable the pins. (You can use the `diff` and `patch` utilities to do this easily) Patch the file and commit the changes in the `KERNEL` repository.
+For the onboard ptp device for the ethernet controller (`/dev/ptp0` corresponding to the interface `eth0` on the BBB), the pin capabilities are not enabled by default. We need to patch a file (cpts.c) in the kernel at (`/export/bb-kernel/KERNEL/drivers/net/ethernet/ti/cpts.c`) to enable the pins. (You can use the `diff` and `patch` utilities to do this easily) Patch the file and commit the changes in the `KERNEL` repository.
 The new file can be found at (https://bitbucket.org/rose-line/qot-stack/downloads/cpts.c) 
 
 In `/export/bb-kernel/KERNEL`:
@@ -925,30 +977,17 @@ In /export/bb-kernel:
 $> ./tools/rebuild.sh
 ```
 
-After the kernel is rebuilt, restart the beaglebone nodes, and run the following in one terminal,
-
+After the kernel is rebuilt, restart the beaglebone nodes, load the `qot_am335x` kernel module using the `capes BBB-AM335X` command and run the following in one terminal:
 ```
 $> phc2phc
 ```
-
-Keep this running for the entire synchronization process.
-Once the on-board Core clock and NIC are properly aligned (follow the logs of phc2phc to verify), we now need to synchronize clocks across different devices.
-
-The `qotdaemon` application monitors the `/dev` directory for the creation and destruction of `timelineX` character devices. When a new device appears, the daemon opens up an ioctl channel to the qot kernel module query metadata, such as name / accuracy / resolution. If it turns out the character device was created by the qot module, a PTP synchronization service is started on a unique domain over `eth0`. Participating devices use OpenSplice DDS to communicate the timelines they are bound to, and a simple protocol elects the master and slaves. Right now, the node with the highest accuracy requirement is elected as master.
-
-In order to create a timeline first, run helloworld application in a separate terminal,
-
-```
-$> helloworld
-```
-
-And then launch the synchronization daemon in another terminal:
-
+This should precisely (with hardware PPS support) synchronize the network interface clock `/dev/ptp0` with the core clock `/dev/ptp1`. To subsequently start the timeline-based network synchronization, run the following in a new terminal:
 ```
 $> qotdaemon -v
 ```
 
-Repeat the synchronization step for other nodes as well, and then you will see multiple nodes -- bound to same timeline -- synchronize to each other.
+# Running NTP Synchronization on the QoT stack #
+To be added soon ....
 
 # Development #
 
