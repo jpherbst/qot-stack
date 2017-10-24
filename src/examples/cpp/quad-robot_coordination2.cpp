@@ -1,10 +1,10 @@
 /*
- * @file helloworld.c
- * @brief Simple C example showing how to use wait_until 
- * @author Andrew Symington, Sandeep D'souza and Fatima Anwar 
+ * @file quad-robot_coordination1.cpp
+ * @brief Quad Robot-Arm Coordination Demo Type 2 Controller Node
+ * @author Sandeep D'souza 
  * 
+ * Copyright (c) Carnegie Mellon University, 2017.
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
- * Copyright (c) Carnegie Mellon University, 2016.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -45,6 +45,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
 
 // Include the QoT CPP API
 #include "../../api/cpp/qot.hpp"
@@ -52,11 +57,27 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define OFFSET_MSEC      20000
+#define OFFSET_MSEC      3000
 
 #define DEBUG 1
 
-static int running = 1;
+#define BUFSIZE 1024
+#define SERVER_IP "192.168.1.110"
+#define SERVER_PORT 1200
+
+// Global Timeline Variable
+timeline_t *my_timeline;
+
+// Socket Communication Variables
+int sockfd, portno;
+int serverlen;
+struct sockaddr_in serveraddr;
+struct hostent *server;
+char buf[BUFSIZE];
+
+// Coordination Running Variables
+static int running = -1;
+utimepoint_t start_time;
 
 static void exit_handler(int s)
 {
@@ -64,14 +85,42 @@ static void exit_handler(int s)
   	running = 0;
 }
 
+static void send_message(std::string message)
+{
+	int n;
+	/* get a message from the user */
+    bzero(buf, BUFSIZE);
+    sprintf(buf, "%s", message.c_str());
+
+    std::cout << "Sending Message " << message << std::endl;
+    /* send the message to the server */
+    serverlen = sizeof(serveraddr);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (n < 0) 
+      printf("ERROR in sendto\n");
+    
+    /* print the server's reply */
+    n = recvfrom(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, (unsigned int*)&serverlen);
+    if (n < 0) 
+      printf("ERROR in recvfrom\n");
+    printf("Echo from server: %s\n", buf);
+}
+
 static void messaging_handler(const qot_message_t *msg)
 {
-    printf("Message Received from %s\n", msg->name);
-    printf("Message Type %d\n", msg->type);
-    if (msg->type == QOT_MSG_SENSOR_VAL)
+    if (msg->type == QOT_MSG_COORD_STOP)
     {
-    	std::cout << "Received a Response from TaskPlanner" << std::endl;
-    	//timeline_publish_message(my_timeline, message);
+    	// If stop message received then nodes will terminate
+    	running = 0;
+    	std::cout << "Received Coordination Stop Message" << std::endl;
+    }
+    else if (msg->type == QOT_MSG_COORD_START)
+    {
+    	// If start message received nodes will start coordination
+    	running = 1;
+    	start_time = msg->timestamp;
+    	std::cout << "Received Coordination Start Message " << start_time.estimate.sec << " " 
+    			                                           << start_time.estimate.asec << std::endl;
     }
 }
 
@@ -100,13 +149,17 @@ int main(int argc, char *argv[])
 	accuracy.above.asec = 1e12;
 
 	// Set the Cluster Nodes which will take part in the coordination
-	std::vector<std::string> Nodes = {"MotionPlanner1", "MotionPlanner2", "TaskPlanner"};
+	std::vector<std::string> Nodes = {"Coordinator","ControlArm1", "ControlArm2", "ControlArm3", "ControlArm4"};
 
 	// Set the Message types the node wants to subscribe to
 	std::set<qot_msg_type_t> MsgTypes;
 	MsgTypes.insert(QOT_MSG_COORD_START);
 	MsgTypes.insert(QOT_MSG_SENSOR_VAL);
+	//MsgTypes.insert(QOT_MSG_COORD_STOP);
 
+	// Command Vector
+	std::vector<std::string> command;
+    int command_vect_size = 0;
 	int i = 0;
 
 	int step_size_ms = OFFSET_MSEC;
@@ -121,33 +174,39 @@ int main(int argc, char *argv[])
 	if (argc > 2)
 		m = argv[2];
 
-    // Loop Interval
-    if (argc > 3)
-        step_size_ms = atoi(argv[3]);
+    // Grab Arm Server IP
+    const char *hostname = SERVER_IP;
+    if (argc > 3) 
+        hostname = argv[3];
+    
+    // Grab Server Port
+    portno = SERVER_PORT;
+    if (argc > 4) 
+    	portno = atoi(argv[4]);
 
-    // Define Messaging Parameters
+    /* socket: create the socket */
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        printf("ERROR opening socket\n");
+        exit(0);
+    }
+
+    /* gethostbyname: get the server's DNS entry */
+    server = gethostbyname(hostname);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+        exit(0);
+    }
+
+    /* build the server's Internet address */
+    bzero((char *) &serveraddr, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+    serveraddr.sin_port = htons(portno);
+    
     strcpy(message.name, m);
     message.type = QOT_MSG_SENSOR_VAL;
-    std::vector<std::string> task_data;
-    std::vector<timelength_t> task_timestamp;
-    timelength_t action_timestamp;
-
-    // Add Messages and timestamps (offsets) to vectors
-    TL_FROM_SEC(action_timestamp, 0);
-    task_timestamp.push_back(action_timestamp);
-    task_data.push_back("GripReady");
-
-    TL_FROM_SEC(action_timestamp, 10);
-    task_timestamp.push_back(action_timestamp);
-    task_data.push_back("ArmGripPos");
-
-    TL_FROM_SEC(action_timestamp, 20);
-    task_timestamp.push_back(action_timestamp);
-    task_data.push_back("GripObject");
-
-    TL_FROM_SEC(action_timestamp, 30);
-    task_timestamp.push_back(action_timestamp);
-    task_data.push_back("ArmLift");
 
 	// Initialize stepsize
 	TL_FROM_mSEC(step_size, step_size_ms);
@@ -171,6 +230,7 @@ int main(int argc, char *argv[])
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
+
 	// Define Cluster
 	if(timeline_define_cluster(my_timeline, Nodes, NULL))
 	{
@@ -185,7 +245,7 @@ int main(int argc, char *argv[])
 		goto exit_point;
 	}
 
-	// Wait for Peers to Join -> Debug and uncomment out
+	// Wait for Peers to Join
 	printf("Waiting for peers to join ...\n");
 	if(timeline_wait_for_peers(my_timeline))
 	{
@@ -200,23 +260,46 @@ int main(int argc, char *argv[])
 		goto exit_point;
 	}
 
-	// Publish tasks for edge nodes
-	for(i = 0; i < task_data.size(); i++)
+	// Install the signal handler
+	signal(SIGINT, exit_handler);
+
+	// Add Commands to Command Vector
+	command.push_back(std::string("ArmGripPos"));
+	command.push_back(std::string("Arm45"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ElbowBendBack"));
+	command.push_back(std::string("ArmBendBack"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ArmBack"));
+	command_vect_size = command.size();
+
+	// Wait for Coordination start message
+	while (running == -1)
+		sleep(1);
+
+	std::cout << "Entered the Running State" << std::endl;
+
+	wake_now = start_time;
+	wake = wake_now.estimate;
+	timeline_waituntil(my_timeline, &wake_now);
+
+	// Periodic Sleep Till the program is terminated
+	while(running)
 	{
-    	message.timestamp.estimate = wake_now.estimate;
-    	strcpy(message.data, task_data[i].c_str());        					// Task action
-		timepoint_add(&message.timestamp.estimate, &task_timestamp[i]);		// Timestamp associated with task action
-		std::cout << "Sending Command " << message.data << " with timestamp " 
-		                                << message.timestamp.estimate.sec << " " 
-		                                << message.timestamp.estimate.asec << std::endl;
-		timeline_publish_message(my_timeline, message);
+		// Send Message to Robot Arm
+		send_message(command[i]);
+
+		// Loop over Command Vector
+		i = (i + 1) % command_vect_size;
+
+		// Set Next Wakeup Point
+		timepoint_add(&wake, &step_size);
+        wake.asec = 0;
+        wake_now.estimate = wake;
+        timeline_waituntil(my_timeline, &wake_now);
 	}
 
-	// Tell edge nodes to stop
-	message.type = QOT_MSG_COORD_STOP;
-	timeline_publish_message(my_timeline, message);
-
-	
 /** DESTROY TIMELINE **/
 exit_point:
 	// Unbind from timeline

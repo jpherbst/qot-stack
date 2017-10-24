@@ -1,10 +1,10 @@
 /*
- * @file helloworld.c
- * @brief Simple C example showing how to use wait_until 
- * @author Andrew Symington, Sandeep D'souza and Fatima Anwar 
+ * @file edge_coordination.c
+ * @brief Edge Coordination Example with Virtualized Coordination Master Planner
+ * @author Sandeep D'souza 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
- * Copyright (c) Carnegie Mellon University, 2016.
+ * Copyright (c) Carnegie Mellon University, 2017.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 	std::set<qot_msg_type_t> MsgTypes;
 	MsgTypes.insert(QOT_MSG_COORD_START);
 	MsgTypes.insert(QOT_MSG_SENSOR_VAL);
-	MsgTypes.insert(QOT_MSG_COORD_STOP);
+	//MsgTypes.insert(QOT_MSG_COORD_STOP);
 
 	int i = 0;
 
