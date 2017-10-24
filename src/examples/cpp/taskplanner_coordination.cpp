@@ -222,11 +222,11 @@ exit_point:
 	// Unbind from timeline
 	if(timeline_unbind(my_timeline))
 	{
-		printf("Failed to unbind from timeline  %s\n", u);
+		printf("Failed to unbind from timeline %s\n", u);
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
-	printf("Unbound from timeline  %s\n", u);
+	printf("Unbound from timeline %s\n", u);
 
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline);	
