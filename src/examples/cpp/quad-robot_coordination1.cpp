@@ -168,8 +168,6 @@ int main(int argc, char *argv[])
 
 	int i = 0;
 
-	int step_size_ms = OFFSET_MSEC;
-
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
 	if (argc > 1)
@@ -189,6 +187,11 @@ int main(int argc, char *argv[])
     portno = SERVER_PORT;
     if (argc > 4) 
     	portno = atoi(argv[4]);
+
+    // Periodic command interval
+    int step_size_ms = OFFSET_MSEC;
+    if (argc > 5) 
+    	step_size_ms = atoi(argv[5]);
 
     /* socket: create the socket */
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
