@@ -1,6 +1,6 @@
 /**
  * @file NTP.cpp
- * @brief Provides ptp instance to the sync interface
+ * @brief Provides ntp instance to the sync interface
  * @author Fatima Anwar, Zhou Fang
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
