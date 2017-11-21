@@ -1,7 +1,7 @@
 /*
  * @file helloworld.c
- * @brief Simple C example showing how to use wait_until 
- * @author Andrew Symington, Sandeep D'souza and Fatima Anwar 
+ * @brief Simple C++ example showing how to use wait_until and inter-node messaging
+ * @author Sandeep D'souza 
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  * Copyright (c) Carnegie Mellon University, 2016.
@@ -215,7 +215,7 @@ exit_point:
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
-	printf("Unbound from timeline  %s\n", u);
+	printf("Unbound from timeline %s\n", u);
 
 	// Free the timeline data structure
 	timeline_t_destroy(my_timeline);	

@@ -188,7 +188,7 @@ Messenger::~Messenger()
 {
 	// Cancel the listener
 	sub_entity.MessageReader.listener(nullptr, dds::core::status::StatusMask::none());
-	cluster_manager.~ClusterManager();
+	std::cout << "Messenger has terminated" << std::endl;
 }
 
 qot_return_t Messenger::Publish(const qot_message_t msg)

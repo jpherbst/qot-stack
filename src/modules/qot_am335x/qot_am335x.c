@@ -252,7 +252,10 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		/* Get the signed ns start time and period */
 		ts = ptp_to_s64(&channel->state.perout.start);
 		tp = ptp_to_s64(&channel->state.perout.period);
-		duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
+		if(timer->id == COMPARE_TIMER)
+			duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
+		else
+			duty = div_s64(tp*50LL,100L);
 
 
 		/* Some basic period checks for sanity */
@@ -284,6 +287,8 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		offset = tc; 		// (start)
 		load   = tp; 		// (low+high)
 		match = duty;       // (low)
+
+		pr_info("qot_am335x: compare duty cycle = %lld, period = %lld\n", duty, tp);
 		
 		channel->parent->compare.load = load;
 		channel->parent->compare.match = match;
