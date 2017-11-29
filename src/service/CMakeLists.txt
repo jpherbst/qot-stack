@@ -153,8 +153,10 @@ ADD_EXECUTABLE(qotdaemon
 	sync/ntp/NTP.cpp
 	sync/Sync.hpp
 	sync/Sync.cpp
-#	PTP.hpp
-#	PTP.cpp
+        sync/SyncUncertainty.hpp
+	sync/SyncUncertainty.cpp
+	sync/ProbabilityLib.hpp
+	sync/ProbabilityLib.cpp
 	Coordinator.hpp
 	Coordinator.cpp
 	Timeline.cpp

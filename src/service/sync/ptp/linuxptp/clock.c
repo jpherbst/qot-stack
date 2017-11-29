@@ -1822,6 +1822,7 @@ enum servo_state clock_synchronize(struct clock *c,
 	adj = servo_sample(CLOCK_SERVO_LINREGNEW, s, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
 
+
 	c->servo_state = state;
 
 	/* QOT, Stats maintained in QOT core */
@@ -1849,7 +1850,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
-		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */ 
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {

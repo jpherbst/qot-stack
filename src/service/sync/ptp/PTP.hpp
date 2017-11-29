@@ -32,6 +32,7 @@
 
 // Parent class include
 #include "../Sync.hpp"
+#include "../SyncUncertainty.hpp"
 
 // Boost includes
 #include <boost/asio.hpp>
@@ -70,7 +71,7 @@ namespace qot
 	{
 
 		// Constructor and destructor
-		public: PTP(boost::asio::io_service *io, const std::string &iface);
+		public: PTP(boost::asio::io_service *io, const std::string &iface, struct uncertainty_params config);
 		public: ~PTP();
 
 		// Control functions
@@ -90,6 +91,9 @@ namespace qot
 
 		// PTP settings
 		private: struct config cfg_settings;
+
+		// Sync Uncertainty Calculation Class
+		private: SyncUncertainty sync_uncertainty;
 
 	};
 }
