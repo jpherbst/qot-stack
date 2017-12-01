@@ -84,6 +84,9 @@ bool SyncUncertainty::CalculateBounds(int64_t offset, double drift)
 	right_margin = sqrt(2)*inv_error_pov*sqrt(offset_bound);
 	left_margin = -right_margin;
 
+	std::cout << "Right Predictor = " << right_predictor
+	          << " Right Margin = " << right_margin << "\n";
+
 	return true;
 }
 
@@ -115,7 +118,7 @@ void SyncUncertainty::AddSample(int64_t offset, double drift)
 	}
 	else
 	{
-		offset_samples[offset_pointer] = drift;
+		offset_samples[offset_pointer] = offset;
 	}
 	offset_pointer = (offset_pointer + 1) % config.N;
 
@@ -168,6 +171,7 @@ double SyncUncertainty::GetPopulationVariance(std::vector<int64_t> samples)
 	   var += ((double)samples[n] - mean)*((double)samples[n] - mean);
 	}
 	var = var/numPoints;
+	std::cout << "Mean = " << mean << " variance = " << var << " numPoints = " << numPoints << "\n";
 
 	return var;
 }
@@ -205,9 +209,11 @@ void SyncUncertainty::CalcVarBounds()
     drift_samvar  = GetSampleVarianceDouble(drift_samples);       // Drift Sample Variance
     offset_popvar = GetPopulationVariance(offset_samples);  // Offset Population Variance
 
+    std::cout << "Drift Variance = " << drift_popvar << "\n";
     // Get the upper bound on the drift variance using the chi squared distribution
     drift_bound = upper_confidence_limit_on_std_deviation(sqrt(drift_popvar), config.M, config.pds);
 
+    std::cout << "Offset Variance = " << offset_popvar << "\n";
     // Get the upper bound on the offset variance using the chi squared distribution
     offset_bound = upper_confidence_limit_on_std_deviation(sqrt(offset_popvar), config.N, config.pos);;
 }

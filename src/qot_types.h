@@ -543,6 +543,13 @@ typedef struct qot_bounds {
 	s64 l_nsec; // Lower bound on offset
 } qot_bounds_t;
 
+// Clock Statistic Data Point
+typedef struct qot_stat_datapoint {
+	int64_t offset;  // Offset in ns
+	int64_t drift;   // Drift in ppb
+	int64_t data_id; // Data point id
+} qot_stat_t;
+
 /* An point of time with an upper and lower bound time */
 typedef struct stimepoint {
 	timepoint_t estimate;		/* Estimate of time */

@@ -41,8 +41,10 @@ double upper_confidence_limit_on_std_deviation(
   chi_squared dist(N - 1);
   
   // Calculate limits:
-  double lower_limit = ((N - 1) * Sd * Sd / quantile(complement(dist, pds))); // Needs to be checked if its pds or pds/2
-  double upper_limit = ((N - 1) * Sd * Sd / quantile(dist, pds));
+  double lower_limit = ((N - 1) * Sd * Sd / quantile(complement(dist, 1 - pds))); // Needs to be checked if its pds or pds/2
+  double upper_limit = ((N - 1) * Sd * Sd / quantile(dist, 1 - pds));
+  std::cout << "Lower Limit = " << lower_limit << "\n";
+  std::cout << "Upper Limit = " << upper_limit << "\n";
 
   return upper_limit;
 } 

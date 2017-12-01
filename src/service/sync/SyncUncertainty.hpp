@@ -34,6 +34,7 @@
 // System includes
 #include <cstdint>
 #include <vector>
+#include <iostream>
 
 // System dependencies
 extern "C"

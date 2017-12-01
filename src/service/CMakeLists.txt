@@ -149,6 +149,7 @@ TARGET_LINK_LIBRARIES(ntp m)
 ADD_EXECUTABLE(qotdaemon
 	sync/ptp/PTP.hpp
 	sync/ptp/PTP.cpp
+	sync/ptp/uncertainty_data.h
 	sync/ntp/NTP.hpp
 	sync/ntp/NTP.cpp
 	sync/Sync.hpp

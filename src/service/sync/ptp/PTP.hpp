@@ -63,6 +63,9 @@ extern "C"
 	#include "linuxptp/uds.h"
 	#include "linuxptp/util.h"
 	#include "linuxptp/version.h"
+
+	// Include to share data from ptp sync to uncertainty calculation
+	#include "uncertainty_data.h"
 }
 
 namespace qot
@@ -94,6 +97,9 @@ namespace qot
 
 		// Sync Uncertainty Calculation Class
 		private: SyncUncertainty sync_uncertainty;
+
+		// Last Received Clock-Sync Skew Statistic Data Point
+		private: qot_stat_t last_clocksync_data_point;
 
 	};
 }
