@@ -94,6 +94,7 @@ bool SyncUncertainty::CalculateBounds(int64_t offset, double drift)
 void SyncUncertainty::Configure(struct uncertainty_params configuration)
 {
 	config = configuration;
+	inv_error_pov = get_inverse_error_func(config.pov);
 	return;
 }
 

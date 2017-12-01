@@ -14,6 +14,7 @@ using std::setw;
 using std::setprecision;
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/normal.hpp>
+#include <boost/math/special_functions/erf.hpp>
 
 double upper_confidence_limit_on_std_deviation(
         double Sd,    // Sample Standard Deviation
@@ -77,4 +78,14 @@ double upper_confidence_limit_gaussian(
   double upper_limit = quantile(normdist, pdv);
 
   return upper_limit;
-} 
+}
+
+double get_inverse_error_func(double probability) 
+{
+  // Calculate the inverse gaussian error function for a given probability
+  // Check if probability value is in a valid range (absolute value)
+  if(probability > 1 && probability < -1)
+    return 0;
+
+  return boost::math::erf_inv(probability);
+}

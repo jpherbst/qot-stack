@@ -36,4 +36,7 @@ double upper_confidence_limit_on_std_deviation(double Sd, unsigned N, double pds
 // Calculate upper confidence interval for a gausian centered around the mean 0
 double upper_confidence_limit_gaussian(double Sd, double pdv);
 
+// Calculate the inverse gaussian error function for a given probability
+double get_inverse_error_func(double probability);
+
 #endif
