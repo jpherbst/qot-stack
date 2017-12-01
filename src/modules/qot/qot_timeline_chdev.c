@@ -652,8 +652,8 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     case TIMELINE_SET_SYNC_UNCERTAINTY:
         if (copy_from_user(&bounds, (qot_bounds_t*)arg, sizeof(qot_bounds_t)))
             return -EACCES;
-        timeline_impl->u_mult = (s32) bounds.u_drift;
-        timeline_impl->l_mult = (s32) bounds.l_drift;
+        timeline_impl->u_mult = (s32) bounds.u_drift; 
+        timeline_impl->l_mult = (s32) bounds.l_drift; 
         timeline_impl->u_nsec = (s64) bounds.u_nsec;
         timeline_impl->l_nsec = (s64) bounds.l_nsec;
         break;
@@ -668,14 +668,17 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         qot_loc2rem(timeline_impl->index, 0, &timelinetime);
         TP_FROM_nSEC(stp.estimate, timelinetime);
 
-        // find upper bound on core time
-        if(timeline_impl->u_nsec < 0){
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
-        }else{
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
-        }
+        // find upper bound on core time -> Code Block commented out by Sandeep
+        // if(timeline_impl->u_nsec < 0){
+        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
+        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
+        // }else{
+        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
+        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
+        // }
+        // Code added by Sandeep -> uncertain_time = time + predictor_function*(core-last_sync) + margin
+        u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
+        l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
 /*      if(u_timelinetime > timelinetime)
             TL_FROM_nSEC(utp.interval.above, u_timelinetime - timelinetime);
         else
@@ -733,14 +736,18 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         TP_FROM_nSEC(utp.estimate, timelinetime); 
 
         /* Calculate sync uncertainty _START */
-        if(timeline_impl->u_nsec < 0){
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
-        }else{
-            u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
-            l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
-        }
-        
+        // if(timeline_impl->u_nsec < 0){
+        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
+        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
+        // }else{
+        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
+        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
+        // }
+        // New code added by Sandeep -> Previous code block commented out by Sandeep
+        u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
+        l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
+        // New code added ends
+
         sync_uncertainty.estimate.sec = 0;
         sync_uncertainty.estimate.asec = 0;
 

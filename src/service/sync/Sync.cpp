@@ -28,6 +28,7 @@
  */
 
 #include "Sync.hpp"
+#include "SyncUncertainty.hpp"
 
 // Subtypes
 #include "ptp/PTP.hpp"
@@ -48,6 +49,15 @@ boost::shared_ptr<Sync> Sync::Factory(
 			const std::string &iface)			// interface for synchronization
 {
 
+	// Uncertainty Information Config
+	struct uncertainty_params uncertainty_config;
+	uncertainty_config.M = 50;			// Number of Estimated Drift Samples used -> Set to 50 (as per paper)
+	uncertainty_config.N = 50;          // Number of Estimated Offset Samples used -> Set to 50 (as per paper)
+	uncertainty_config.pds = 0.999999;  // Probability that drift variance less than upper bound -> Set to 0.999999 (as per paper)
+	uncertainty_config.pdv = 0.999999;  // Probability of computing a safe bound on drift variation -> Set to 0.999999 (as per paper)
+	uncertainty_config.pos = 0.999999;  // Probability that offset variance less than upper bound -> Set to 0.999999 (as per paper)
+	uncertainty_config.pov = 0.999999;// Probability of computing a safe bound on offset variance -> Set to 0.999999 (as per paper)
+	
 	// If IP address is private (LAN) and interface specified is ethernet
 	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0){
 
@@ -74,9 +84,9 @@ boost::shared_ptr<Sync> Sync::Factory(
 	}
 	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,-1));  // Instantiate a ptp sync algorithm with s/w timestamping
 	*/
-		return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface));  // Instantiate a ptp sync algorithm
+		return boost::shared_ptr<Sync>((Sync*) new PTP(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
-	return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 		   // Instantiate ntp sync algorithm
+	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface)); 		   // Instantiate ntp sync algorithm
 }
 
 // Convert string into 32 bit IP address

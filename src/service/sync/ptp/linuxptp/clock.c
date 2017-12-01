@@ -1742,6 +1742,9 @@ int clock_switch_phc(struct clock *c, int phc_index)
 	return 0;
 }
 
+// Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
+qot_stat_t clocksync_data_point;
+
 enum servo_state clock_synchronize(struct clock *c,
 				   struct timespec ingress_ts,
 				   struct timestamp origin_ts,
@@ -1755,7 +1758,7 @@ enum servo_state clock_synchronize(struct clock *c,
 	struct timespec ingress_tml, ingress_tml_inv; //QOT
 	tmv_t tml_offset, tml_local; //QOT
 	double dmax, dmin;
-	qot_bounds_t bounds;
+	//qot_bounds_t bounds;// Commented out by Sandeep
 	int fd;
 	struct stats_result offset_stats, freq_stats;
 
@@ -1822,6 +1825,7 @@ enum servo_state clock_synchronize(struct clock *c,
 	adj = servo_sample(CLOCK_SERVO_LINREGNEW, s, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
 
+
 	c->servo_state = state;
 
 	/* QOT, Stats maintained in QOT core */
@@ -1849,7 +1853,7 @@ enum servo_state clock_synchronize(struct clock *c,
 		//clockadj_step(c->clkid, -tmv_to_nanoseconds(c->master_offset)); 
 		// Adjust the timeline
 		clockadj_set_freq(s->tml_clkid, -adj); /* QOT */
-		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */
+		clockadj_step(s->tml_clkid, -tmv_to_nanoseconds(tml_offset)); /* QOT */ 
 		c->t1 = tmv_zero();
 		c->t2 = tmv_zero();
 		if (c->sanity_check) {
@@ -1857,6 +1861,10 @@ enum servo_state clock_synchronize(struct clock *c,
 			clockcheck_step(c->sanity_check,
 					-tmv_to_nanoseconds(c->master_offset));
 		}
+		// Add Clock-Skew Statistic for the QoT Uncertainty Service to process
+		clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
+		clocksync_data_point.drift = adj;
+		clocksync_data_point.data_id++;
 		break;
 	case SERVO_LOCKED:
 		/* QOT */
@@ -1881,17 +1889,22 @@ enum servo_state clock_synchronize(struct clock *c,
 			offset_stats.stddev = c->off_stddev;
 		if(freq_stats.stddev == 0)
 			freq_stats.stddev = c->freq_stddev;
+
+		// Add Statistic for the QoT Uncertainty Service to process
+		clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
+		clocksync_data_point.drift = adj;
+		clocksync_data_point.data_id++;
 		
 		//Invert max and min since we run the clock in opposite direction to compensate for drift
 		//bounds.u_drift = (s32) (-dmin);
 		//bounds.l_drift = (s32) (-dmax);
-		bounds.u_drift = (s32) -(freq_stats.mean - (0.5*freq_stats.stddev));
-		bounds.l_drift = (s32) -(freq_stats.mean + (0.5*freq_stats.stddev));
+		// bounds.u_drift = (s32) -(freq_stats.mean - (0.5*freq_stats.stddev)); // Commented out by Sandeep
+		// bounds.l_drift = (s32) -(freq_stats.mean + (0.5*freq_stats.stddev)); // Commented out by Sandeep
 		//bounds.u_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) - offset_stats.stddev);
 		//bounds.l_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) + offset_stats.stddev);
 		
-		bounds.u_nsec = -(offset_stats.rms - offset_stats.stddev);
-		bounds.l_nsec = -(offset_stats.rms + offset_stats.stddev);
+		// bounds.u_nsec = -(offset_stats.rms - offset_stats.stddev); // Commented out by Sandeep
+		// bounds.l_nsec = -(offset_stats.rms + offset_stats.stddev); // Commented out by Sandeep
 
 		//c->off_stddev = offset_stats.stddev;
 		//c->freq_stddev = freq_stats.stddev;
@@ -1899,11 +1912,11 @@ enum servo_state clock_synchronize(struct clock *c,
 		//pr_info("[T%i]: Offset upp %lld Offset low %lld Freq upp %lld Freq low %lld ",
 		//	c->timelineid, bounds.u_nsec, bounds.l_nsec, bounds.u_drift, bounds.l_drift);
 
-		fd = CLOCKID_TO_FD(s->tml_clkid);
+		// fd = CLOCKID_TO_FD(s->tml_clkid); // Commented out by Sandeep
 
-		if(ioctl(fd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){
-			pr_warning("Setting sync uncertainty failed for timeline ");
-		}
+		// if(ioctl(fd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){ // Commented out by Sandeep
+		// 	pr_warning("Setting sync uncertainty failed for timeline "); // Commented out by Sandeep
+		// } // Commented out by Sandeep
 		/* SET UNCERTAINTY END */
 
 		if (c->sanity_check)
