@@ -327,7 +327,7 @@ int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 			          << " data_id =" << last_clocksync_data_point.data_id << "\n";
 
 			// Add Synchronization Uncertainty Sample
-			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL);
+			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);
 		}
 	}
 

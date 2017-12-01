@@ -1758,7 +1758,7 @@ enum servo_state clock_synchronize(struct clock *c,
 	struct timespec ingress_tml, ingress_tml_inv; //QOT
 	tmv_t tml_offset, tml_local; //QOT
 	double dmax, dmin;
-	qot_bounds_t bounds;
+	//qot_bounds_t bounds;// Commented out by Sandeep
 	int fd;
 	struct stats_result offset_stats, freq_stats;
 
@@ -1898,13 +1898,13 @@ enum servo_state clock_synchronize(struct clock *c,
 		//Invert max and min since we run the clock in opposite direction to compensate for drift
 		//bounds.u_drift = (s32) (-dmin);
 		//bounds.l_drift = (s32) (-dmax);
-		bounds.u_drift = (s32) -(freq_stats.mean - (0.5*freq_stats.stddev));
-		bounds.l_drift = (s32) -(freq_stats.mean + (0.5*freq_stats.stddev));
+		// bounds.u_drift = (s32) -(freq_stats.mean - (0.5*freq_stats.stddev)); // Commented out by Sandeep
+		// bounds.l_drift = (s32) -(freq_stats.mean + (0.5*freq_stats.stddev)); // Commented out by Sandeep
 		//bounds.u_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) - offset_stats.stddev);
 		//bounds.l_nsec = -(tmv_to_nanoseconds(tml_offset) - 0.9*(tmv_to_nanoseconds(tml_offset)) + offset_stats.stddev);
 		
-		bounds.u_nsec = -(offset_stats.rms - offset_stats.stddev);
-		bounds.l_nsec = -(offset_stats.rms + offset_stats.stddev);
+		// bounds.u_nsec = -(offset_stats.rms - offset_stats.stddev); // Commented out by Sandeep
+		// bounds.l_nsec = -(offset_stats.rms + offset_stats.stddev); // Commented out by Sandeep
 
 		//c->off_stddev = offset_stats.stddev;
 		//c->freq_stddev = freq_stats.stddev;
@@ -1912,11 +1912,11 @@ enum servo_state clock_synchronize(struct clock *c,
 		//pr_info("[T%i]: Offset upp %lld Offset low %lld Freq upp %lld Freq low %lld ",
 		//	c->timelineid, bounds.u_nsec, bounds.l_nsec, bounds.u_drift, bounds.l_drift);
 
-		fd = CLOCKID_TO_FD(s->tml_clkid);
+		// fd = CLOCKID_TO_FD(s->tml_clkid); // Commented out by Sandeep
 
-		if(ioctl(fd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){
-			pr_warning("Setting sync uncertainty failed for timeline ");
-		}
+		// if(ioctl(fd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){ // Commented out by Sandeep
+		// 	pr_warning("Setting sync uncertainty failed for timeline "); // Commented out by Sandeep
+		// } // Commented out by Sandeep
 		/* SET UNCERTAINTY END */
 
 		if (c->sanity_check)

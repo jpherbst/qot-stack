@@ -537,10 +537,10 @@ typedef struct qot_message {
 
 /* Upper and lower bound on current time */
 typedef struct qot_bounds {
-	s64 u_drift; // Upper bound on drift
-	s64 l_drift; // Lower bound on drift
-	s64 u_nsec; // Upper bound on offset
-	s64 l_nsec; // Lower bound on offset
+	s64 u_drift; // Upper bound (Right Predictor) function for drift
+	s64 l_drift; // Lower bound (Left Predictor) function for drift
+	s64 u_nsec;  // Upper bound (Right Margin) function for offset
+	s64 l_nsec;  // Lower bound (Left Margin) function for offset
 } qot_bounds_t;
 
 // Clock Statistic Data Point

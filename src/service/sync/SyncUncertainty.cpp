@@ -61,8 +61,10 @@ SyncUncertainty::SyncUncertainty()
 SyncUncertainty::~SyncUncertainty() {}
 
 // Add Latest Statistic and Calculate Bounds
-bool SyncUncertainty::CalculateBounds(int64_t offset, double drift)
+bool SyncUncertainty::CalculateBounds(int64_t offset, double drift, int timelinefd)
 {
+	qot_bounds_t bounds; // Calculated bound values
+
 	// Add Newest Sample
 	AddSample(offset, drift);
 
@@ -86,6 +88,17 @@ bool SyncUncertainty::CalculateBounds(int64_t offset, double drift)
 
 	std::cout << "Right Predictor = " << right_predictor
 	          << " Right Margin = " << right_margin << "\n";
+
+	// Poulate the bounds
+	bounds.u_drift = (s64)ceil(right_predictor*1000000000LL); // Upper bound (Right Predictor) function for drift
+	bounds.l_drift = (s64)ceil(left_predictor*1000000000LL);  // Lower bound (Left Predictor) function for drift
+	bounds.u_nsec  = (s64)ceil(right_margin);                 // Upper bound (Right Margin) function for offset
+	bounds.l_nsec  = (s64)ceil(left_margin);                  // Lower bound (Left Margin) function for offset
+
+	// Write calculated uncertainty information to the timeline character device
+	if(ioctl(timelinefd, TIMELINE_SET_SYNC_UNCERTAINTY, &bounds)){
+		std::cout << "Setting sync uncertainty failed for timeline\n";
+	}
 
 	return true;
 }

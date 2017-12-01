@@ -84,9 +84,9 @@ boost::shared_ptr<Sync> Sync::Factory(
 	}
 	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,-1));  // Instantiate a ptp sync algorithm with s/w timestamping
 	*/
-		return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface, uncertainty_config));  // Instantiate a ptp sync algorithm
+		return boost::shared_ptr<Sync>((Sync*) new PTP(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
-	return boost::shared_ptr<Sync>((Sync*) new NTP(io,iface)); 		   // Instantiate ntp sync algorithm
+	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface)); 		   // Instantiate ntp sync algorithm
 }
 
 // Convert string into 32 bit IP address

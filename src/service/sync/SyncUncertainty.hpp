@@ -68,7 +68,7 @@ namespace qot
 		public: ~SyncUncertainty();
 
 		// Add Latest Statistic and Calculate Bounds
-		public: bool CalculateBounds(int64_t offset, double drift);
+		public: bool CalculateBounds(int64_t offset, double drift, int timelinefd);
 
 		// Configure the Parameters of the Synchronization Uncertainty Calculation Algorithm
 		public: void Configure(struct uncertainty_params configuration);
