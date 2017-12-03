@@ -1,9 +1,10 @@
 /**
  * @file PTP.cpp
  * @brief Provides ptp instance to the sync interface
- * @author Andrew Symingon, Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar, Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the Carnegie Mellon University, 2017. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -152,9 +153,9 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	last_clocksync_data_point.data_id = 0;
 
 	// Initialize Global Variable for Clock-Skew Statistics 
-	clocksync_data_point.offset  = 0;
-	clocksync_data_point.drift   = 0;
-	clocksync_data_point.data_id = 0;
+	ptp_clocksync_data_point.offset  = 0;
+	ptp_clocksync_data_point.drift   = 0;
+	ptp_clocksync_data_point.data_id = 0;
 
 	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
@@ -317,10 +318,10 @@ int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 		if (clock_poll(clock)) break;
 
 		// Check if a new skew statistic data point has been added
-		if(last_clocksync_data_point.data_id < clocksync_data_point.data_id)
+		if(last_clocksync_data_point.data_id < ptp_clocksync_data_point.data_id)
 		{
 			// New statistic received -> Replace old value
-			last_clocksync_data_point = clocksync_data_point;
+			last_clocksync_data_point = ptp_clocksync_data_point;
 
 			std::cout << "Estimated Drift = " << last_clocksync_data_point.drift << " " << ((double)last_clocksync_data_point.drift)/1000000000LL
 			          << " offset = " << last_clocksync_data_point.offset 

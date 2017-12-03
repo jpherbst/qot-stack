@@ -35,8 +35,9 @@
 using namespace qot;
 
 NTP::NTP(boost::asio::io_service *io, // ASIO handle
-	const std::string &iface)     // interface			
-	: asio(io), baseiface(iface)
+	const std::string &iface,     // interface	
+	struct uncertainty_params config // uncertainty calculation configuration		
+	) : asio(io), baseiface(iface), sync_uncertainty(config)
 {	
 	this->Reset();
 }
@@ -67,6 +68,15 @@ void NTP::Start(
 	BOOST_LOG_TRIVIAL(info) << "Starting NTP synchronization";
 	kill = false;
 
+	// Initialize Local Tracking Variable for Clock-Skew Statistics (Checks Staleness)
+	last_clocksync_data_point.offset  = 0;
+	last_clocksync_data_point.drift   = 0;
+	last_clocksync_data_point.data_id = 0;
+
+	// Initialize Global Variable for Clock-Skew Statistics 
+	ntp_clocksync_data_point.offset  = 0;
+	ntp_clocksync_data_point.drift   = 0;
+	ntp_clocksync_data_point.data_id = 0;
 
 	thread = boost::thread(boost::bind(&NTP::SyncThread, this, timelinesfd, timelines_size));
 }
@@ -123,6 +133,19 @@ int NTP::SyncThread(int *timelinesfd, uint16_t timelines_size)
 			if (cursor == total) {
 				cursor = 0;
 				ntp_process(timelinesfd[0], resp_list, total); // process responses
+				// Check if a new skew statistic data point has been added
+				if(last_clocksync_data_point.data_id < ntp_clocksync_data_point.data_id)
+				{
+					// New statistic received -> Replace old value
+					last_clocksync_data_point = ntp_clocksync_data_point;
+
+					std::cout << "Estimated Drift = " << last_clocksync_data_point.drift << " " << ((double)last_clocksync_data_point.drift)/1000000000LL
+					          << " offset = " << last_clocksync_data_point.offset 
+					          << " data_id =" << last_clocksync_data_point.data_id << "\n";
+
+					// Add Synchronization Uncertainty Sample
+					sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);
+				}
 			}
 		}
 

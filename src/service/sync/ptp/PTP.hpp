@@ -1,9 +1,10 @@
 /**
  * @file PTP.hpp
  * @brief Provides ptp instance to the sync interface
- * @author Andrew Symingon, Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar, Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the Carnegie Mellon University, 2017. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:

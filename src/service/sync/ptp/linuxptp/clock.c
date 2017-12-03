@@ -1743,7 +1743,7 @@ int clock_switch_phc(struct clock *c, int phc_index)
 }
 
 // Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
-qot_stat_t clocksync_data_point;
+qot_stat_t ptp_clocksync_data_point;
 
 enum servo_state clock_synchronize(struct clock *c,
 				   struct timespec ingress_ts,
@@ -1862,9 +1862,9 @@ enum servo_state clock_synchronize(struct clock *c,
 					-tmv_to_nanoseconds(c->master_offset));
 		}
 		// Add Clock-Skew Statistic for the QoT Uncertainty Service to process
-		clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
-		clocksync_data_point.drift = adj;
-		clocksync_data_point.data_id++;
+		ptp_clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
+		ptp_clocksync_data_point.drift = (int64_t)ceil(adj);
+		ptp_clocksync_data_point.data_id++;
 		break;
 	case SERVO_LOCKED:
 		/* QOT */
@@ -1891,9 +1891,9 @@ enum servo_state clock_synchronize(struct clock *c,
 			freq_stats.stddev = c->freq_stddev;
 
 		// Add Statistic for the QoT Uncertainty Service to process
-		clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
-		clocksync_data_point.drift = adj;
-		clocksync_data_point.data_id++;
+		ptp_clocksync_data_point.offset = tmv_to_nanoseconds(tml_offset);
+		ptp_clocksync_data_point.drift = (int64_t)ceil(adj);
+		ptp_clocksync_data_point.data_id++;
 		
 		//Invert max and min since we run the clock in opposite direction to compensate for drift
 		//bounds.u_drift = (s32) (-dmin);
