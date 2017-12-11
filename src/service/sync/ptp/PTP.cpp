@@ -53,7 +53,7 @@ void PTP::Reset()
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
 	cfg_settings.dds.dds.flags = DDS_TWO_STEP_FLAG;
 	cfg_settings.dds.dds.priority1 = 128;
-	cfg_settings.dds.dds.clockQuality.clockClass = 248;
+	cfg_settings.dds.dds.clockQuality.clockClass = 248; // had been changed by Sandeep from 100
 	cfg_settings.dds.dds.clockQuality.clockAccuracy = 0xfe;
 	cfg_settings.dds.dds.clockQuality.offsetScaledLogVariance = 0xffff;
 	cfg_settings.dds.dds.priority2 = 128;
@@ -94,12 +94,12 @@ void PTP::Reset()
 	cfg_settings.pod.tx_timestamp_offset = 0;
 	cfg_settings.pod.rx_timestamp_offset = 0;
 	cfg_settings.timestamping = TS_HARDWARE;
-	cfg_settings.dm = DM_E2E;
+	cfg_settings.dm = DM_E2E; //Changed by sandeep from e2e
 	cfg_settings.transport = TRANS_IEEE_802_3;
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;
 	cfg_settings.check_fup_sync = &sk_check_fupsync;
-	cfg_settings.clock_servo = CLOCK_SERVO_LINREGNEW;
+	cfg_settings.clock_servo = CLOCK_SERVO_LINREGNEW; 
 	cfg_settings.step_threshold = &servo_step_threshold;
 	cfg_settings.first_step_threshold = &servo_first_step_threshold;
 	cfg_settings.max_frequency = &servo_max_frequency;
@@ -133,15 +133,18 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
 	//cfg_settings.dds.dds.domainNumber = sync_session;	
 	cfg_settings.dds.dds.domainNumber = 0;
-	cfg_settings.pod.laterlogSyncInterval = log_sync_interval; // Change this when you need to slow down sync later
-	cfg_settings.pod.logSyncInterval = log_sync_interval; 
+	cfg_settings.pod.laterlogSyncInterval = 0;//log_sync_interval; // Change this when you need to slow down sync later
+	cfg_settings.pod.logSyncInterval = 0;//log_sync_interval; 
 
-	if (master){
-		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-	}else{
-		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
-		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
-	}
+	// if (master){
+	// 	cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	// }else{
+	// 	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+	// 	cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
+	// }
+	// Force to be a slave -> prev lines commented by Sandeep
+	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+	cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 
 	kill = false;
 
