@@ -36,6 +36,7 @@
 #include <boost/log/trivial.hpp>
 
 #include "../Sync.hpp"
+#include "../SyncUncertainty.hpp"
 
 /* Linuxptp includes */
 extern "C"
@@ -50,6 +51,9 @@ extern "C"
 
 	// ntpv4 includes
 	#include "ntpv4/ntpclient.h"
+
+	// Include to share data from ntp sync to uncertainty calculation
+	#include "uncertainty_data.h"
 }
 
 namespace qot
@@ -58,7 +62,7 @@ namespace qot
 	{
 
 		// Constructor and destructor
-		public: NTP(boost::asio::io_service *io, const std::string &iface);
+		public: NTP(boost::asio::io_service *io, const std::string &iface, struct uncertainty_params config);
 		public: ~NTP();
 
 		// Control functions
@@ -80,6 +84,12 @@ namespace qot
 		private: Response resp_list[NSTAGE];
 		private: int total;
 		private: int cursor = 0;
+
+		// Sync Uncertainty Calculation Class
+		private: SyncUncertainty sync_uncertainty;
+
+		// Last Received Clock-Sync Skew Statistic Data Point
+		private: qot_stat_t last_clocksync_data_point;
 
 	};
 }

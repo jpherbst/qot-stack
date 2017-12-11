@@ -16,6 +16,24 @@ ADD_EXECUTABLE(taskplanner_coordination
 )
 TARGET_LINK_LIBRARIES(taskplanner_coordination qot_cpp)
 
+# Quad-Arm Robot Coordination Master
+ADD_EXECUTABLE(quad_robot_master
+ 	quad-robot_coordinator.cpp
+)
+TARGET_LINK_LIBRARIES(quad_robot_master qot_cpp)
+
+# Quad-Arm Robot Coordination Controller Type 1
+ADD_EXECUTABLE(quad_robot1
+ 	quad-robot_coordination1.cpp
+)
+TARGET_LINK_LIBRARIES(quad_robot1 qot_cpp)
+
+# Quad-Arm Robot Coordination Controller Type 2
+ADD_EXECUTABLE(quad_robot2
+ 	quad-robot_coordination2.cpp
+)
+TARGET_LINK_LIBRARIES(quad_robot2 qot_cpp)
+
 # Simple application to demonstrate precise interrupt capture in global time
 # ADD_EXECUTABLE(helloworld_capture 
 # 	helloworld_capture.cpp
@@ -34,6 +52,9 @@ INSTALL(
 		helloworld_cpp
 		taskplanner_coordination
 		edge_coordination
+		quad_robot_master
+		quad_robot1
+		quad_robot2
 		#helloworld_capture 
 		#helloworld_compare 
 	DESTINATION 

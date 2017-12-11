@@ -407,6 +407,9 @@ void clockadj_step(clockid_t clkid, int64_t step)
   printf("CLOCK JUMP\n");
 }
 
+// Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
+qot_stat_t ntp_clocksync_data_point;
+
 void adjust_clock(int fd)
 {
   struct timex tx;
@@ -423,6 +426,11 @@ void adjust_clock(int fd)
 
   step = offset;
   freq = adj;
+
+  // Write calculated drift and offset to global variables
+  ntp_clocksync_data_point.offset = offset;
+  ntp_clocksync_data_point.drift = (int64_t) ceil(adj);
+  ntp_clocksync_data_point.data_id++;
 
   // Adjust offset gradually within one period
   if(adj > MAXFREQADJ || adj < -MAXFREQADJ){ // Offset is too big to be gradually adjusted, jump clock instead

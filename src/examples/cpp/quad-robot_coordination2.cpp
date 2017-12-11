@@ -1,10 +1,10 @@
 /*
- * @file edge_coordination.c
- * @brief Edge Coordination Example with Virtualized Coordination Master Planner
+ * @file quad-robot_coordination1.cpp
+ * @brief Quad Robot-Arm Coordination Demo Type 2 Controller Node
  * @author Sandeep D'souza 
  * 
- * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  * Copyright (c) Carnegie Mellon University, 2017.
+ * Copyright (c) Regents of the University of California, 2015. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -57,10 +57,9 @@
 // Basic onfiguration
 #define TIMELINE_UUID    "my_test_timeline"
 #define APPLICATION_NAME "default"
-#define OFFSET_MSEC      1000
+#define OFFSET_MSEC      3000
 
 #define DEBUG 1
-#define ARM_NAME "arm1"
 
 #define BUFSIZE 1024
 #define SERVER_IP "192.168.1.110"
@@ -76,10 +75,9 @@ struct sockaddr_in serveraddr;
 struct hostent *server;
 char buf[BUFSIZE];
 
-// Arm Name
-const char *arm_name = ARM_NAME;
-
-static int running = 1;
+// Coordination Running Variables
+static int running = -1;
+utimepoint_t start_time;
 
 static void exit_handler(int s)
 {
@@ -110,31 +108,19 @@ static void send_message(std::string message)
 
 static void messaging_handler(const qot_message_t *msg)
 {
-    std::string command;
-    std::ostringstream oss;
-    utimepoint_t wake;
-
-    // Check if the message was received from the TaskPlanner
-    if (msg->type == QOT_MSG_SENSOR_VAL && !strcmp(msg->name, "TaskPlanner"))
-    {
-    	std::cout << "Received a command " << msg->data << " from TaskPlanner with timestamp " 
-    							<< msg->timestamp.estimate.sec << " " 
-    							<< msg->timestamp.estimate.asec << std::endl;
-		oss << msg->data << "_" << arm_name << ":" << msg->timestamp.estimate.sec << "." << msg->timestamp.estimate.asec;
-		command = oss.str();
-
-		// TODO -> Compare time against current time as a safeguard
-		// Wait until the required time to send the command
-		wake = msg->timestamp;
-		timeline_waituntil(my_timeline, &wake);
-		
-		// Send Command to node
-		send_message(command);	
-    }
-    else if (msg->type == QOT_MSG_COORD_STOP)
+    if (msg->type == QOT_MSG_COORD_STOP)
     {
     	// If stop message received then nodes will terminate
     	running = 0;
+    	std::cout << "Received Coordination Stop Message" << std::endl;
+    }
+    else if (msg->type == QOT_MSG_COORD_START)
+    {
+    	// If start message received nodes will start coordination
+    	running = 1;
+    	start_time = msg->timestamp;
+    	std::cout << "Received Coordination Start Message " << start_time.estimate.sec << " " 
+    			                                           << start_time.estimate.asec << std::endl;
     }
 }
 
@@ -142,6 +128,7 @@ static void messaging_handler(const qot_message_t *msg)
 int main(int argc, char *argv[])
 {
 	// Variable declarations
+	timeline_t *my_timeline;
 	qot_return_t retval;
 	utimepoint_t est_now;
 	utimepoint_t wake_now;
@@ -162,7 +149,7 @@ int main(int argc, char *argv[])
 	accuracy.above.asec = 1e12;
 
 	// Set the Cluster Nodes which will take part in the coordination
-	std::vector<std::string> Nodes = {"MotionPlanner1", "MotionPlanner2", "TaskPlanner"};
+	std::vector<std::string> Nodes = {"Coordinator","ControlArm1", "ControlArm2", "ControlArm3", "ControlArm4"};
 
 	// Set the Message types the node wants to subscribe to
 	std::set<qot_msg_type_t> MsgTypes;
@@ -170,9 +157,10 @@ int main(int argc, char *argv[])
 	MsgTypes.insert(QOT_MSG_SENSOR_VAL);
 	//MsgTypes.insert(QOT_MSG_COORD_STOP);
 
+	// Command Vector
+	std::vector<std::string> command;
+    int command_vect_size = 0;
 	int i = 0;
-
-	int step_size_ms = OFFSET_MSEC;
 
 	// Grab the timeline
 	const char *u = TIMELINE_UUID;
@@ -184,18 +172,20 @@ int main(int argc, char *argv[])
 	if (argc > 2)
 		m = argv[2];
 
-	if (argc > 3) 
-        arm_name = argv[3];
-
     // Grab Arm Server IP
     const char *hostname = SERVER_IP;
-    if (argc > 4) 
-        hostname = argv[4];
+    if (argc > 3) 
+        hostname = argv[3];
     
     // Grab Server Port
     portno = SERVER_PORT;
+    if (argc > 4) 
+    	portno = atoi(argv[4]);
+
+    // Periodic command interval
+    int step_size_ms = OFFSET_MSEC;
     if (argc > 5) 
-    	portno = atoi(argv[5]);
+    	step_size_ms = atoi(argv[5]);
 
     /* socket: create the socket */
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -243,6 +233,7 @@ int main(int argc, char *argv[])
 		timeline_t_destroy(my_timeline);
 		return QOT_RETURN_TYPE_ERR;
 	}
+
 	// Define Cluster
 	if(timeline_define_cluster(my_timeline, Nodes, NULL))
 	{
@@ -271,19 +262,45 @@ int main(int argc, char *argv[])
 		printf("Could not read timeline reference time\n");
 		goto exit_point;
 	}
-	else
-	{
-		wake = wake_now.estimate;
-		timepoint_add(&wake, &step_size);
-        wake.asec = 0;
-	}
 
+	// Install the signal handler
 	signal(SIGINT, exit_handler);
+
+	// Add Commands to Command Vector
+	command.push_back(std::string("ArmGripPos"));
+	command.push_back(std::string("Arm45"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ElbowBendBack"));
+	command.push_back(std::string("ArmBendBack"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ArmUp"));
+	command.push_back(std::string("ArmBack"));
+	command_vect_size = command.size();
+
+	// Wait for Coordination start message
+	while (running == -1)
+		sleep(1);
+
+	std::cout << "Entered the Running State" << std::endl;
+
+	wake_now = start_time;
+	wake = wake_now.estimate;
+	timeline_waituntil(my_timeline, &wake_now);
 
 	// Periodic Sleep Till the program is terminated
 	while(running)
 	{
-		sleep(10);
+		// Send Message to Robot Arm
+		send_message(command[i]);
+
+		// Loop over Command Vector
+		i = (i + 1) % command_vect_size;
+
+		// Set Next Wakeup Point
+		timepoint_add(&wake, &step_size);
+        wake.asec = 0;
+        wake_now.estimate = wake;
+        timeline_waituntil(my_timeline, &wake_now);
 	}
 
 /** DESTROY TIMELINE **/

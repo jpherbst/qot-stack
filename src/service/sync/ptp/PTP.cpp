@@ -1,9 +1,10 @@
 /**
  * @file PTP.cpp
  * @brief Provides ptp instance to the sync interface
- * @author Andrew Symingon, Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar, Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the Carnegie Mellon University, 2017. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -35,9 +36,10 @@ using namespace qot;
 #define DEBUG true
 #define TEST  true
 
-PTP::PTP(boost::asio::io_service *io,	// ASIO handle
-		const std::string &iface		// interface
-	) : /*asio(io),*/ baseiface(iface)
+PTP::PTP(boost::asio::io_service *io,	 // ASIO handle
+		const std::string &iface,		 // interface
+		struct uncertainty_params config // uncertainty calculation configuration
+	) : /*asio(io),*/ baseiface(iface), sync_uncertainty(config)
 {	
 	this->Reset();	
 }
@@ -147,6 +149,16 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 
 	kill = false;
+
+	// Initialize Local Tracking Variable for Clock-Skew Statistics (Checks Staleness)
+	last_clocksync_data_point.offset  = 0;
+	last_clocksync_data_point.drift   = 0;
+	last_clocksync_data_point.data_id = 0;
+
+	// Initialize Global Variable for Clock-Skew Statistics 
+	ptp_clocksync_data_point.offset  = 0;
+	ptp_clocksync_data_point.drift   = 0;
+	ptp_clocksync_data_point.data_id = 0;
 
 	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
@@ -305,7 +317,23 @@ int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 
 	// Keep going until kill called or ctrl+c is pressed
 	while (is_running() && !kill)
+	{
 		if (clock_poll(clock)) break;
+
+		// Check if a new skew statistic data point has been added
+		if(last_clocksync_data_point.data_id < ptp_clocksync_data_point.data_id)
+		{
+			// New statistic received -> Replace old value
+			last_clocksync_data_point = ptp_clocksync_data_point;
+
+			std::cout << "Estimated Drift = " << last_clocksync_data_point.drift << " " << ((double)last_clocksync_data_point.drift)/1000000000LL
+			          << " offset = " << last_clocksync_data_point.offset 
+			          << " data_id =" << last_clocksync_data_point.data_id << "\n";
+
+			// Add Synchronization Uncertainty Sample
+			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);
+		}
+	}
 
 	// Clean up
 	clock_destroy(clock);

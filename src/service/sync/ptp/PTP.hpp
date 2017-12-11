@@ -1,9 +1,10 @@
 /**
  * @file PTP.hpp
  * @brief Provides ptp instance to the sync interface
- * @author Andrew Symingon, Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar, Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the Carnegie Mellon University, 2017. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -32,6 +33,7 @@
 
 // Parent class include
 #include "../Sync.hpp"
+#include "../SyncUncertainty.hpp"
 
 // Boost includes
 #include <boost/asio.hpp>
@@ -62,6 +64,9 @@ extern "C"
 	#include "linuxptp/uds.h"
 	#include "linuxptp/util.h"
 	#include "linuxptp/version.h"
+
+	// Include to share data from ptp sync to uncertainty calculation
+	#include "uncertainty_data.h"
 }
 
 namespace qot
@@ -70,7 +75,7 @@ namespace qot
 	{
 
 		// Constructor and destructor
-		public: PTP(boost::asio::io_service *io, const std::string &iface);
+		public: PTP(boost::asio::io_service *io, const std::string &iface, struct uncertainty_params config);
 		public: ~PTP();
 
 		// Control functions
@@ -90,6 +95,12 @@ namespace qot
 
 		// PTP settings
 		private: struct config cfg_settings;
+
+		// Sync Uncertainty Calculation Class
+		private: SyncUncertainty sync_uncertainty;
+
+		// Last Received Clock-Sync Skew Statistic Data Point
+		private: qot_stat_t last_clocksync_data_point;
 
 	};
 }
