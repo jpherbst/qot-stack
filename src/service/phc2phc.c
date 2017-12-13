@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
                         perror("slave: cannot read event");
                         break;
                 }
-		
+
 		/* Local timestamp and offset */
 		local_ts = ptp_clock_u64(&perout_request.start);
 		offset = ptp_clock_diff(&event.t, &perout_request.start);

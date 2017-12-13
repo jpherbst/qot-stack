@@ -255,7 +255,10 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		if(timer->id == COMPARE_TIMER)
 			duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
 		else
-			duty = div_s64(tp*1LL,100L);
+		{
+			duty = div_s64(tp*99LL,100L);
+			channel->parent->compare.perout.edge = 1;
+		}
 
 		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
