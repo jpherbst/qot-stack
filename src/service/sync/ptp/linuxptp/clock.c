@@ -1772,26 +1772,8 @@ enum servo_state clock_synchronize(struct clock *c,
 		return SERVO_UNLOCKED;
 	}
 	
-	/*** Code snippet used to debug qot_rem2loc ***/
-	/*if(clock_project_inverse_timeline(s->tml_clkid, ingress_tml, &ingress_tml_inv)){ //Used for debugging
-		pr_warning("timeline inverse projection failed");
-		//return SERVO_UNLOCKED;
-	}
-
-	tmv_t diff = tmv_sub(timespec_to_tmv(ingress_ts),timespec_to_tmv(ingress_tml_inv));
-
-	pr_info("core %10" PRId64 " tml %10" PRId64 " tml inverse %10" PRId64 " diff %10" PRId64, 
-		timespec_to_tmv(ingress_ts), timespec_to_tmv(ingress_tml), timespec_to_tmv(ingress_tml_inv), diff);*/
-
-	/********************************************/
-	
-	//printf("Core: %lld.%.9ld\nTML: %lld.%.9ld\nOrig: %lld.%.9lu\n", 
-	//	(long long)ingress_ts.tv_sec, ingress_ts.tv_nsec, (long long)ingress_tml.tv_sec, ingress_tml.tv_nsec, (long long)origin_ts.sec, (long)origin_ts.nsec);
-
-	//pr_info("core %10" PRId64 " tml %10" PRId64, timespec_to_tmv(ingress_ts), timespec_to_tmv(ingress_tml));
-
+	// Populate timestamps for offset calculation
 	ingress = timespec_to_tmv(ingress_ts); 		/* QOT */
-	//ingress = timespec_to_tmv(ingress_tml);	/* QOT */
 	origin  = timestamp_to_tmv(origin_ts);
 
 	c->t1 = origin;
@@ -1799,6 +1781,9 @@ enum servo_state clock_synchronize(struct clock *c,
 
 	c->c1 = correction_to_tmv(correction1);
 	c->c2 = correction_to_tmv(correction2);
+
+	// Added by Sandeep -> Calculate ingress timeline timestamp (shifting from feed-forward to feedback)
+	ingress = timespec_to_tmv(ingress_tml); 		/* QOT */
 
 	/*
 	 * c->master_offset = ingress - origin - c->path_delay - c->c1 - c->c2;
@@ -1817,14 +1802,18 @@ enum servo_state clock_synchronize(struct clock *c,
 
 	c->cur.offsetFromMaster = tmv_to_TimeInterval(c->master_offset);
 
-	//if (c->free_running)
+	//if (c->free_running) -
 		//return clock_no_adjust(c);
 
 	/*adj = servo_sample(c->servo, tmv_to_nanoseconds(c->master_offset),
 			   tmv_to_nanoseconds(ingress), &state);*/
-	adj = servo_sample(CLOCK_SERVO_LINREGNEW, s, tmv_to_nanoseconds(c->master_offset),
-			   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
+	// Commented out by Sandeep (Old code written by Fatima)
+	// adj = servo_sample(CLOCK_SERVO_LINREGNEW, s, tmv_to_nanoseconds(c->master_offset),
+	// 		   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
 
+	// Added by Sandeep
+    adj = servo_sample(CLOCK_SERVO_PI, s, tmv_to_nanoseconds(c->master_offset),
+			   tmv_to_nanoseconds(ingress), &state, &dmax, &dmin); /* QOT */
 
 	c->servo_state = state;
 

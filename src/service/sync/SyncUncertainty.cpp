@@ -185,7 +185,6 @@ double SyncUncertainty::GetPopulationVariance(std::vector<int64_t> samples)
 	   var += ((double)samples[n] - mean)*((double)samples[n] - mean);
 	}
 	var = var/numPoints;
-	std::cout << "Mean = " << mean << " variance = " << var << " numPoints = " << numPoints << "\n";
 
 	return var;
 }

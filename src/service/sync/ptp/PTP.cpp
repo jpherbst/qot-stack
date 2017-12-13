@@ -101,7 +101,7 @@ void PTP::Reset()
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;
 	cfg_settings.check_fup_sync = &sk_check_fupsync;
-	cfg_settings.clock_servo = CLOCK_SERVO_LINREGNEW; 
+	cfg_settings.clock_servo = CLOCK_SERVO_PI;//changed by Sandeep from CLOCK_SERVO_LINREGNEW, moving from feedforward to feedback; 
 	cfg_settings.step_threshold = &servo_step_threshold;
 	cfg_settings.first_step_threshold = &servo_first_step_threshold;
 	cfg_settings.max_frequency = &servo_max_frequency;
@@ -325,10 +325,6 @@ int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 		{
 			// New statistic received -> Replace old value
 			last_clocksync_data_point = ptp_clocksync_data_point;
-
-			std::cout << "Estimated Drift = " << last_clocksync_data_point.drift << " " << ((double)last_clocksync_data_point.drift)/1000000000LL
-			          << " offset = " << last_clocksync_data_point.offset 
-			          << " data_id =" << last_clocksync_data_point.data_id << "\n";
 
 			// Add Synchronization Uncertainty Sample
 			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);
