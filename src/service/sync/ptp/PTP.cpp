@@ -55,7 +55,7 @@ void PTP::Reset()
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
 	cfg_settings.dds.dds.flags = DDS_TWO_STEP_FLAG;
 	cfg_settings.dds.dds.priority1 = 128;
-	cfg_settings.dds.dds.clockQuality.clockClass = 248; // had been changed by Sandeep from 100
+	cfg_settings.dds.dds.clockQuality.clockClass = 100; // had been changed by Sandeep from 100
 	cfg_settings.dds.dds.clockQuality.clockAccuracy = 0xfe;
 	cfg_settings.dds.dds.clockQuality.offsetScaledLogVariance = 0xffff;
 	cfg_settings.dds.dds.priority2 = 128;
@@ -138,15 +138,15 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	cfg_settings.pod.laterlogSyncInterval = 0;//log_sync_interval; // Change this when you need to slow down sync later
 	cfg_settings.pod.logSyncInterval = 0;//log_sync_interval; 
 
-	// if (master){
-	// 	cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
-	// }else{
-	// 	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
-	// 	cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
-	// }
+	if (master){
+		cfg_settings.dds.dds.flags &= ~DDS_SLAVE_ONLY;
+	}else{
+		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
+	}
 	// Force to be a slave -> prev lines commented by Sandeep
-	cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
-	cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
+	// cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+	// cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 
 	kill = false;
 
