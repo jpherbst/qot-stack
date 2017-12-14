@@ -27,13 +27,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PTP_UNCERTAINTY_DATA_QOT_H
-#define PTP_UNCERTAINTY_DATA_QOT_H
+#ifndef NTP_UNCERTAINTY_DATA_QOT_H
+#define NTP_UNCERTAINTY_DATA_QOT_H
 
 #include "../../../qot_types.h"
 
 // Clock Statistics Data Point -> variable defined in ptp/clock.c
-extern qot_stat_t ptp_clocksync_data_point;
+extern qot_stat_t ntp_clocksync_data_point;
 
 #endif
 

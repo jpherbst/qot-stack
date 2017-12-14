@@ -152,6 +152,7 @@ ADD_EXECUTABLE(qotdaemon
 	sync/ptp/uncertainty_data.h
 	sync/ntp/NTP.hpp
 	sync/ntp/NTP.cpp
+	sync/ntp/uncertainty_data.h
 	sync/Sync.hpp
 	sync/Sync.cpp
         sync/SyncUncertainty.hpp

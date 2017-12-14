@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 	/* Request timestamps from the slave */
 	memset(&extts_request, 0, sizeof(extts_request));
 	extts_request.index = index_s;
-	extts_request.flags = PTP_ENABLE_FEATURE;
+	extts_request.flags = PTP_ENABLE_FEATURE | PTP_RISING_EDGE;
 	if (ioctl(fd_s, PTP_EXTTS_REQUEST, &extts_request)) {
 		perror("slave: cannot request external timestamp");
 	}
@@ -272,8 +272,6 @@ int main(int argc, char *argv[])
                         perror("slave: cannot read event");
                         break;
                 }
-		/* Work out the predicted timestamp */
-		ptp_clock_addns(&perout_request.start, (period)); //Fatima Test to reduce sync error
 
 		/* Local timestamp and offset */
 		local_ts = ptp_clock_u64(&perout_request.start);
@@ -295,7 +293,7 @@ int main(int argc, char *argv[])
 		if(ppb > 50 || ppb < -50) // Fatima: just a small hack
 			ppb = -7;
 		
-		/* What we do depends on the servo state */
+		/* What we do depends on the servo state */ 
 		switch (state) {
 		case SERVO_UNLOCKED:
 			break;
@@ -313,6 +311,10 @@ int main(int argc, char *argv[])
 			perout_request.start.sec, perout_request.start.nsec);
 		printf("- NIC PHC at %lld.%09u\n", 
 			event.t.sec, event.t.nsec);
+
+		/* Work out the predicted timestamp */
+		ptp_clock_addns(&perout_request.start, (period)); //Fatima Test to reduce sync error
+
 		//fflush(stdout);
 	}
 

@@ -1,9 +1,10 @@
 /**
  * @file PTP.cpp
  * @brief Provides ptp instance to the sync interface
- * @author Andrew Symingon, Fatima Anwar
+ * @author Andrew Symingon, Fatima Anwar, Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Regents of the Carnegie Mellon University, 2017. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -54,7 +55,7 @@ void PTP::Reset()
 	cfg_settings.interfaces = STAILQ_HEAD_INITIALIZER(cfg_settings.interfaces);
 	cfg_settings.dds.dds.flags = DDS_TWO_STEP_FLAG;
 	cfg_settings.dds.dds.priority1 = 128;
-	cfg_settings.dds.dds.clockQuality.clockClass = 248;
+	cfg_settings.dds.dds.clockQuality.clockClass = 100; // had been changed by Sandeep from 100
 	cfg_settings.dds.dds.clockQuality.clockAccuracy = 0xfe;
 	cfg_settings.dds.dds.clockQuality.offsetScaledLogVariance = 0xffff;
 	cfg_settings.dds.dds.priority2 = 128;
@@ -95,12 +96,12 @@ void PTP::Reset()
 	cfg_settings.pod.tx_timestamp_offset = 0;
 	cfg_settings.pod.rx_timestamp_offset = 0;
 	cfg_settings.timestamping = TS_HARDWARE;
-	cfg_settings.dm = DM_E2E;
+	cfg_settings.dm = DM_E2E; //Changed by sandeep from e2e
 	cfg_settings.transport = TRANS_IEEE_802_3;
 	cfg_settings.assume_two_step = &assume_two_step;
 	cfg_settings.tx_timestamp_timeout = &sk_tx_timeout;
 	cfg_settings.check_fup_sync = &sk_check_fupsync;
-	cfg_settings.clock_servo = CLOCK_SERVO_LINREGNEW;
+	cfg_settings.clock_servo = CLOCK_SERVO_PI;//changed by Sandeep from CLOCK_SERVO_LINREGNEW, moving from feedforward to feedback; 
 	cfg_settings.step_threshold = &servo_step_threshold;
 	cfg_settings.first_step_threshold = &servo_first_step_threshold;
 	cfg_settings.max_frequency = &servo_max_frequency;
@@ -143,6 +144,9 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 	}
+	// Force to be a slave -> prev lines commented by Sandeep (comment prev lines out to force slave mode)
+	// cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
+	// cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 
 	kill = false;
 
@@ -152,9 +156,9 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	last_clocksync_data_point.data_id = 0;
 
 	// Initialize Global Variable for Clock-Skew Statistics 
-	clocksync_data_point.offset  = 0;
-	clocksync_data_point.drift   = 0;
-	clocksync_data_point.data_id = 0;
+	ptp_clocksync_data_point.offset  = 0;
+	ptp_clocksync_data_point.drift   = 0;
+	ptp_clocksync_data_point.data_id = 0;
 
 	thread = boost::thread(boost::bind(&PTP::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
@@ -317,14 +321,10 @@ int PTP::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 		if (clock_poll(clock)) break;
 
 		// Check if a new skew statistic data point has been added
-		if(last_clocksync_data_point.data_id < clocksync_data_point.data_id)
+		if(last_clocksync_data_point.data_id < ptp_clocksync_data_point.data_id)
 		{
 			// New statistic received -> Replace old value
-			last_clocksync_data_point = clocksync_data_point;
-
-			std::cout << "Estimated Drift = " << last_clocksync_data_point.drift << " " << ((double)last_clocksync_data_point.drift)/1000000000LL
-			          << " offset = " << last_clocksync_data_point.offset 
-			          << " data_id =" << last_clocksync_data_point.data_id << "\n";
+			last_clocksync_data_point = ptp_clocksync_data_point;
 
 			// Add Synchronization Uncertainty Sample
 			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);

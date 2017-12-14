@@ -255,8 +255,10 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		if(timer->id == COMPARE_TIMER)
 			duty = div_s64(tp*(100LL-(s64)channel->parent->compare.perout.duty_cycle),100L);
 		else
-			duty = div_s64(tp*50LL,100L);
-
+		{
+			duty = div_s64(tp*99LL,100L);
+			channel->parent->compare.perout.edge = 1;
+		}
 
 		/* Some basic period checks for sanity */
 		if (tp < MIN_PERIOD_NS || tp > MAX_PERIOD_NS)
@@ -269,12 +271,14 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		if (ts < MIN_PERIOD_NS || ts > MAX_PERIOD_NS)
 			return -EINVAL;
 
+		pr_info("qot_am335x: compare tp = %lld, ts = %lld\n", tp, ts);
+
 		/* Work out the cycle count corresponding to this edge */
 		ts = div_u64((ts << channel->parent->cc.shift)
 			+ channel->parent->tc.frac, channel->parent->cc.mult);
 		tc = ts;
 		tc = tc + channel->parent->tc.cycle_last;
-		
+	
 		/* Use the cyclecounter mult at shift to scale */
 		tp = div_u64((tp << channel->parent->cc.shift)
 			+ channel->parent->tc.frac, channel->parent->cc.mult);
@@ -288,7 +292,7 @@ static int qot_am335x_perout(struct qot_am335x_channel *channel, int event)
 		load   = tp; 		// (low+high)
 		match = duty;       // (low)
 
-		pr_info("qot_am335x: compare duty cycle = %lld, period = %lld\n", duty, tp);
+		pr_info("qot_am335x: compare duty cycle = %lld, period = %lld, edge = %d\n", duty, tp, channel->parent->compare.perout.edge);
 		
 		channel->parent->compare.load = load;
 		channel->parent->compare.match = match;
