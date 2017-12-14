@@ -144,7 +144,7 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 		cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 		cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 	}
-	// Force to be a slave -> prev lines commented by Sandeep
+	// Force to be a slave -> prev lines commented by Sandeep (comment prev lines out to force slave mode)
 	// cfg_settings.dds.dds.flags |= DDS_SLAVE_ONLY;
 	// cfg_settings.cfg_ignore |= CFG_IGNORE_SLAVEONLY;
 
