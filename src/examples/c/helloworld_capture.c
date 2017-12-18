@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
 {
     FILE *fp1, *fp2, *fp3, *fp4, *fp5, *fp6;
 	timeline_t *my_timeline1, *my_timeline2;
+  stimepoint_t compare_compat;
 	timelength_t resolution = { .sec = 0, .asec = 1e9 }; // 1nsec
 	timeinterval_t accuracy = { .below.sec = 0, .below.asec = 1e12, .above.sec = 0, .above.asec = 1e12 }; // 1usec
 
@@ -185,7 +186,7 @@ int main(int argc, char *argv[])
         }
     }
 
-	char *device_m = "/dev/ptp1";               /* PTP device */
+	  char *device_m = "/dev/ptp1";               /* PTP device */
     int index_m = 1;                            /* Channel index, '1' corresponds to 'TIMER6' */
     int fd_m;                                   /* device file descriptor */
 
@@ -246,12 +247,14 @@ int main(int argc, char *argv[])
         utp.estimate.sec  = event.t.sec;
         utp.estimate.asec = event.t.nsec*nSEC_PER_SEC;
         // Get the core time
-        timeline_core2rem(my_timeline1, &utp.estimate);
+        compare_compat.estimate = utp.estimate;
+        timeline_core2rem(my_timeline1, &compare_compat);
         
         if(i > 0){
             utp2.estimate.sec  = event.t.sec;
             utp2.estimate.asec = event.t.nsec*nSEC_PER_SEC;
-            timeline_core2rem(my_timeline2, &utp2.estimate);
+            compare_compat.estimate = utp2.estimate;
+            timeline_core2rem(my_timeline2, &compare_compat);
         }
 
         if(DEBUG){
