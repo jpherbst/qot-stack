@@ -7,7 +7,7 @@ ADD_EXECUTABLE(helloworld
 )
 TARGET_LINK_LIBRARIES(helloworld qot)
 
-IF (NOT BUILD_VIRT_GUEST)
+IF (CROSS_AM335X)
 	ADD_EXECUTABLE(helloworld_capture
 		helloworld_capture.c
 	)
@@ -22,7 +22,7 @@ IF (NOT BUILD_VIRT_GUEST)
 		helloworld_gpio.c
 	)
 	TARGET_LINK_LIBRARIES(helloworld_gpio qot)
-ENDIF (NOT BUILD_VIRT_GUEST)
+ENDIF (CROSS_AM335X)
 
 
 ADD_EXECUTABLE(helloworld_end2end
@@ -79,7 +79,7 @@ INSTALL(
 	COMPONENT 
 		applications
 )
-IF (NOT BUILD_VIRT_GUEST)
+IF (CROSS_AM335X)
 	INSTALL(
 		TARGETS 
 			helloworld_capture
@@ -106,7 +106,7 @@ IF (NOT BUILD_VIRT_GUEST)
 		COMPONENT 
 			applications
 	)
-ENDIF (NOT BUILD_VIRT_GUEST)
+ENDIF (CROSS_AM335X)
 
 
 INSTALL(
