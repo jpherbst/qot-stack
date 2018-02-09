@@ -47,7 +47,8 @@ public:
         MessageWriter(dds::core::null), nameServiceWriter(dds::core::null)
     {
         std::ostringstream timeline_partition;
-        timeline_partition << "Messaging_" << "tl" << timeline_uuid;
+        /** Each timeline has its own DDS partition **/
+        timeline_partition << timeline_uuid;
         /** A dds::domain::DomainParticipant is created for the default domain. */
         dds::domain::DomainParticipant participant
             = dds::domain::DomainParticipant(org::opensplice::domain::default_id());
@@ -118,7 +119,8 @@ public:
         MessageReader(dds::core::null), nameServiceReader(dds::core::null)
     {
         std::ostringstream timeline_partition;
-        timeline_partition << "Messaging_" << "tl" << timeline_uuid;
+        /** Each timeline has its own DDS partition **/
+        timeline_partition << timeline_uuid;
         /** A dds::domain::DomainParticipant is created for the default domain. */
         dds::domain::DomainParticipant participant
             = dds::domain::DomainParticipant(org::opensplice::domain::default_id());
