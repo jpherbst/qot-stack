@@ -4,6 +4,12 @@ ADD_EXECUTABLE(helloworld_cpp
 )
 TARGET_LINK_LIBRARIES(helloworld_cpp qot_cpp)
 
+# Simple application to demonstrate how to use the publish subscribe functionality
+ADD_EXECUTABLE(helloworld_pubsub
+ 	helloworld_pubsub.cpp
+)
+TARGET_LINK_LIBRARIES(helloworld_pubsub qot_cpp)
+
 # Robot Coordination edge node 
 ADD_EXECUTABLE(edge_coordination
  	edge_coordination.cpp
@@ -46,10 +52,11 @@ TARGET_LINK_LIBRARIES(quad_robot2 qot_cpp)
 # )
 # TARGET_LINK_LIBRARIES(helloworld_compare qot_cpp)
 
-# Install the qot library to the given prefix
+# Install the cpp test applications to the given prefix
 INSTALL(
 	TARGETS 
 		helloworld_cpp
+		helloworld_pubsub
 		taskplanner_coordination
 		edge_coordination
 		quad_robot_master

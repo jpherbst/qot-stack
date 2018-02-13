@@ -25,11 +25,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PUBSUB_HPP
-#define PUBSUB_HPP
-
-// Timeline Message DDS IDL
-#include <msg/QoT_DCPS.hpp>
+#ifndef PUBSUB_IMPL_HPP
+#define PUBSUB_IMPL_HPP
 
 // Include the QoT api
 extern "C"
@@ -37,26 +34,35 @@ extern "C"
 	#include "../../../qot_types.h"
 }
 
+// Timeline Message DDS IDL
+#include <msg/QoT_DCPS.hpp>
+
+#include "PubSubWrapper.hpp"
+
 std::ostream& operator <<(std::ostream& os, const qot_msgs::TimelineMsgingType& tms);
 
 namespace qot
 {
-	// Distributed Inter-Process Messenger functionality
-	class Publisher
+	// Distributed Inter-Process Publisher functionality
+	class PublisherImpl
 	{
 		// Constructor and destructor
 		// The Constructor initializes private member variables and starts the DDS datawriter
 		// The Destructor destroys the datawriter
-		public: Publisher(const std::string &topicName, const std::string &nodeName, const std::string &timelineUUID);
-		public: ~Publisher();
+		public: PublisherImpl(const std::string &topicName, const qot::TopicType topicType, const std::string &nodeName, const std::string &timelineUUID);
+		public: ~PublisherImpl();
 	
 		// Publish to a topic -> Needs to be called for each data point published
 		public: qot_return_t Publish(const qot_message_t msg);
+
+		// Helper function to reshape topic name based on topic type
+		private: void reshapeTopicName();
 
 		// Information about the application, topic and the timeline
 		private: std::string timeline_uuid;    // timeline uuid
 		private: std::string node_name;    	   // application name
 		private: std::string topic_name;	   // topic name 
+		private: qot::TopicType topic_type;	   // topic type			 
 
 		// DDS Data Writer
 		private: dds::pub::DataWriter<qot_msgs::TimelineMsgingType> dataWriter;		
@@ -67,14 +73,14 @@ namespace qot
 
 	};
 
-	// Distributed Inter-Process Messenger functionality
-	class Subscriber : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineMsgingType>
+	// Distributed Inter-Process Subscriber functionality
+	class SubscriberImpl : public dds::sub::NoOpDataReaderListener<qot_msgs::TimelineMsgingType>
 	{
 		// Constructor and destructor
 		// The Constructor initializes private member variables and starts the DDS datareader
 		// The Destructor destroys the datareader
-		public: Subscriber(const std::string &topicName, const std::string &timelineUUID, qot_msg_callback_t callback);
-		public: ~Subscriber();
+		public: SubscriberImpl(const std::string &topicName, const qot::TopicType topicType, const std::string &timelineUUID, qot_msg_callback_t callback);
+		public: ~SubscriberImpl();
 
 		// Required by dds::sub::NoOpDataReaderListener dds callback. Gets called when new data is available to read. 
 		public: virtual void on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr);
@@ -83,12 +89,16 @@ namespace qot
 		public: virtual void on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr, 
 			const dds::core::status::LivelinessChangedStatus& status);
 
+		// Helper function to reshape topic name based on topic type
+		private: void reshapeTopicName();
+
 		// UserFunction Callback for message
 		private: qot_msg_callback_t msg_callback;
 
 		// Information about the topic and the timeline
 		private: std::string timeline_uuid;    // timeline uuid
 		private: std::string topic_name;       // topic name
+		private: qot::TopicType topic_type;	   // topic type			 
 
 		// DDS Data Writer
 		private: dds::sub::DataReader<qot_msgs::TimelineMsgingType> dataReader;

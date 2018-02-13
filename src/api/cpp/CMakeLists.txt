@@ -104,7 +104,7 @@ FIND_PACKAGE(Threads REQUIRED)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
 ADD_LIBRARY(qot_cpp SHARED qot.hpp qot.cpp lib/messenger.hpp lib/MessengerInterface.cpp lib/Messenger.cpp lib/Messenger.hpp 
 	    lib/ClusterManager.cpp lib/ClusterManager.hpp lib/MsgingEntities.cpp lib/ClusterHandlers.cpp lib/ClusterHandlers.hpp 
-	    lib/PubSub.cpp lib/PubSub.hpp ${OpenSplice_DATAMODEL})
+	    lib/PubSub.cpp lib/PubSub.hpp lib/PubSubWrapper.cpp lib/PubSubWrapper.hpp ${OpenSplice_DATAMODEL})
 TARGET_LINK_LIBRARIES(qot_cpp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 INSTALL(FILES qot.hpp DESTINATION include COMPONENT headers)
 INSTALL(TARGETS qot_cpp DESTINATION lib COMPONENT libraries)
