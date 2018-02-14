@@ -44,6 +44,9 @@ extern "C"
 /* Include Messenger Framework */ 
 #include "lib/messenger.hpp"
 
+/* Include Publish-Subscribe Wrappers */
+#include "lib/PubSubWrapper.hpp"
+
 /* Opaque type */
 typedef struct timeline timeline_t;
 

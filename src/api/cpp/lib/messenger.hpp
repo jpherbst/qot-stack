@@ -3,7 +3,7 @@
  * @brief A simple C application programming interface to the QoT stack DDS Messenger Service in C++
  * @author Sandeep D'souza
  *
- * Copyright (c) Carnegie Mellon University, 2016.
+ * Copyright (c) Carnegie Mellon University, 2017.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,14 +26,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-// #ifdef __cplusplus
-// #  define EXTERNC extern "C"
-// #  define NOTHROW noexcept
-// #else
-// #  define EXTERNC
-// #  define NOTHROW
-// #endif
 
 #include <vector>
 #include <string>

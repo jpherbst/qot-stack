@@ -145,7 +145,7 @@ ADD_LIBRARY(ntp SHARED
 TARGET_LINK_LIBRARIES(ntp m)
 
 #########################################################################################################
-
+# QoT Clock Synchronization Daemon
 ADD_EXECUTABLE(qotdaemon
 	sync/ptp/PTP.hpp
 	sync/ptp/PTP.cpp
@@ -188,6 +188,12 @@ IF (NOT BUILD_VIRT_GUEST)
 	)
 	TARGET_LINK_LIBRARIES(testptp -lrt)
 ENDIF (NOT BUILD_VIRT_GUEST)
+
+# QoT Global Pub-Sub Broker
+ADD_EXECUTABLE(pubsub_broker
+			   broker/Broker.cpp
+	           ${OpenSplice_DATAMODEL})
+TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 #########################################################################################################
 
@@ -253,4 +259,14 @@ IF (NOT BUILD_VIRT_GUEST)
 			applications
 )
 ENDIF (NOT BUILD_VIRT_GUEST)
+
+# Install the Global Pub-Sub Broker
+INSTALL(
+	TARGETS
+		pubsub_broker
+	DESTINATION
+		bin
+	COMPONENT
+		applications
+)
 

@@ -389,7 +389,8 @@ typedef enum {
 	QOT_MSG_COORD_START        = (1),    /* Coordination Start    */
 	QOT_MSG_COORD_STOP         = (2),    /* Coordination Stop     */
 	QOT_MSG_SENSOR_VAL         = (3),    /* Sensor Value          */
-	QOT_MSG_INVALID            = (4),    /* Invalid Message (used as a bound for the enum List) */
+	QOT_MSG_DATA               = (4),    /* Data Value            */
+	QOT_MSG_INVALID            = (5),    /* Invalid Message (used as a bound for the enum List) */
 } qot_msg_type_t;
 
 /**
