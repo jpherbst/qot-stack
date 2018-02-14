@@ -27,15 +27,40 @@
 
 #include <iostream>
 
+// Pub-Sub Header
 #include "PubSub.hpp"
 
 using namespace qot;
 
+// Helper function to reshape topic name based on topic type
+void PublisherImpl::reshapeTopicName()
+{
+    std::string prefix;
+    // Create topic prefix based on type, default type is local
+    switch(topic_type) {
+        case TOPIC_LOCAL : 
+                prefix = "lo_";
+                break;
+        case TOPIC_GLOBAL : 
+                prefix = "gl_";
+                break;
+        case TOPIC_GLOBAL_OPT : 
+                prefix = "go_";
+                break;
+        default:
+                prefix = "lo_";
+                break;
+    }
+    // Append Prefix to Topic Name
+    topic_name = prefix + topic_name;
+    std::cout << "PublisherImpl: Publishing to topic " << topic_name << "\n";
+}
+
 /**
  * Publisher Constructor
  */
-Publisher::Publisher(const std::string &topicName, const std::string &nodeName, const std::string &timelineUUID)
- : timeline_uuid(timelineUUID), topic_name(topicName), node_name(nodeName), dataWriter(dds::core::null)
+PublisherImpl::PublisherImpl(const std::string &topicName, const qot::TopicType topicType, const std::string &nodeName, const std::string &timelineUUID)
+ : timeline_uuid(timelineUUID), topic_type(topicType), topic_name(topicName), node_name(nodeName), dataWriter(dds::core::null)
 {
     int result = 0;
     try
@@ -52,8 +77,13 @@ Publisher::Publisher(const std::string &topicName, const std::string &nodeName, 
                 << dds::core::policy::Durability::Transient()
                 << dds::core::policy::Reliability::Reliable();
 
+        /** Reshape Topic Name based on type **/
+        reshapeTopicName();
+
         /** A dds::topic::Topic is created for our messaging type on the domain participant. */
-        dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topicName, topicQos);
+        dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topic_name, topicQos);
+
+        std::cout << "Creating Publisher on Timeline " << timeline_uuid << " for topic " << topic_name << "\n";
 
         /** A dds::pub::Publisher is created on the domain participant. 
             Set the partition specific to the timeline **/
@@ -83,13 +113,13 @@ Publisher::Publisher(const std::string &topicName, const std::string &nodeName, 
 /**
  * Publisher Destructor
  */
-Publisher::~Publisher()
+PublisherImpl::~PublisherImpl()
 {
     std::cout << "Publisher of topic " << topic_name << " has terminated" << std::endl;
 }
 
 /* Public function to publish a message to a topic */
-qot_return_t Publisher::Publish(const qot_message_t msg)
+qot_return_t PublisherImpl::Publish(const qot_message_t msg)
 {
     qot_msgs::UncertainTimestamp utimestamp;
 
@@ -110,11 +140,36 @@ qot_return_t Publisher::Publish(const qot_message_t msg)
     return QOT_RETURN_TYPE_OK;  
 }
 
+// Helper function to reshape topic name based on topic type
+void SubscriberImpl::reshapeTopicName()
+{
+    std::string prefix;
+    // Create topic prefix based on type, default type is local
+    switch(topic_type) {
+        case TOPIC_LOCAL : 
+                prefix = "lo_";
+                break;
+        case TOPIC_GLOBAL : 
+                prefix = "gl_";
+                break;
+        case TOPIC_GLOBAL_OPT : 
+                prefix = "go_";
+                break;
+        default:
+                prefix = "lo_";
+                break;
+    }
+
+    // Append Prefix to Topic Name
+    topic_name = prefix + topic_name;
+    std::cout << "SubscriberImpl: Subscribing to topic " << topic_name << "\n";
+}
+
 /**
  * Subscriber Constructor
  */
-Subscriber::Subscriber(const std::string &topicName, const std::string &timelineUUID, qot_msg_callback_t callback)
- : timeline_uuid(timelineUUID), topic_name(topicName), dataReader(dds::core::null), msg_callback(NULL)
+SubscriberImpl::SubscriberImpl(const std::string &topicName, const qot::TopicType topicType, const std::string &timelineUUID, qot_msg_callback_t callback)
+ : timeline_uuid(timelineUUID), topic_name(topicName), topic_type(topicType), dataReader(dds::core::null), msg_callback(NULL)
 {
     // Set the subscriber callback function
     if(callback != NULL)
@@ -130,8 +185,13 @@ Subscriber::Subscriber(const std::string &topicName, const std::string &timeline
         dds::topic::qos::TopicQos topicQos = dp.default_topic_qos()
                                                     << dds::core::policy::Durability::Transient()
                                                     << dds::core::policy::Reliability::Reliable();
+
+        /** Reshape Topic Name based on type **/
+        reshapeTopicName();
+
         dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topic_name, topicQos);
 
+        std::cout << "Creating Subscriber on Timeline " << timeline_uuid << " for topic " << topic_name << "\n";
         /** A dds::sub::Subscriber is created on the domain participant. 
             Set the partition specific to the timeline **/
         dds::sub::qos::SubscriberQos subQos
@@ -144,6 +204,9 @@ Subscriber::Subscriber(const std::string &topicName, const std::string &timeline
 
         /** A dds::sub::DataReader is created on the Subscriber & Topic with the DataReaderQos. */
         dataReader = dds::sub::DataReader<qot_msgs::TimelineMsgingType>(sub, topic, drqos);
+
+        /** Create a topic listener for the data reader **/
+        dataReader.listener(this, dds::core::status::StatusMask::data_available());
     }
     catch (const dds::core::Exception& e)
     {
@@ -154,13 +217,14 @@ Subscriber::Subscriber(const std::string &topicName, const std::string &timeline
 /**
  * Subscriber Destructor
  */
-Subscriber::~Subscriber()
+SubscriberImpl::~SubscriberImpl()
 {
+    dataReader.listener(nullptr, dds::core::status::StatusMask::none());
     std::cout << "Subscriber of topic " << topic_name << " has terminated" << std::endl;
 }
 
 /* DDS Callback to receive subscribed messages */
-void Subscriber::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr) 
+void SubscriberImpl::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr) 
 {
     // QoT Message type
     qot_message_t qot_msg;
@@ -197,7 +261,7 @@ void Subscriber::on_data_available(dds::sub::DataReader<qot_msgs::TimelineMsging
     }
 }
 
-void Subscriber::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr, 
+void SubscriberImpl::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineMsgingType>& dr, 
     const dds::core::status::LivelinessChangedStatus& status) 
 {
     // according to C++ API reference, this function gets called when the
