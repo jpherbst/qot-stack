@@ -107,7 +107,7 @@ void UserLeftHandler::operator() (dds::core::Entity& e)
         {
             if(user->info().valid())
             {
-                std::cout << "Departed user: " << user->data().name();
+                std::cout << "Departed user: " << user->data().name() << "\n";
                 // Remove User from Alive Nodes
                 AliveNodes.erase(std::remove(AliveNodes.begin(), AliveNodes.end(), user->data().name()), AliveNodes.end());
                  // Populate Callback information

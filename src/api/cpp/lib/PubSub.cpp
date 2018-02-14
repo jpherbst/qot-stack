@@ -53,6 +53,7 @@ void PublisherImpl::reshapeTopicName()
     }
     // Append Prefix to Topic Name
     topic_name = prefix + topic_name;
+    std::cout << "PublisherImpl: Publishing to topic " << topic_name << "\n";
 }
 
 /**
@@ -80,7 +81,9 @@ PublisherImpl::PublisherImpl(const std::string &topicName, const qot::TopicType 
         reshapeTopicName();
 
         /** A dds::topic::Topic is created for our messaging type on the domain participant. */
-        dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topicName, topicQos);
+        dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topic_name, topicQos);
+
+        std::cout << "Creating Publisher on Timeline " << timeline_uuid << " for topic " << topic_name << "\n";
 
         /** A dds::pub::Publisher is created on the domain participant. 
             Set the partition specific to the timeline **/
@@ -159,6 +162,7 @@ void SubscriberImpl::reshapeTopicName()
 
     // Append Prefix to Topic Name
     topic_name = prefix + topic_name;
+    std::cout << "SubscriberImpl: Subscribing to topic " << topic_name << "\n";
 }
 
 /**
@@ -187,6 +191,7 @@ SubscriberImpl::SubscriberImpl(const std::string &topicName, const qot::TopicTyp
 
         dds::topic::Topic<qot_msgs::TimelineMsgingType> topic(dp, topic_name, topicQos);
 
+        std::cout << "Creating Subscriber on Timeline " << timeline_uuid << " for topic " << topic_name << "\n";
         /** A dds::sub::Subscriber is created on the domain participant. 
             Set the partition specific to the timeline **/
         dds::sub::qos::SubscriberQos subQos
@@ -199,6 +204,9 @@ SubscriberImpl::SubscriberImpl(const std::string &topicName, const qot::TopicTyp
 
         /** A dds::sub::DataReader is created on the Subscriber & Topic with the DataReaderQos. */
         dataReader = dds::sub::DataReader<qot_msgs::TimelineMsgingType>(sub, topic, drqos);
+
+        /** Create a topic listener for the data reader **/
+        dataReader.listener(this, dds::core::status::StatusMask::data_available());
     }
     catch (const dds::core::Exception& e)
     {
@@ -211,6 +219,7 @@ SubscriberImpl::SubscriberImpl(const std::string &topicName, const qot::TopicTyp
  */
 SubscriberImpl::~SubscriberImpl()
 {
+    dataReader.listener(nullptr, dds::core::status::StatusMask::none());
     std::cout << "Subscriber of topic " << topic_name << " has terminated" << std::endl;
 }
 
