@@ -129,7 +129,7 @@ int TopicInfo::removeSubscriber(int32_t participant_ID, int32_t dr_ID)
 {
     std::map<int32_t, int32_t>::iterator it;
     it = subscribers.find(dr_ID);
-    if(it != subscribers.end())
+    if(it == subscribers.end())
     {
         std::cout << "Subscriber "<< dr_ID <<  " does not exist for this topic" << std::endl;
         return -1;
@@ -143,7 +143,7 @@ int TopicInfo::removePublisher(int32_t participant_ID, int32_t dw_ID)
 {
     std::map<int32_t, int32_t>::iterator it;
     it = publishers.find(dw_ID);
-    if(it != publishers.end())
+    if(it == publishers.end())
     {
         std::cout << "Publisher "<< dw_ID << " does not exist for this topic" << std::endl;
         return -1;
@@ -213,7 +213,7 @@ TopicInfo* getPublicationTopicInfo(const DDS::PublicationBuiltinTopicData& publi
     /** Find and return the node if it already exists */
     for(std::vector<TopicInfo>::iterator it = topics.begin(); it < topics.end(); it++)
     {
-        if(it->getTopicName().compare(publisherData.topic_name) != 0)
+        if(it->getTopicName().compare(publisherData.topic_name) == 0)
         {
             /* If the topic is found return the topic */
             return &(*it);
@@ -234,7 +234,7 @@ TopicInfo* getSubscriptionTopicInfo(const DDS::SubscriptionBuiltinTopicData& sub
     /** Find and return the node if it already exists */
     for(std::vector<TopicInfo>::iterator it = topics.begin(); it < topics.end(); it++)
     {
-        if(it->getTopicName().compare(subscriberData.topic_name) != 0)
+        if(it->getTopicName().compare(subscriberData.topic_name) == 0)
         {
             /* If the topic is found return the topic */
             return &(*it);
@@ -252,8 +252,8 @@ Broker::Broker()
     // We can now start polling, because the broker is setup
     //participant_thread = boost::thread(boost::bind(&Broker::ParticipantThread, this));
     topic_thread = boost::thread(boost::bind(&Broker::TopicThread, this));
-    //publisher_thread = boost::thread(boost::bind(&Broker::PublisherThread, this));
-    //subscriber_thread = boost::thread(boost::bind(&Broker::SubscriberThread, this));
+    publisher_thread = boost::thread(boost::bind(&Broker::PublisherThread, this));
+    subscriber_thread = boost::thread(boost::bind(&Broker::SubscriberThread, this));
 }
 
 Broker::~Broker()
@@ -263,8 +263,8 @@ Broker::~Broker()
     this->kill = true;
     //this->participant_thread.join();
     this->topic_thread.join();
-    //this->publisher_thread.join();
-    //this->subscriber_thread.join();
+    this->publisher_thread.join();
+    this->subscriber_thread.join();
 }
 
 /* Participant Thread */
@@ -416,7 +416,7 @@ void newTopicCallback(dds::sub::DataReader<DDS::TopicBuiltinTopicData>& topicRea
             TopicInfo& topicInfo = getTopicInfo(sample->data());
 
             
-            std::cout << "=== [BuiltInTopicsDataSubscriber] Created Topic '"
+            std::cout << "=== [Topic BuiltInTopics Thread] Created Topic '"
                                 << topicInfo.getTopicID() << "' name: "
                                 << topicInfo.getTopicName() << std::endl;
                
@@ -441,7 +441,7 @@ void deletedTopicCallback(dds::core::Entity& e, dds::sub::status::DataState& dat
             int32_t topicID_ = sample->data().key[0];                         
             std::string topicName_(sample->data().name);     
             
-            std::cout << "=== [BuiltInTopicsDataSubscriber] Destroyed Topic '"
+            std::cout << "=== [Topic BuiltInTopics Thread] Destroyed Topic '"
                                 << topicID_ << "' name: "
                                 << topicName_ << std::endl;
         }
@@ -470,12 +470,12 @@ void Broker::TopicThread()
         throw "Could not get TopicBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Topic BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     topicReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    std::cout << "=== [Topic BuiltInTopics Thread] Done" << std::endl;
 
     /* Specify the state to look for new data */
     dds::sub::status::DataState newDataState;
@@ -507,7 +507,7 @@ void Broker::TopicThread()
     waitSet += dataDeletedCond;
     waitSet += dataNewCond;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
+    std::cout << "=== [Topic BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
@@ -516,7 +516,7 @@ void Broker::TopicThread()
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
+        std::cout << "=== [Topic BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
             /* Dispatch Waitset */
@@ -528,6 +528,55 @@ void Broker::TopicThread()
         }
     }
 }
+
+/* Callback Function for handling new publishers */
+void newPubCallback(dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
+
+            if(topicInfo)
+            {
+                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher added on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0]); 
+            }    
+               
+        }
+    }
+}
+
+/* Callback Function for handling publisher deletion */
+void deletedPubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topicReader
+        = (dds::sub::DataReader<DDS::PublicationBuiltinTopicData>&)e;
+
+    dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
+
+            if(topicInfo)
+            {
+                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher removed on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->removePublisher(sample->data().participant_key[0], sample->data().key[0]); 
+            }  
+        }
+    }
+}
+
 
 /* Publisher Thread */
 void Broker::PublisherThread()
@@ -551,61 +600,109 @@ void Broker::PublisherThread()
         throw "Could not get PublicationBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Publisher BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     publisherReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    std::cout << "=== [Publisher BuiltInTopics Thread] Done" << std::endl;
 
-    /* Create a new ReadCondition for the reader that matches all samples.*/
-    dds::sub::cond::ReadCondition readCond(publisherReader, dds::sub::status::DataState::new_data());
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
 
-    /* Create a WaitSet and attach the ReadCondition created above */
+    /* Create the Handler for new data */
+    ReadPublisherHandler newDataHandler(newPubCallback, newDataState);
+
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(publisherReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedPubCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(publisherReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
     dds::core::cond::WaitSet waitSet;
-    waitSet += readCond;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
-
-    /*
-    * Block the current thread until the attached condition becomes true
-    * or the user interrupts.
-    */
-    waitSet.wait();
+    std::cout << "=== [Publisher BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
     while (!this->kill && !done)
     {
-        dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = publisherReader.take();
-        for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
-            sample < samples.end(); ++sample)
-        {
-            if(sample->info().valid())
-            {
-                TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
-
-                if(topicInfo)
-                {
-                    std::cout << "=== [BuiltInTopicsDataSubscriber] Topic '"
-                                    << topicInfo->getTopicID() << "' name: "
-                                    << topicInfo->getTopicName() << std::endl;
-                    topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0]); 
-                }     
-            }
-        }
-   
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
+        std::cout << "=== [Publisher BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
-            waitSet.wait();
+            /* Dispatch Waitset */
+            waitSet.dispatch();
         }
         catch(...)
         {
             done = true;
+        }
+    }
+}
+
+/* Callback Function for handling new publishers */
+void newSubCallback(dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
+
+            if(topicInfo)
+            {
+                std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber added on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
+            }    
+               
+        }
+    }
+}
+
+/* Callback Function for handling publisher deletion */
+void deletedSubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& topicReader
+        = (dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>&)e;
+
+    dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
+
+            if(topicInfo)
+            {
+                std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber removed on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->removeSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
+            }  
         }
     }
 }
@@ -632,57 +729,55 @@ void Broker::SubscriberThread()
         throw "Could not get SubscriptionBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Subsciber BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     subscriberReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
 
-    /* Create a new ReadCondition for the reader that matches all samples.*/
-    dds::sub::cond::ReadCondition readCond(subscriberReader, dds::sub::status::DataState::any());
+    /* Create the Handler for new data */
+    ReadSubscriberHandler newDataHandler(newSubCallback, newDataState);
 
-    /* Create a WaitSet and attach the ReadCondition created above */
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(subscriberReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedSubCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(subscriberReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
     dds::core::cond::WaitSet waitSet;
-    waitSet += readCond;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
-
-    /*
-    * Block the current thread until the attached condition becomes true
-    * or the user interrupts.
-    */
-    waitSet.wait();
+    std::cout << "=== [Subsciber BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
     while (!this->kill && !done)
     {
-        dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = subscriberReader.take();
-        for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
-            sample < samples.end(); ++sample)
-        {
-            if(sample->info().valid())
-            {
-                TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
-
-                if(topicInfo)
-                {
-                    std::cout << "=== [BuiltInTopicsDataSubscriber] Topic '"
-                                    << topicInfo->getTopicID() << "' name: "
-                                    << topicInfo->getTopicName() << std::endl;
-                    topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
-                }     
-            }
-        }
-   
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
+        std::cout << "=== [Subsciber BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
-            waitSet.wait();
+            /* Dispatch Waitset */
+            waitSet.dispatch();
         }
         catch(...)
         {
