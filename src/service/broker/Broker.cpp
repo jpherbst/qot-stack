@@ -24,7 +24,9 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * The code in this file is an adaptation of the ISO C++ DCPS API BuiltinTopics example from Opensplice DDS  
+ * The code in this file is an adaptation of the ISO C++ DCPS API BuiltinTopics example from Opensplice DDS 
+ * Note: When a topic, publisher or subscriber is created we "read" the data,
+ *       and when they are destroyed we "take" the available data  
  *
  */
 #include "Broker.hpp"
@@ -151,6 +153,23 @@ int TopicInfo::removePublisher(int32_t participant_ID, int32_t dw_ID)
     publishers.erase(it);
     return 0;
 }
+
+/**
+ * Check if a topic is a "global" topic
+ *
+ * @param topicData The TopicBuiltinTopicData of the node
+ * @return bool indicating success/failure
+ */
+ bool checkTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
+ {
+    std::string topicName_(topicData.name);
+    std::size_t pos_gl = topicName_.find("gl_");
+    std::size_t pos_go = topicName_.find("go_");
+
+    if (pos_gl == 0 || pos_go == 0)
+        return true;
+    return false;
+ }
 
 /**
  * Finds a topic with an ID obtained from the TopicBuiltinTopicData, updates the
@@ -413,13 +432,18 @@ void newTopicCallback(dds::sub::DataReader<DDS::TopicBuiltinTopicData>& topicRea
     {
         if(sample->info().valid())
         {
-            TopicInfo& topicInfo = getTopicInfo(sample->data());
+            /* Check if a topic is designated as global or global optimized */
+            bool status = checkTopicInfo(sample->data());
+
+            if (status)
+            {
+                TopicInfo& topicInfo = getTopicInfo(sample->data());
 
             
-            std::cout << "=== [Topic BuiltInTopics Thread] Created Topic '"
-                                << topicInfo.getTopicID() << "' name: "
-                                << topicInfo.getTopicName() << std::endl;
-               
+                std::cout << "=== [Topic BuiltInTopics Thread] Created Topic '"
+                                    << topicInfo.getTopicID() << "' name: "
+                                    << topicInfo.getTopicName() << std::endl;
+            }  
         }
     }
 }
@@ -436,14 +460,20 @@ void deletedTopicCallback(dds::core::Entity& e, dds::sub::status::DataState& dat
     {
         if(sample->info().valid())
         {
-            bool status = deleteTopicInfo(sample->data());
+            /* Check if a topic is designated as global or global optimized */
+            bool found = checkTopicInfo(sample->data());
 
-            int32_t topicID_ = sample->data().key[0];                         
-            std::string topicName_(sample->data().name);     
-            
-            std::cout << "=== [Topic BuiltInTopics Thread] Destroyed Topic '"
-                                << topicID_ << "' name: "
-                                << topicName_ << std::endl;
+            if (found)
+            {
+                bool status = deleteTopicInfo(sample->data());
+
+                int32_t topicID_ = sample->data().key[0];                         
+                std::string topicName_(sample->data().name);     
+                
+                std::cout << "=== [Topic BuiltInTopics Thread] Destroyed Topic '"
+                                    << topicID_ << "' name: "
+                                    << topicName_ << std::endl;
+            }
         }
     }
 }
@@ -516,7 +546,6 @@ void Broker::TopicThread()
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [Topic BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
             /* Dispatch Waitset */
@@ -540,6 +569,7 @@ void newPubCallback(dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topi
         {
             TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
 
+            // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
                 std::cout << "=== [Publisher BuiltInTopics Thread] Publisher added on Topic '"
@@ -566,6 +596,7 @@ void deletedPubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataS
         {
             TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
 
+            // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
                 std::cout << "=== [Publisher BuiltInTopics Thread] Publisher removed on Topic '"
@@ -646,7 +677,6 @@ void Broker::PublisherThread()
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [Publisher BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
             /* Dispatch Waitset */
@@ -670,6 +700,7 @@ void newSubCallback(dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& top
         {
             TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
 
+            // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
                 std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber added on Topic '"
@@ -696,6 +727,7 @@ void deletedSubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataS
         {
             TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
 
+            // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
                 std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber removed on Topic '"
@@ -773,7 +805,6 @@ void Broker::SubscriberThread()
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [Subsciber BuiltInTopics Thread] Waiting ... " << std::endl;
         try
         {
             /* Dispatch Waitset */
