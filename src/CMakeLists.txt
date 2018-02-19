@@ -61,6 +61,9 @@ IF (BUILD_SERVICE)
 	ADD_SUBDIRECTORY(service)
 ENDIF (BUILD_SERVICE)
 
+# Build the pub-sub edge broker
+OPTION(BUILD_EDGEBROKER "Build edge broker" OFF)
+
 # Build example applications
 OPTION(BUILD_EXAMPLE "Build example applications" OFF)
 IF (BUILD_EXAMPLE)

@@ -190,11 +190,13 @@ IF (NOT BUILD_VIRT_GUEST)
 ENDIF (NOT BUILD_VIRT_GUEST)
 
 # QoT Global Pub-Sub Broker
-ADD_EXECUTABLE(pubsub_broker
-			   broker/Broker.cpp
-			   broker/Handlers.cpp
-	           ${OpenSplice_DATAMODEL})
-TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+IF (BUILD_EDGEBROKER)
+	ADD_EXECUTABLE(pubsub_broker
+				   broker/Broker.cpp
+				   broker/Handlers.cpp
+			   ${OpenSplice_DATAMODEL})
+	TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+ENDIF (BUILD_EDGEBROKER)
 
 #########################################################################################################
 
@@ -262,12 +264,14 @@ IF (NOT BUILD_VIRT_GUEST)
 ENDIF (NOT BUILD_VIRT_GUEST)
 
 # Install the Global Pub-Sub Broker
-INSTALL(
-	TARGETS
-		pubsub_broker
-	DESTINATION
-		bin
-	COMPONENT
-		applications
-)
+IF (BUILD_EDGEBROKER)
+	INSTALL(
+		TARGETS
+			pubsub_broker
+		DESTINATION
+			bin
+		COMPONENT
+			applications
+	)
+ENDIF (BUILD_EDGEBROKER)
 
