@@ -191,11 +191,16 @@ ENDIF (NOT BUILD_VIRT_GUEST)
 
 # QoT Global Pub-Sub Broker
 IF (BUILD_EDGEBROKER)
+	INCLUDE_DIRECTORIES(
+		../../thirdparty/zookeeper-3.4.10/src/c/include
+		../../thirdparty/zookeeper-3.4.10/src/c/generated
+	)
 	ADD_EXECUTABLE(pubsub_broker
 				   broker/Broker.cpp
 				   broker/Handlers.cpp
+				   broker/zk_logic.c
 			   ${OpenSplice_DATAMODEL})
-	TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+	TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} zookeeper_mt)
 ENDIF (BUILD_EDGEBROKER)
 
 #########################################################################################################

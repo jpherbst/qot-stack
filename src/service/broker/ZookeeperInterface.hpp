@@ -28,16 +28,18 @@
 #ifndef _zk_interface_h
 #define _zk_interface_h
 
-/* Create a Timeline zk node */
-void zk_timeline_create(const char* timelineName)
+#ifdef __cplusplus
+extern "C"
 {
+#endif
 
-}
+/* Create a Timeline zk node */
+void zk_timeline_create(const char* timelineName);
 
 /* Delete a Timeline zk node */
 void zk_timeline_delete(const char* timelineName)
 {
-	
+
 }
 
 /* Create a Topic zk node */
@@ -57,5 +59,9 @@ void zk_subscriber_create(const char* timelineName, const char* topicName, const
 
 /* Delete a Subscriber zk node */ 
 void zk_subscriber_delete(const char* timelineName, const char* topicName, const char* subscriberName);
+
+#ifdef __cplusplus
+}
+#endif
     
 #endif

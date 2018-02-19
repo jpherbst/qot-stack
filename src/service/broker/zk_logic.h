@@ -28,12 +28,18 @@
 #ifndef _zk_logic_h
 #define _zk_logic_h
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <zookeeper.h>
 #include <zookeeper_log.h>
@@ -55,7 +61,6 @@ static struct String_vector* timelines = NULL;
  * Function definitions.
  */
 
-void create_parent();
 void run_for_master();
 void check_master();
 void master_exists();
@@ -199,5 +204,9 @@ static const char * rc2string(int rc){
 
     return "UNKNOWN_EVENT_TYPE";
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
