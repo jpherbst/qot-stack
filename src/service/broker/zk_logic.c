@@ -490,7 +490,48 @@ void create_parent(const char * path, const char * value)
 
 /*********************************************************************************/
 /*
- * Topic Handling Logic
+ * Routines to delete a znode
+ */
+
+/* znode deletion function declaration */
+void delete_znode(const char *path) ;
+
+/* Completion function called when the request to delete znode returns. */
+void delete_znode_completion(int rc, const void *data) 
+{
+    switch (rc) {
+        case ZCONNECTIONLOSS:
+        case ZOPERATIONTIMEOUT:
+            delete_znode((const char *) data);
+        break;
+        case ZOK:
+            LOG_DEBUG(("Deleted node: %s", (char *) data));
+            free((char *) data);
+        break;
+        default:
+            LOG_ERROR(("Something went wrong when deleting node: %s",
+            rc2string(rc)));
+        break;
+    }
+}
+
+/* znode deletion function*/
+void delete_znode(const char *path) 
+{
+    if(path == NULL) 
+        return;
+    char * tmp_path = strdup(path);
+    zoo_adelete(zh,
+                tmp_path,
+                -1,
+                delete_znode_completion,
+                (const void*) tmp_path);
+}
+
+
+/*********************************************************************************/
+/*
+ * Timeline Handling Logic
  */
 
 /* Add a new Timeline to zookeeper*/
@@ -517,6 +558,25 @@ void zk_timeline_create(const char* timelineName)
                 NULL);
     free(path);
 }
+
+void zk_timeline_delete(const char* timelineName) 
+{
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(2, "/timelines/" , timelineName);
+    printf("Deleting Timeline %s\n", timelineName);
+    delete_znode(path);
+}
+
+/*********************************************************************************/
+/*
+ * Topic Handling Logic
+ */
+
 
 /* Re-try to create a topic node */
 void create_topic(const char * path, const char * value);
@@ -900,7 +960,8 @@ void bootstrap() {
 
 /*********************************************************************************/
 /* Initialize the Zookeeper connection -> takes in host:port pair to initiate connection*/
-int init (char * hostPort) {
+int init (char * hostPort) 
+{
     srand(time(NULL));
     server_id  = rand();
     
@@ -918,12 +979,13 @@ int init (char * hostPort) {
 
 /*********************************************************************************/
 
-int init_zk_logic (int argc, char * argv[]) {
+/* Logic to initialize the Zookeeper Client Logic */
+/* Requires argc as 3 and a char array of 3 arguments
+   argv[1] = host:port -> comma separate list of host:port pairs of zookeeper ensemble
+   argv[2] = lan_name  -> unique name of the lan which the edge broker is representing */
+int init_zk_logic (int argc, char * argv[]) 
+{
     LOG_DEBUG(("THREADED defined"));
-    if (argc != 3) {
-        fprintf(stderr, "USAGE: %s host:port lan_name\n", argv[0]);
-        exit(1);
-    }
 
     /* Get Broker Group Name from command line*/
     brokerGroup = argv[2];
@@ -961,18 +1023,18 @@ int init_zk_logic (int argc, char * argv[]) {
         sleep(2);
     }
 
-    zk_timeline_create("test");
-    zk_topic_create("test", "blah");
-    zk_publisher_create("test", "blah","test-pub");
-    zk_subscriber_create("test", "blah","test-sub");
+    // zk_timeline_create("test");
+    // zk_topic_create("test", "blah");
+    // zk_publisher_create("test", "blah","test-pub");
+    // zk_subscriber_create("test", "blah","test-sub");
     
-    /*
-     * Run until session expires
-     */
+    // /*
+    //  * Run until session expires
+    //  */
     
-    while(!is_expired()) {
-        sleep(1);
-    }    
+    // while(!is_expired()) {
+    //     sleep(1);
+    // }    
     return 0; 
 }
 

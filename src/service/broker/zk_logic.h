@@ -58,18 +58,12 @@ static int server_id;
 static struct String_vector* timelines = NULL;
 
 /*
- * Function definitions.
+ * Master Edge Broker Election Function definitions.
  */
 
 void run_for_master();
 void check_master();
 void master_exists();
-void get_workers();
-void get_tasks();
-void task_assignment();
-void get_task_data();
-void delete_pending_task();
-
 
 /*
  * Master states

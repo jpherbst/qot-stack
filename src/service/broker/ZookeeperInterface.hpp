@@ -33,14 +33,15 @@ extern "C"
 {
 #endif
 
+/* Initialize the Zookeeper Client Logic */
+
+int init_zk_logic (int argc, char * argv[]);
+
 /* Create a Timeline zk node */
 void zk_timeline_create(const char* timelineName);
 
 /* Delete a Timeline zk node */
-void zk_timeline_delete(const char* timelineName)
-{
-
-}
+void zk_timeline_delete(const char* timelineName);
 
 /* Create a Topic zk node */
 void zk_topic_create(const char* timelineName, const char* topicName);

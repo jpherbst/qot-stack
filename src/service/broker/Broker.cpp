@@ -985,13 +985,17 @@ static void exit_handler(int s)
 int main(int argc, char *argv[])
 {
     int result = 0;
-    bool automatic = true;
-    if (argc > 1)
-    {
-        automatic = !(strcmp(argv[1], "false") == 0);
+    if (argc != 3) {
+        /* host:port -> comma separate list of host:port pairs of zookeeper ensemble
+           lan_name  -> unique name of the lan which the edge broker is representing*/
+        fprintf(stderr, "USAGE: %s host:port lan_name\n", argv[0]);
+        exit(1);
     }
 
-    // Install SIGINT Signal Handler for exit
+    /* Initialize the zookeeper client -> copy over the argc and argv values */
+    init_zk_logic (argc, argv);
+
+    /* Install SIGINT Signal Handler for exit */
     signal(SIGINT, exit_handler);
 
     try
