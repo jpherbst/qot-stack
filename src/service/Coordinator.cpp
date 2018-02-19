@@ -125,8 +125,6 @@ void Coordinator::Start(int id, int fd, const char* uuid, timeinterval_t acc, ti
 	dr.listener(this, dds::core::status::StatusMask::data_available());
 
 	// Start the state timer to wait for peers
-	//timer.expires_from_now(boost::posix_time::milliseconds(DELAY_INITIALIZING));
-	//timer.async_wait(boost::bind(&Coordinator::Timeout, this,  boost::asio::placeholders::error));
 	timer.expires_from_now(boost::posix_time::milliseconds(DELAY_INITIALIZING));
 	timer.async_wait(boost::bind(&Coordinator::Heartbeat, this,  boost::asio::placeholders::error));
 }
