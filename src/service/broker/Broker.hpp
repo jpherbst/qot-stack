@@ -64,6 +64,21 @@ class NodeInfo
 	    std::vector<uint32_t> participants;
 };
 
+/*  Class to maintain timeline information */
+class TimelineInfo
+{
+	public:
+	    TimelineInfo(const std::string& timelineUUID);
+	    std::string getTimelineUUID();
+	    bool operator==(const TimelineInfo& rhs)
+	    {
+	        return timeline_uuid == rhs.timeline_uuid;
+	    }
+
+	private:
+		std::string timeline_uuid; // Timeline Name
+};
+
 /* Class to maintain information of topics published by other nodes on the LAN*/
 class TopicInfo
 {
@@ -96,15 +111,17 @@ class Broker
 
 		// Thread handlers
 		void ParticipantThread();
+		void TimelineThread();
 		void TopicThread();
 		void PublisherThread();
 		void SubscriberThread();
 	private: 
 		// Worker threads
 		boost::thread participant_thread; // Worker thread for finding new participants
+		boost::thread timeline_thread;    // Worker thread for finding new timelines
 		boost::thread topic_thread; 	  // Worker thread for finding new topics
 		boost::thread publisher_thread;   // Worker thread for finding new publishers
-		boost::thread subscriber_thread;   // Worker thread for finding new subscribers
+		boost::thread subscriber_thread;  // Worker thread for finding new subscribers
 		bool kill; 						  // Kill flag for threads
 		
 		// DDS Information

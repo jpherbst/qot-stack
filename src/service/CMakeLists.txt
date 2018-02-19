@@ -192,6 +192,7 @@ ENDIF (NOT BUILD_VIRT_GUEST)
 # QoT Global Pub-Sub Broker
 ADD_EXECUTABLE(pubsub_broker
 			   broker/Broker.cpp
+			   broker/Handlers.cpp
 	           ${OpenSplice_DATAMODEL})
 TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
