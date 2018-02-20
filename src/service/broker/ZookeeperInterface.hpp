@@ -37,25 +37,25 @@ extern "C"
 
 int init_zk_logic (int argc, char * argv[]);
 
-/* Create a Timeline zk node */
+/* Synchronous call to Create a Timeline zk node */
 int zk_timeline_create(const char* timelineName);
 
 /* Delete a Timeline zk node */
 void zk_timeline_delete(const char* timelineName);
 
-/* Create a Topic zk node */
+/* Synchronous call to Create a Topic zk node */
 int zk_topic_create(const char* timelineName, const char* topicName);
 
 /* Delete a Topic zk node */
 void zk_topic_delete(const char* timelineName, const char* topicName);
 
-/* Create a Publisher zk node */ 
+/* Asynchronous call to Create a Publisher zk node */ 
 void zk_publisher_create(const char* timelineName, const char* topicName, const char* publisherName); 
 
 /* Delete a Publisher zk node */ 
 void zk_publisher_delete(const char* timelineName, const char* topicName, const char* publisherName); 
 
-/* Create a Subscriber zk node */ 
+/* Asynchronous call to Create a Subscriber zk node */ 
 void zk_subscriber_create(const char* timelineName, const char* topicName, const char* subscriberName);
 
 /* Delete a Subscriber zk node */ 

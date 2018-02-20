@@ -101,7 +101,7 @@ std::string TimelineInfo::getTimelineUUID()
     return timeline_uuid;
 }
 
-/* Add a publisher */
+/* Add a timeline */
 int addTimeline(std::string timeline_uuid)
 {
     if(timelines.find(timeline_uuid) != timelines.end())
@@ -115,7 +115,7 @@ int addTimeline(std::string timeline_uuid)
     return 0;
 }
 
-/* Remove a subscriber */
+/* Remove a timeline */
 int removeTimeline(std::string timeline_uuid)
 {
     std::map<std::string, TimelineInfo>::iterator it;
@@ -171,6 +171,18 @@ int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID, std::string 
         return -1;
     }
     subscribers[dr_ID] = participant_ID;
+    
+    /* Add the Timeline Name to the Class if needed */
+    if (timeline_uuid.compare("default_tlname") == 0)
+    {
+        timeline_uuid = timelineUUID;
+        /* Create the relevant timeline and topic nodes as this is the first publisher/subscriber on the timeline */
+        zk_timeline_create(timelineUUID.c_str());
+        zk_topic_create(timelineUUID.c_str(), topicName_.c_str());
+    }
+
+    /* Create the relevant zookeeper nodes */
+    zk_subscriber_create(timelineUUID.c_str(), topicName_.c_str(), std::to_string(dr_ID).c_str());
     return 0;
 }
 
@@ -209,6 +221,8 @@ int TopicInfo::removeSubscriber(int32_t participant_ID, int32_t dr_ID)
         return -1;
     }
     subscribers.erase(it);
+    /* Delete the relevant zookeeper nodes */
+    zk_subscriber_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(dr_ID).c_str());
     return 0;
 }
 
@@ -223,6 +237,8 @@ int TopicInfo::removePublisher(int32_t participant_ID, int32_t dw_ID)
         return -1;
     }
     publishers.erase(it);
+    /* Delete the relevant zookeeper nodes */
+    zk_publisher_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(dw_ID).c_str());
     return 0;
 }
 
@@ -268,6 +284,24 @@ TopicInfo& getTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
     return topics.back();
 }
 
+/* Remove all the publishers and subscribers under the topic */
+void deleteTopicPubSubNodes(TopicInfo &topic)
+{
+    for(auto it = topic.publishers.cbegin(); it != topic.publishers.cend();)
+    {
+        /* Delete the relevant zookeeper nodes */
+        zk_publisher_delete(topic.getTimelineUUID().c_str(), topic.getTopicName().c_str(), std::to_string(it->first).c_str());
+        topic.publishers.erase(it++);
+    }
+
+    for(auto it = topic.subscribers.cbegin(); it != topic.subscribers.cend();)
+    {
+        /* Delete the relevant zookeeper nodes */
+        zk_subscribers_delete(topic.getTimelineUUID().c_str(), topic.getTopicName().c_str(), std::to_string(it->first).c_str());
+        topic.subscribers.erase(it++);
+    }
+}
+
 /**
  * Finds a topic with an ID obtained from the TopicBuiltinTopicData
  * If a node is found then it is removed from the vector, and destroyed.
@@ -282,6 +316,10 @@ bool deleteTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
     {
         if(it->getTopicID() == topicData.key[0])
         {
+            /* Delete all the publishers and subscribers before attempting to delete the topic */
+            deleteTopicPubSubNodes(*it);
+            /* Delete the corresponding zookeeper node */
+            zk_topic_delete(it->getTimelineUUID().c_str(), it->getTopicName().c_str());
             /* If the topic is found erase the topic and return true */
             topics.erase(it);
             return true;

@@ -546,6 +546,17 @@ void delete_znode(const char *path)
                 (const void*) tmp_path);
 }
 
+/* znode deletion function*/
+int sync_delete_znode(const char *path) 
+{
+    int rc;
+    if(path == NULL) 
+        return ZBADARGUMENTS;
+    rc = zoo_delete(zh, path, -1);
+
+    return rc;
+}
+
 
 /*********************************************************************************/
 /*
@@ -657,7 +668,8 @@ void create_topic(const char * path, const char * value)
                 NULL);   
 }
 
-/* Add a new topic to a timeline (synchronous call)*/
+/* Remove a new topic to a timeline (synchronous call)
+   Note: Will fail if child node exist (this is desirable)*/
 int zk_topic_create(const char* timelineName, const char* topicName) 
 {
     if(!connected) {
@@ -700,6 +712,31 @@ int zk_topic_create(const char* timelineName, const char* topicName)
 
     free(path);
     return rc;
+}
+
+/* Add a new topic to a timeline (synchronous call)*/
+void zk_topic_delete(const char* timelineName, const char* topicName) 
+{
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+        return;
+    }
+
+    char* pub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/publishers");
+    char* sub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/subscribers");
+    delete_znode(pub_path);
+    delete_znode(sub_path);
+    free(pub_path);
+    free(sub_path);
+
+    sleep(5);
+    
+    char* path = make_path(4, "/timelines/" , timelineName, "/", topicName);
+    printf("Deleting zk node Topic %s on Timeline %s\n", timelineName, topicName);
+    
+    delete_znode(path);
+    free(path);
+    return;
 }
 
 /*********************************************************************************/
@@ -848,6 +885,22 @@ void zk_publisher_create(const char* timelineName, const char* topicName, const 
                 NULL);
     free(path);
 }
+
+/* Delete a new publisher from a topic*/
+void zk_publisher_delete(const char* timelineName, const char* topicName, const char* publisherName) {
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(6, "/timelines/" , timelineName, "/", topicName, "/publishers/", publisherName);
+    printf("Deleting znode of a Publisher on Topic %s on Timeline %s\n", timelineName, topicName);
+
+    sync_delete_znode(path);
+    free(path);
+}
+
 /*********************************************************************************/
 /*
  * Logic to listen to relevant publishers to a topic
@@ -972,7 +1025,7 @@ void create_subscriber(const char * path, const char * value) {
                 NULL);    
 }
 
-/* Add a new publisher to a topic*/
+/* Add a new subscriber to a topic*/
 void zk_subscriber_create(const char* timelineName, const char* topicName, const char* subscriberName) {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
@@ -993,9 +1046,25 @@ void zk_subscriber_create(const char* timelineName, const char* topicName, const
                 NULL);
     free(path);
 }
+
+/* Delete a subscriber from a topic*/
+void zk_subscriber_delete(const char* timelineName, const char* topicName, const char* subscriberName) {
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(6, "/timelines/" , timelineName, "/", topicName, "/subscribers/", subscriberName);
+    printf("Deleting the znode of a Subscriber on Topic %s on Timeline %s\n", timelineName, topicName);
+
+    sync_delete_znode(path);
+    free(path);
+}
+
 /*********************************************************************************/
 
-/* Bootstrapping function, create prent nodes, if not already creater */
+/* Bootstrapping function, create parent nodes, if not already created */
 void bootstrap() {
     if(!connected) {
       LOG_WARN(("Client not connected to ZooKeeper"));
