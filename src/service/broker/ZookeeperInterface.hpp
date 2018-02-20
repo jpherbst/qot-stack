@@ -38,13 +38,13 @@ extern "C"
 int init_zk_logic (int argc, char * argv[]);
 
 /* Create a Timeline zk node */
-void zk_timeline_create(const char* timelineName);
+int zk_timeline_create(const char* timelineName);
 
 /* Delete a Timeline zk node */
 void zk_timeline_delete(const char* timelineName);
 
 /* Create a Topic zk node */
-void zk_topic_create(const char* timelineName, const char* topicName);
+int zk_topic_create(const char* timelineName, const char* topicName);
 
 /* Delete a Topic zk node */
 void zk_topic_delete(const char* timelineName, const char* topicName);

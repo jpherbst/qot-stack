@@ -86,8 +86,9 @@ class TopicInfo
 	    TopicInfo(const DDS::TopicBuiltinTopicData& topicData);
 	    std::string getTopicName();
 	    int32_t getTopicID();
-	    int addSubscriber(int32_t participant_ID, int32_t dr_ID);
-	    int addPublisher(int32_t participant_ID, int32_t dw_ID);
+	    std::string getTimelineUUID();
+	    int addSubscriber(int32_t participant_ID, int32_t dr_ID, std::string timelineUUID);
+	    int addPublisher(int32_t participant_ID, int32_t dw_ID, std::string timelineUUID);
 	    int removeSubscriber(int32_t participant_ID, int32_t dr_ID);
 	    int removePublisher(int32_t participant_ID, int32_t dw_ID);
 	    bool operator==(const TopicInfo& rhs)
@@ -95,8 +96,10 @@ class TopicInfo
 	        return topicID_ == rhs.topicID_;
 	    }
 	private:
+	    void setTimelineUUID(std::string& uuid);
 	    int32_t topicID_;						 // Topic Unique ID
 	    std::string topicName_; 			     // Topic Name
+	    std::string timeline_uuid;				 // Timeline Name under which the topic falls
 	    std::map<int32_t, int32_t> subscribers;	 // List of Subscribers of the topic
 	    std::map<int32_t, int32_t> publishers;   // List of Publishers of the topic
 

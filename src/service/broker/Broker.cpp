@@ -132,6 +132,7 @@ int removeTimeline(std::string timeline_uuid)
 
 /* TopicInfo Class Constructor */
 TopicInfo::TopicInfo(const DDS::TopicBuiltinTopicData& topicData)
+    : timeline_uuid("default_tlname") // Set this default name until the first publisher arrives
 {
     topicID_ = topicData.key[0];
     topicName_ = topicData.name;
@@ -149,8 +150,20 @@ int32_t TopicInfo::getTopicID()
     return topicID_;
 }
 
+/* Get the Timeline UUID */
+std::string TopicInfo::getTimelineUUID()
+{
+    return timeline_uuid;
+}
+
+/* Set the Timeline UUID */
+void TopicInfo::setTimelineUUID(std::string& uuid)
+{
+    timeline_uuid = uuid;
+}
+
 /* Add a subscriber */
-int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID)
+int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID, std::string timelineUUID)
 {
     if(subscribers.find(dr_ID) != subscribers.end())
     {
@@ -162,7 +175,7 @@ int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID)
 }
 
 /* Add a publisher */
-int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID)
+int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID, std::string timelineUUID)
 {
     if(publishers.find(dw_ID) != publishers.end())
     {
@@ -170,6 +183,18 @@ int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID)
         return -1;
     }
     publishers[dw_ID] = participant_ID;
+
+    /* Add the Timeline Name to the Class if needed */
+    if (timeline_uuid.compare("default_tlname") == 0)
+    {
+        timeline_uuid = timelineUUID;
+        /* Create the relevant timeline and topic nodes as this is the first publisher/subscriber on the timeline */
+        zk_timeline_create(timelineUUID.c_str());
+        zk_topic_create(timelineUUID.c_str(), topicName_.c_str());
+    }
+
+    /* Create the relevant zookeeper nodes */
+    zk_publisher_create(timelineUUID.c_str(), topicName_.c_str(), std::to_string(dw_ID).c_str());
     return 0;
 }
 
@@ -728,10 +753,12 @@ void newPubCallback(dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topi
             // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
-                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher added on Topic '"
-                                << topicInfo->getTopicID() << "' name: "
-                                << topicInfo->getTopicName() << std::endl;
-                topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0]); 
+                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher "
+                                << topicInfo->getTopicID() << " added on Topic "
+                                << topicInfo->getTopicName() << " on Timeline " 
+                                << sample->data().partition.name[0]<< std::endl;
+
+                topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0], sample->data().partition.name[0]); 
             }    
                
         }
@@ -858,10 +885,12 @@ void newSubCallback(dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& top
             // Check if the topic is relevant (global or global optimized) to be shared
             if(topicInfo)
             {
-                std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber added on Topic '"
-                                << topicInfo->getTopicID() << "' name: "
-                                << topicInfo->getTopicName() << std::endl;
-                topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
+                std::cout << "=== [Subscriber BuiltInTopics Thread] Subscriber "
+                                << topicInfo->getTopicID() << " added on Topic "
+                                << topicInfo->getTopicName() << " on Timeline " 
+                                << sample->data().partition.name[0]<< std::endl;
+
+                topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0], sample->data().partition.name[0]);
             }    
                
         }

@@ -469,7 +469,7 @@ void create_parent_completion (int rc, const char * value, const void * data)
             
             break;
         default:
-	  		LOG_ERROR(("Something went wrong when running for master: %s, %s", value, rc2string(rc)));
+	  		LOG_ERROR(("Something went wrong when creating a parent node: %s, %s", value, rc2string(rc)));
             
             break;
     }
@@ -486,6 +486,24 @@ void create_parent(const char * path, const char * value)
                 0,
                 create_parent_completion,
                 NULL);
+}
+
+/* Create a parent node synchronous call*/
+int create_parent_sync(const char * path, const char * value) 
+{
+    int rc = ZNONODE;
+    while (rc == ZNONODE)
+    {
+        rc = zoo_create(zh,
+                        path,
+                        value,
+                        0,
+                        &ZOO_OPEN_ACL_UNSAFE,
+                        0,
+                        NULL,
+                        0);
+    }
+    return rc;
 }
 
 /*********************************************************************************/
@@ -535,12 +553,12 @@ void delete_znode(const char *path)
  */
 
 /* Add a new Timeline to zookeeper*/
-void zk_timeline_create(const char* timelineName) 
+int zk_timeline_create(const char* timelineName) 
 {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
-        return;
+        return ZCONNECTIONLOSS;
     }
     
    	char* path = make_path(2, "/timelines/" , timelineName);
@@ -548,15 +566,28 @@ void zk_timeline_create(const char* timelineName)
     printf("Registering Timeline %s\n", timelineName);
     
     char* tmp_string;
-    zoo_acreate(zh,
-                path,
-                tmp_string,
-                0,
-                &ZOO_OPEN_ACL_UNSAFE,
-                0,
-                create_parent_completion,
-                NULL);
+    int rc = ZNONODE;
+
+    /* Wait untill the node creation occurs */
+    while (rc == ZNONODE)
+    {
+       rc = zoo_create(zh, 
+                       path,
+                       tmp_string,
+                       0, 
+                       &ZOO_OPEN_ACL_UNSAFE, 
+                       0,
+                       NULL, 
+                       0); 
+    }
+    /* Possible Return Codes
+     * ZOK operation completed successfully
+     * ZNONODE the parent node does not exist.
+     * ZNODEEXISTS the node already exists
+     * ZNOAUTH the client does not have permission.
+     */
     free(path);
+    return rc;
 }
 
 void zk_timeline_delete(const char* timelineName) 
@@ -626,28 +657,49 @@ void create_topic(const char * path, const char * value)
                 NULL);   
 }
 
-/* Add a new topic to a timeline*/
-void zk_topic_create(const char* timelineName, const char* topicName) 
+/* Add a new topic to a timeline (synchronous call)*/
+int zk_topic_create(const char* timelineName, const char* topicName) 
 {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
-        return;
+        return ZCONNECTIONLOSS;
     }
     
    	char* path = make_path(4, "/timelines/" , timelineName, "/", topicName);
     printf("Registering Topic %s on Timeline %s\n", timelineName, topicName);
-
+    
     char* tmp_string;
-    zoo_acreate(zh,
-                path,
-                tmp_string,
-                0,
-                &ZOO_OPEN_ACL_UNSAFE,
-                0,
-                topic_create_completion,
-                NULL);
+    int rc = ZNONODE;
+
+    /* Wait untill the node creation occurs */
+    while (rc == ZNONODE)
+    {
+       rc = zoo_create(zh, 
+                       path,
+                       tmp_string,
+                       0, 
+                       &ZOO_OPEN_ACL_UNSAFE, 
+                       0,
+                       NULL, 
+                       0); 
+    }
+    /* Possible Return Codes
+     * ZOK operation completed successfully
+     * ZNONODE the parent node does not exist.
+     * ZNODEEXISTS the node already exists
+     * ZNOAUTH the client does not have permission.
+     */
+
+    char* pub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/publishers");
+    char* sub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/subscribers");
+    rc = create_parent_sync(pub_path, "");
+    rc = create_parent_sync(sub_path, "");
+    free(pub_path);
+    free(sub_path);
+
     free(path);
+    return rc;
 }
 
 /*********************************************************************************/
