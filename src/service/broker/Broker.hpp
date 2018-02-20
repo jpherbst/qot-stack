@@ -30,6 +30,7 @@
 // std includes
 #include <thread>
 #include <map>
+#include <mutex>      
 
 // Boost includes
 #include <boost/thread.hpp>
@@ -91,6 +92,7 @@ class TopicInfo
 	    int addPublisher(int32_t participant_ID, int32_t dw_ID, std::string timelineUUID);
 	    int removeSubscriber(int32_t participant_ID, int32_t dr_ID);
 	    int removePublisher(int32_t participant_ID, int32_t dw_ID);
+	    void deleteTopicPubSubNodes()
 	    bool operator==(const TopicInfo& rhs)
 	    {
 	        return topicID_ == rhs.topicID_;
@@ -102,6 +104,7 @@ class TopicInfo
 	    std::string timeline_uuid;				 // Timeline Name under which the topic falls
 	    std::map<int32_t, int32_t> subscribers;	 // List of Subscribers of the topic
 	    std::map<int32_t, int32_t> publishers;   // List of Publishers of the topic
+	    std::mutex topic_mtx;           	     // mutex for critical section
 
 };
 

@@ -40,25 +40,25 @@ int init_zk_logic (int argc, char * argv[]);
 /* Synchronous call to Create a Timeline zk node */
 int zk_timeline_create(const char* timelineName);
 
-/* Delete a Timeline zk node */
+/* Asynchronous call to delete a Timeline zk node */
 void zk_timeline_delete(const char* timelineName);
 
 /* Synchronous call to Create a Topic zk node */
 int zk_topic_create(const char* timelineName, const char* topicName);
 
-/* Delete a Topic zk node */
+/* Synchronous call to delete a Topic zk node */
 void zk_topic_delete(const char* timelineName, const char* topicName);
 
 /* Asynchronous call to Create a Publisher zk node */ 
 void zk_publisher_create(const char* timelineName, const char* topicName, const char* publisherName); 
 
-/* Delete a Publisher zk node */ 
+/* Synchronous call to delete a Publisher zk node */ 
 void zk_publisher_delete(const char* timelineName, const char* topicName, const char* publisherName); 
 
 /* Asynchronous call to Create a Subscriber zk node */ 
 void zk_subscriber_create(const char* timelineName, const char* topicName, const char* subscriberName);
 
-/* Delete a Subscriber zk node */ 
+/* Synchronous call to delete a Subscriber zk node */ 
 void zk_subscriber_delete(const char* timelineName, const char* topicName, const char* subscriberName);
 
 #ifdef __cplusplus

@@ -684,7 +684,7 @@ int zk_topic_create(const char* timelineName, const char* topicName)
     char* tmp_string;
     int rc = ZNONODE;
 
-    /* Wait untill the node creation occurs */
+    /* Wait until the node creation occurs */
     while (rc == ZNONODE)
     {
        rc = zoo_create(zh, 
@@ -729,7 +729,7 @@ void zk_topic_delete(const char* timelineName, const char* topicName)
     free(pub_path);
     free(sub_path);
 
-    sleep(5);
+    sleep(2);
     
     char* path = make_path(4, "/timelines/" , timelineName, "/", topicName);
     printf("Deleting zk node Topic %s on Timeline %s\n", timelineName, topicName);
