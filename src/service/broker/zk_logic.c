@@ -767,7 +767,7 @@ void get_subscribers_completion (int rc,
 
             // struct String_vector *tmp_workers = removed_and_set(strings, &workers);
             // free_vector(tmp_workers);
-            //get_tasks();
+            get_subscribers((char*) data);
 
             break;
         default:
@@ -928,7 +928,7 @@ void get_publishers_completion (int rc,
 
             // struct String_vector *tmp_workers = removed_and_set(strings, &workers);
             // free_vector(tmp_workers);
-            //get_tasks();
+            get_publishers((char*) data);
 
             break;
         default:

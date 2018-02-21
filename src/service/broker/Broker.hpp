@@ -42,11 +42,14 @@
 
 namespace qot_broker {
 
+static std::mutex topic_mtx;           	     // mutex for critical section
+
 /*  Class to maintain node information 
  *  A 'node' is a 'spliced' instance.
  *  In shared memory mode, this will be a splice daemon process managing the domain.
  *  In single process mode each application will be a 'node'.
  */
+
 class NodeInfo
 {
 	public:
@@ -92,11 +95,12 @@ class TopicInfo
 	    int addPublisher(int32_t participant_ID, int32_t dw_ID, std::string timelineUUID);
 	    int removeSubscriber(int32_t participant_ID, int32_t dr_ID);
 	    int removePublisher(int32_t participant_ID, int32_t dw_ID);
-	    void deleteTopicPubSubNodes()
+	    void deleteTopicPubSubNodes();
 	    bool operator==(const TopicInfo& rhs)
 	    {
 	        return topicID_ == rhs.topicID_;
 	    }
+
 	private:
 	    void setTimelineUUID(std::string& uuid);
 	    int32_t topicID_;						 // Topic Unique ID
@@ -104,8 +108,6 @@ class TopicInfo
 	    std::string timeline_uuid;				 // Timeline Name under which the topic falls
 	    std::map<int32_t, int32_t> subscribers;	 // List of Subscribers of the topic
 	    std::map<int32_t, int32_t> publishers;   // List of Publishers of the topic
-	    std::mutex topic_mtx;           	     // mutex for critical section
-
 };
 
 /* Class to Start the Broker Threads which listen for new topics, publishers and subscribers */

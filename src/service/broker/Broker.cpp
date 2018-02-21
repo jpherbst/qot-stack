@@ -165,7 +165,7 @@ void TopicInfo::setTimelineUUID(std::string& uuid)
 /* Add a subscriber */
 int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID, std::string timelineUUID)
 {
-    topic_mtx.lock()
+    topic_mtx.lock();
     if(subscribers.find(dr_ID) != subscribers.end())
     {
         std::cout << "Subscriber "<< dr_ID << " already exists for this topic" << std::endl;
@@ -269,7 +269,7 @@ void TopicInfo::deleteTopicPubSubNodes()
     for(auto it = subscribers.cbegin(); it != subscribers.cend();)
     {
         /* Delete the relevant zookeeper nodes */
-        zk_subscribers_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(it->first).c_str());
+        zk_subscriber_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(it->first).c_str());
         subscribers.erase(it++);
     }
     topic_mtx.unlock();
