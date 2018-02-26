@@ -43,6 +43,7 @@
 namespace qot_broker {
 
 static std::mutex topic_mtx;           	     // mutex for critical section
+bool terminated;							 // Flag to terminate the edge broker
 
 /*  Class to maintain node information 
  *  A 'node' is a 'spliced' instance.
@@ -131,6 +132,9 @@ class Broker
 		boost::thread publisher_thread;   // Worker thread for finding new publishers
 		boost::thread subscriber_thread;  // Worker thread for finding new subscribers
 		bool kill; 						  // Kill flag for threads
+
+		// Guard condition to terminate the watch thread 
+    	dds::core::cond::GuardCondition escape;
 		
 		// DDS Information
 		dds::domain::DomainParticipant dp; 		// Domain Participant

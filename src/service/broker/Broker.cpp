@@ -393,6 +393,9 @@ Broker::Broker()
 {
     std::cout << "Pub Sub Broker starting up\n";
 
+    EscapeHandler escapeHandler(terminated);
+    escape.handler(escapeHandler);
+
     // We can now start polling, because the broker is setup
     //participant_thread = boost::thread(boost::bind(&Broker::ParticipantThread, this));
     timeline_thread = boost::thread(boost::bind(&Broker::TimelineThread, this));
@@ -406,6 +409,7 @@ Broker::~Broker()
     // Kill all broker threads and wait for them to join before destroying the class
     std::cout << "Pub Sub Broker being destroyed\n";
     this->kill = true;
+    escape.trigger_value(true);
     //this->participant_thread.join();
     this->timeline_thread.join();
     this->topic_thread.join();
@@ -500,6 +504,7 @@ void Broker::TimelineThread()
     dds::core::cond::WaitSet waitSet;
     waitSet += dataDeletedCond;
     waitSet += dataNewCond;
+    waitSet += escape;
 
     std::cout << "=== [Timeline Thread] Ready ..." << std::endl;
 
@@ -557,6 +562,7 @@ void Broker::ParticipantThread()
     /* Create a WaitSet and attach the ReadCondition created above */
     dds::core::cond::WaitSet waitSet;
     waitSet += readCond;
+    waitSet += escape;
 
     std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
 
@@ -770,6 +776,7 @@ void Broker::TopicThread()
     dds::core::cond::WaitSet waitSet;
     waitSet += dataDeletedCond;
     waitSet += dataNewCond;
+    waitSet += escape;
 
     std::cout << "=== [Topic BuiltInTopics Thread] Ready ..." << std::endl;
 
@@ -902,6 +909,7 @@ void Broker::PublisherThread()
     dds::core::cond::WaitSet waitSet;
     waitSet += dataDeletedCond;
     waitSet += dataNewCond;
+    waitSet += escape;
 
     std::cout << "=== [Publisher BuiltInTopics Thread] Ready ..." << std::endl;
 
@@ -1031,6 +1039,7 @@ void Broker::SubscriberThread()
     dds::core::cond::WaitSet waitSet;
     waitSet += dataDeletedCond;
     waitSet += dataNewCond;
+    waitSet += escape;
 
     std::cout << "=== [Subsciber BuiltInTopics Thread] Ready ..." << std::endl;
 
@@ -1073,6 +1082,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "USAGE: %s host:port lan_name\n", argv[0]);
         exit(1);
     }
+
+    /* Set Terminated FLag to False */
+    terminated = false;
 
     /* Initialize the zookeeper client -> copy over the argc and argv values */
     init_zk_logic (argc, argv);
