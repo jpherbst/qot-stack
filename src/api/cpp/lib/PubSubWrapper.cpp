@@ -31,6 +31,8 @@ extern "C"
 	#include "../../../qot_types.h"
 }
 
+#include <iostream>
+
 #include "PubSub.hpp"
 #include "PubSubWrapper.hpp"
 
@@ -39,6 +41,16 @@ using namespace qot;
 // Publisher Constructor
 Publisher::Publisher(const std::string &topicName, const qot::TopicType topicType, const std::string &nodeName, const std::string &timelineUUID)
 {
+	// Check if timeline is global before allowing global topics
+	if (topicType == TOPIC_GLOBAL || topicType == TOPIC_GLOBAL_OPT)
+	{
+		std::size_t pos = timelineUUID.find(GLOBAL_TL_STRING);
+		if(pos != 0)
+		{
+			std::cout << "Only Global Timelines can publish to global topics\n";
+			throw 20; // Change this to a specific number
+		}
+	} 
 	Impl = new PublisherImpl(topicName, topicType, nodeName, timelineUUID);
 }
 
@@ -57,6 +69,16 @@ qot_return_t Publisher::Publish(const qot_message_t msg)
 
 Subscriber::Subscriber(const std::string &topicName, const qot::TopicType topicType, const std::string &timelineUUID, qot_msg_callback_t callback)
 {
+	// Check if timeline is global before allowing global topics
+	if (topicType == TOPIC_GLOBAL || topicType == TOPIC_GLOBAL_OPT)
+	{
+		std::size_t pos = timelineUUID.find(GLOBAL_TL_STRING);
+		if(pos != 0)
+		{
+			std::cout << "Only Global Timelines can subscribe to global topics\n";
+			throw 20; // Change this to a specific number
+		}
+	} 
 	Impl = new SubscriberImpl(topicName, topicType, timelineUUID, callback);
 }
 

@@ -31,6 +31,9 @@
 #ifndef QOT_STACK_SRC_QOT_TYPES_H
 #define QOT_STACK_SRC_QOT_TYPES_H
 
+/* Define keyword prefix for defining a global timeline */
+#define GLOBAL_TL_STRING "gl_"
+
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_MAX_NAMELEN 	64
 #define QOT_MAX_NUMCLKS 	8
