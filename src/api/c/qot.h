@@ -36,6 +36,9 @@
 /* Include basic types, time math and ioctl interface */
 #include "../../qot_types.h"
 
+/* Define keyword prefix for defining a global timeline */
+#define GLOBAL_TL_STRING "gl_"
+
 /* Opaque type */
 typedef struct timeline timeline_t;
 

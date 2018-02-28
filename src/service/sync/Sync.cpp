@@ -56,34 +56,12 @@ boost::shared_ptr<Sync> Sync::Factory(
 	uncertainty_config.pds = 0.999999;  // Probability that drift variance less than upper bound -> Set to 0.999999 (as per paper)
 	uncertainty_config.pdv = 0.999999;  // Probability of computing a safe bound on drift variation -> Set to 0.999999 (as per paper)
 	uncertainty_config.pos = 0.999999;  // Probability that offset variance less than upper bound -> Set to 0.999999 (as per paper)
-	uncertainty_config.pov = 0.999999;// Probability of computing a safe bound on offset variance -> Set to 0.999999 (as per paper)
+	uncertainty_config.pov = 0.999999;  // Probability of computing a safe bound on offset variance -> Set to 0.999999 (as per paper)
 	
 	// If IP address is private (LAN) and interface specified is ethernet
-	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0){
-
-		// Open dev directory
-		/*DIR *dir = opendir(QOT_IOCTL_BASE);
-		if(dir){
-			BOOST_LOG_TRIVIAL(info) << "directory open" << QOT_IOCTL_BASE;
-			// Read the entries from dev directory
-			struct dirent *entry;
-			while ((entry = readdir(dir)) != NULL) {
-				BOOST_LOG_TRIVIAL(info) << "entry in directory found" << QOT_IOCTL_BASE;
-				// Check if we have a ptp device
-				char str[QOT_MAX_PTP_NAMELEN]; 
-				int ret, val;	
-				ret = sscanf(entry->d_name, QOT_IOCTL_PTP_FORMAT, str, &val);
-				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_PTP_NAMELEN)==0)){
-					BOOST_LOG_TRIVIAL(info) << "found in directory ptp" << val;
-					closedir(dir);
-				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val));  // Instantiate a ptp sync algorithm with h/w timestamping
-			}
-		}
-	}else{
-		BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
-	}
-	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,-1));  // Instantiate a ptp sync algorithm with s/w timestamping
-	*/
+	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0)
+	{
+		// Use PTP
 		return boost::shared_ptr<Sync>((Sync*) new PTP(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
 	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm

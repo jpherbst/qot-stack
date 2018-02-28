@@ -1,9 +1,10 @@
 /*
  * @file qot.h
  * @brief Data types, temporal math and ioctl interfaces for the qot-stack
- * @author Andrew Symington
+ * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
+ * Copyright (c) Carnegie Mellon University, 2016.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -410,15 +411,19 @@ typedef enum {
     QOT_CLK_STATE_OFF,
 } qot_clk_state_t;
 
-/* QoT timeline type */
+/**
+ * @brief Timeline Types
+ */
+typedef enum {
+    QOT_TIMELINE_LOCAL  = (0),
+    QOT_TIMELINE_GLOBAL,
+} qot_timeline_type_t;
+
+/* QoT timeline data type */
 typedef struct qot_timeline {
     char name[QOT_MAX_NAMELEN];          /* Timeline name                     */
     int index;                           /* The integer Y in /dev/timelineY   */
-    // #ifdef __KERNEL__
-    // //Changes added by Sandeep -> Scheduler Specific Stuff
-    // struct rb_root event_head;            RB tree head for events on this timeline 
-    // raw_spinlock_t rb_lock;              /* RB tree spinlock */
-    // #endif
+	qot_timeline_type_t type;            /* Timeline Type                     */
 } qot_timeline_t;
 
 /* QoT wait until */

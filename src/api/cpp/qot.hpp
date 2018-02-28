@@ -47,6 +47,9 @@ extern "C"
 /* Include Publish-Subscribe Wrappers */
 #include "lib/PubSubWrapper.hpp"
 
+/* Define keyword prefix for defining a global timeline */
+#define GLOBAL_TL_STRING "gl_"
+
 /* Opaque type */
 typedef struct timeline timeline_t;
 
