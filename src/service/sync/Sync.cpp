@@ -1,9 +1,10 @@
 /**
  * @file Sync.cpp
  * @brief Factory class prepares a synchronization session
- * @author Fatima Anwar
+ * @author Fatima Anwar and Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Carnegie Mellon University, 2018. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -32,6 +33,7 @@
 
 // Subtypes
 #include "ptp/PTP.hpp"
+#include "ptp/PTP18.hpp"
 #include "ntp/NTP.hpp"
 
 /* So that we might expose a meaningful name through PTP interface */
@@ -62,7 +64,7 @@ boost::shared_ptr<Sync> Sync::Factory(
 	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0)
 	{
 		// Use PTP
-		return boost::shared_ptr<Sync>((Sync*) new PTP(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
+		return boost::shared_ptr<Sync>((Sync*) new PTP18(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
 	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm
 }

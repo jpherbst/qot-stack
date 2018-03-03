@@ -135,6 +135,44 @@ ADD_LIBRARY(ptp SHARED
 )
 TARGET_LINK_LIBRARIES(ptp m)
 
+# PTP (based on linuxptp-1.8) library
+ADD_LIBRARY(ptp18 SHARED
+	sync/ptp/linuxptp-1.8/bmc.c
+	sync/ptp/linuxptp-1.8/clock.c
+	sync/ptp/linuxptp-1.8/clockadj.c
+	sync/ptp/linuxptp-1.8/clockcheck.c
+	sync/ptp/linuxptp-1.8/config.c
+	sync/ptp/linuxptp-1.8/fault.c
+	sync/ptp/linuxptp-1.8/filter.c
+	sync/ptp/linuxptp-1.8/fsm.c
+	sync/ptp/linuxptp-1.8/hash.c
+	sync/ptp/linuxptp-1.8/linreg.c
+	sync/ptp/linuxptp-1.8/mave.c
+	sync/ptp/linuxptp-1.8/mmedian.c
+	sync/ptp/linuxptp-1.8/msg.c
+	sync/ptp/linuxptp-1.8/ntpshm.c
+	sync/ptp/linuxptp-1.8/nullf.c
+	sync/ptp/linuxptp-1.8/phc.c
+	sync/ptp/linuxptp-1.8/pi.c
+	sync/ptp/linuxptp-1.8/port.c
+	sync/ptp/linuxptp-1.8/print.c
+	sync/ptp/linuxptp-1.8/raw.c
+	sync/ptp/linuxptp-1.8/rtnl.c
+	sync/ptp/linuxptp-1.8/servo.c
+	sync/ptp/linuxptp-1.8/sk.c
+	sync/ptp/linuxptp-1.8/stats.c
+	sync/ptp/linuxptp-1.8/sysoff.c
+	sync/ptp/linuxptp-1.8/tlv.c
+	sync/ptp/linuxptp-1.8/transport.c
+	sync/ptp/linuxptp-1.8/tsproc.c
+	sync/ptp/linuxptp-1.8/udp.c
+	sync/ptp/linuxptp-1.8/udp6.c
+	sync/ptp/linuxptp-1.8/uds.c
+	sync/ptp/linuxptp-1.8/util.c
+	sync/ptp/linuxptp-1.8/version.c
+)
+TARGET_LINK_LIBRARIES(ptp18 m)
+
 # NTP library
 ADD_LIBRARY(ntp SHARED
 	sync/ntp/ntpv4/algorithm.c
@@ -147,15 +185,17 @@ TARGET_LINK_LIBRARIES(ntp m)
 #########################################################################################################
 # QoT Clock Synchronization Daemon
 ADD_EXECUTABLE(qotdaemon
-	sync/ptp/PTP.hpp
-	sync/ptp/PTP.cpp
+	sync/ptp/PTP18.hpp
+	sync/ptp/PTP18.cpp
+	#sync/ptp/PTP.hpp
+	#sync/ptp/PTP.cpp
 	sync/ptp/uncertainty_data.h
 	sync/ntp/NTP.hpp
 	sync/ntp/NTP.cpp
 	sync/ntp/uncertainty_data.h
 	sync/Sync.hpp
 	sync/Sync.cpp
-        sync/SyncUncertainty.hpp
+    sync/SyncUncertainty.hpp
 	sync/SyncUncertainty.cpp
 	sync/ProbabilityLib.hpp
 	sync/ProbabilityLib.cpp
@@ -168,7 +208,7 @@ ADD_EXECUTABLE(qotdaemon
 	main.cpp
 	${OpenSplice_DATAMODEL}
 )
-TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon ptp18 ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 ADD_EXECUTABLE(phc2sys
 	sync/ptp/linuxptp/phc2sys.c
@@ -209,6 +249,16 @@ ENDIF (BUILD_EDGEBROKER)
 INSTALL(
 	TARGETS
 		ptp
+	DESTINATION
+		lib
+	COMPONENT
+		libraries
+)
+
+# Install the PTP (linuxptp-1.8) library
+INSTALL(
+	TARGETS
+		ptp18
 	DESTINATION
 		lib
 	COMPONENT

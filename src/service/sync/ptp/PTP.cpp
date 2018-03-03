@@ -133,8 +133,8 @@ void PTP::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	// Restart sync
 	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
-	//cfg_settings.dds.dds.domainNumber = sync_session;	
-	cfg_settings.dds.dds.domainNumber = 0;
+	cfg_settings.dds.dds.domainNumber = sync_session;	
+	//cfg_settings.dds.dds.domainNumber = 0;
 	cfg_settings.pod.laterlogSyncInterval = 0;//log_sync_interval; // Change this when you need to slow down sync later
 	cfg_settings.pod.logSyncInterval = 0;//log_sync_interval; 
 
