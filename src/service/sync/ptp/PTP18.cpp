@@ -70,7 +70,7 @@ void PTP18::Start(bool master, int log_sync_interval, uint32_t sync_session,
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
 	
 	config_set_int(cfg, "logSyncInterval", 0);
-	config_set_int(cfg, "domainNumber", 0); // Should (can also for multi-timeline?) be set to sync session
+	config_set_int(cfg, "domainNumber", sync_session); // Should (can also for multi-timeline?) be set to sync session
 
 	if (master){
 		config_set_int(cfg, "slaveOnly", 0);
@@ -88,9 +88,9 @@ void PTP18::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	last_clocksync_data_point.data_id = 0;
 
 	// Initialize Global Variable for Clock-Skew Statistics 
-	ptp_clocksync_data_point.offset  = 0;
-	ptp_clocksync_data_point.drift   = 0;
-	ptp_clocksync_data_point.data_id = 0;
+	ptp_clocksync_data_point[timelineid].offset  = 0;
+	ptp_clocksync_data_point[timelineid].drift   = 0;
+	ptp_clocksync_data_point[timelineid].data_id = 0;
 
 	thread = boost::thread(boost::bind(&PTP18::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
@@ -190,10 +190,10 @@ int PTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 			break;
 
 		// Check if a new skew statistic data point has been added
-		if(last_clocksync_data_point.data_id < ptp_clocksync_data_point.data_id)
+		if(last_clocksync_data_point.data_id < ptp_clocksync_data_point[timelineid].data_id)
 		{
 			// New statistic received -> Replace old value
-			last_clocksync_data_point = ptp_clocksync_data_point;
+			last_clocksync_data_point = ptp_clocksync_data_point[timelineid];
 
 			// Add Synchronization Uncertainty Sample
 			sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);

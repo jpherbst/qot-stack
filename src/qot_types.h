@@ -34,6 +34,9 @@
 /* Define keyword prefix for defining a global timeline */
 #define GLOBAL_TL_STRING "gl_"
 
+/* Default Maximum Number of Timelines Supported */
+#define MAX_TIMELINES 5
+
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_MAX_NAMELEN 	64
 #define QOT_MAX_NUMCLKS 	8

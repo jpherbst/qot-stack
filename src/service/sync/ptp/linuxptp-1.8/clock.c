@@ -131,7 +131,8 @@ struct clock {
 	int tml_clkid; 			/* Timeline clock id */
 };
 
-struct clock the_clock;
+/* Global Clock Structure */
+struct clock timeline_clocks[MAX_TIMELINES];
 
 static void handle_state_decision_event(struct clock *c);
 static int clock_resize_pollfd(struct clock *c, int new_nports);
@@ -864,7 +865,7 @@ struct clock *clock_create(enum clock_type type, struct config *config,
 	int fadj = 0, max_adj = 0, sw_ts = timestamping == TS_SOFTWARE ? 1 : 0;
 	enum servo_type servo = config_get_int(config, NULL, "clock_servo");
 	int phc_index, required_modes = 0;
-	struct clock *c = &the_clock;
+	struct clock *c = &timeline_clocks[timelineid];//&the_clock;
 	struct port *p;
 	unsigned char oui[OUI_LEN];
 	char phc[32], *tmp;
@@ -926,6 +927,8 @@ struct clock *clock_create(enum clock_type type, struct config *config,
 	memcpy(c->desc.manufacturerIdentity, oui, OUI_LEN);
 
 	c->dds.domainNumber = config_get_int(config, NULL, "domainNumber");
+
+	printf("Clock PTP Domain is %d\n", c->dds.domainNumber);
 
 	if (config_get_int(config, NULL, "slaveOnly")) {
 		c->dds.flags |= DDS_SLAVE_ONLY;
@@ -1625,7 +1628,7 @@ int clock_switch_phc(struct clock *c, int phc_index)
 }
 
 // Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
-qot_stat_t ptp_clocksync_data_point;
+qot_stat_t ptp_clocksync_data_point[MAX_TIMELINES];
 
 /* QoT Stack function to project core time to timeline time */
 int clock_project_timeline(clockid_t clkid, tmv_t ts, struct timespec *tml_ts)
@@ -1677,7 +1680,6 @@ enum servo_state clock_synchronize(struct clock *c, tmv_t ingress, tmv_t origin)
 
 	c->cur.offsetFromMaster = tmv_to_TimeInterval(c->master_offset);
 
-
 	if (c->free_running)
 		return clock_no_adjust(c, ingress, origin);
 
@@ -1711,9 +1713,9 @@ enum servo_state clock_synchronize(struct clock *c, tmv_t ingress, tmv_t origin)
 		}
 		tsproc_reset(c->tsproc, 0);
 		// Add Statistic for the QoT Uncertainty Service to process
-		ptp_clocksync_data_point.offset = tmv_to_nanoseconds(c->master_offset);
-		ptp_clocksync_data_point.drift = (int64_t)ceil(adj);
-		ptp_clocksync_data_point.data_id++;
+		ptp_clocksync_data_point[c->timelineid].offset = tmv_to_nanoseconds(c->master_offset);
+		ptp_clocksync_data_point[c->timelineid].drift = (int64_t)ceil(adj);
+		ptp_clocksync_data_point[c->timelineid].data_id++;
 		break;
 	case SERVO_LOCKED:
 		clockadj_set_freq(c->tml_clkid, -adj);
@@ -1722,9 +1724,9 @@ enum servo_state clock_synchronize(struct clock *c, tmv_t ingress, tmv_t origin)
 		if (c->sanity_check)
 			clockcheck_set_freq(c->sanity_check, -adj);
 		// Add Statistic for the QoT Uncertainty Service to process
-		ptp_clocksync_data_point.offset = tmv_to_nanoseconds(c->master_offset);
-		ptp_clocksync_data_point.drift = (int64_t)ceil(adj);
-		ptp_clocksync_data_point.data_id++;
+		ptp_clocksync_data_point[c->timelineid].offset = tmv_to_nanoseconds(c->master_offset);
+		ptp_clocksync_data_point[c->timelineid].drift = (int64_t)ceil(adj);
+		ptp_clocksync_data_point[c->timelineid].data_id++;
 		break;
 	}
 	return state;
