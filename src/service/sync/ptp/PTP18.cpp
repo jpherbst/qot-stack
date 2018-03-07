@@ -62,17 +62,22 @@ void PTP18::Reset()
 void PTP18::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	int timelineid, int *timelinesfd, uint16_t timelines_size)
 {
+	int mod_log_sync_interval;
 	// First stop any sync that is currently underway
 	this->Stop();
 
 	// Initialize Default Config
 	cfg = config_create();
 
+	// If requested interval is less than 1 sec (log value < 0) then truncate to 0
+	if (log_sync_interval < 0)
+		mod_log_sync_interval = 0;
+
 	// Restart sync
 	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
-		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
+		<< " on domain " << sync_session << " with synchronization interval " << pow(mod_log_sync_interval,2) << " seconds";
 	
-	config_set_int(cfg, "logSyncInterval", 0);
+	config_set_int(cfg, "logSyncInterval", mod_log_sync_interval);
 	config_set_int(cfg, "domainNumber", sync_session); // Should (can also for multi-timeline?) be set to sync session
 
 	if (master){
