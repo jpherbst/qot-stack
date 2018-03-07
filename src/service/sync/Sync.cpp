@@ -84,7 +84,7 @@ uint32_t Sync::IPtoUint(const std::string ip) {
 	return addr;
 }
 
-// CHeck if the IP address is in private / public subnet
+// Check if the IP address is in private / public subnet
 bool Sync::IsIPprivate(const std::string ip) {
 	uint32_t ip_addr = IPtoUint(ip);
 

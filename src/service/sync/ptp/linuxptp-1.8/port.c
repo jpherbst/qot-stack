@@ -2236,6 +2236,7 @@ enum fsm_event port_event(struct port *p, int fd_index)
 	}
 
 	msg = msg_allocate();
+
 	if (!msg)
 		return EV_FAULT_DETECTED;
 
@@ -2247,6 +2248,13 @@ enum fsm_event port_event(struct port *p, int fd_index)
 		msg_put(msg);
 		return EV_FAULT_DETECTED;
 	}
+
+	/* Added to suppress prints in the QoT Stack for non relevant events (events not belonging to the domain)*/
+	if (port_ignore(p, msg)) {
+		msg_put(msg);
+		return EV_NONE;
+	}
+	
 	err = msg_post_recv(msg, cnt);
 	if (err) {
 		switch (err) {

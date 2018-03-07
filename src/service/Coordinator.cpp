@@ -83,12 +83,11 @@ void Coordinator::on_liveliness_changed(dds::sub::DataReader<qot_msgs::TimelineT
 
 Coordinator::Coordinator(boost::asio::io_service *io, const std::string &name, const std::string &iface, const std::string &addr)
 	: dp(0), topic(dp, "timeline"), pub(dp), dw(pub, topic), sub(dp), dr(sub, topic), 
-	  timer(*io),
+	  timer(*io), io(io), iface(iface), address(addr),
 	  counter_(0), lastcount_(0)
 {
 	timeline.name() = (std::string) name;	// Our name
 	timeline.domain() = rand() % 128;
-	sync = Sync::Factory(io, addr, iface);	// handle to sync algorithm
 }
 
 Coordinator::~Coordinator() {}
@@ -104,7 +103,18 @@ void Coordinator::Start(int id, int fd, const char* uuid, timeinterval_t acc, ti
 	timeline.uuid() = (std::string) uuid;	
 	BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] UUID of timeline is " << timeline.uuid();
 
-	
+	// Get the timeline type (global or local)
+	char* gl_start;
+  	gl_start = strstr(const_cast<char*>(uuid), const_cast<char*>(GLOBAL_TL_STRING));
+    if(gl_start == uuid)
+  		tl_type = QOT_TIMELINE_GLOBAL;
+    else
+        tl_type = QOT_TIMELINE_LOCAL;
+
+    // Create the Sync Class based on the timeline type
+    if (sync == NULL)
+   		sync = Sync::Factory(io, address, iface);	// handle to sync algorithm
+
 	//choose the max of the upper and lower bound of accuracy
 	BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] Lower Accuracy of timeline is " << acc.below.sec << ", " << acc.below.asec;
 	BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] Higher Accuracy of timeline is " << acc.above.sec << ", " << acc.above.asec;
@@ -116,9 +126,9 @@ void Coordinator::Start(int id, int fd, const char* uuid, timeinterval_t acc, ti
 
 	BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] Resolution of timeline is " << res.sec << ", " << res.asec;
 	double scalar_res = res.sec * aSEC_PER_SEC + res.asec;
-	timeline.resolution() = scalar_res;			// Our resolution
+	timeline.resolution() = scalar_res;				// Our resolution
 	BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] timeline resolution is " << timeline.resolution();
-	timeline.master() = "";					// Indicates master unknown!
+	timeline.master() = "";							// Indicates master unknown!
 
 	// Create the listener
 	dr.listener(this, dds::core::status::StatusMask::data_available());
@@ -135,7 +145,11 @@ void Coordinator::Stop()
 	timer.cancel();
 
 	// Stop synchronizing
-	sync->Stop();
+	if (sync != NULL)
+	{
+		BOOST_LOG_TRIVIAL(info) << "Stopping sync on timeline " << tml_id_;
+		sync->Stop();
+	}
 
 	// Create the listener
 	dr.listener(nullptr, dds::core::status::StatusMask::none());
@@ -144,24 +158,23 @@ void Coordinator::Stop()
 // Update the target metrics
 void Coordinator::Update(timeinterval_t acc, timelength_t res)
 {
-	// Update the timeline information
-	//choose the max of the upper and lower bound of accuracy
+	// Update the timeline information -> choose the max of the upper and lower bound of accuracy
 	timelength_t max_acc_bound;
 	timelength_max(&max_acc_bound, &acc.above, &acc.below);
 	double scalar_acc = max_acc_bound.sec * aSEC_PER_SEC + max_acc_bound.asec;
 	timeline.accuracy() = scalar_acc;				// Our accuracy
 
 	double scalar_res = res.sec * aSEC_PER_SEC + res.asec;
-	timeline.resolution() = scalar_res;			// Our resolution
+	timeline.resolution() = scalar_res;				// Our resolution
 
-	timeline.master() = "";					// Indicates master unknown!
+	timeline.master() = "";							// Indicates master unknown!
 
 	// If I am a slave then my accuracy may change the sync rate
 	if (timeline.master().compare(timeline.name())) {
-		//sync.Start(tml_id_, qotfd, timeline.domain(), true, timeline.accuracy());
 		if(timeline.accuracy() > 0) {
 			int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-			sync->Start(true, sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
+			if (sync != NULL)
+				sync->Start(true, sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
 		}
 	}
 }
@@ -176,16 +189,14 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 
 	counter_ += 1; // increment heartbeat counter
 
-	// Check for master timeout, but only if I am a slave and actually
-	// have a master
+	// Check for master timeout, but only if I am a slave and actually have a master
 	if (timeline.name() != timeline.master()         // I am slave
 	    && !timeline.master().empty()                // I have a master
 	    && counter_ - lastcount_ > MASTER_TIMEOUT) { // Master timeout
 
 		BOOST_LOG_TRIVIAL(info) << "master timed out. resetting";
 
-		// get rid of old samples
-		// TODO: ideally just 'take' the timed out master's samples
+		// get rid of old samples, ideally just 'take' the timed out master's samples
 		dr.take();
 
 		// update my master as undecided
@@ -227,11 +238,10 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 				BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] Switching to " << timeline.domain();
 
 				// (Re)start the synchronization service as master
-				//sync.Start(tml_id_, qotfd, timeline.domain(), true, timeline.accuracy());
-				// Convert the file descriptor to a clock handle
 				if(timeline.accuracy() > 0){
 					int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-					sync->Start(true, sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
+					if (sync != NULL)
+						sync->Start(true, sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
 				}
 			}
 
@@ -258,8 +268,7 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 		}
 	}
 
-	// done processing data
-	// see if we've found a new master
+	// done processing data, see if we've found a new master
 	if (newmaster != timeline.master()) {
 		BOOST_LOG_TRIVIAL(info) << "[T" << tml_id_ << "] new master should be " << newmaster;
 		timeline.master() = newmaster;
@@ -269,7 +278,8 @@ void Coordinator::Heartbeat(const boost::system::error_code& err)
 		// restart sync service as master or slave depending on whether master == my name
 		if(timeline.accuracy() > 0){
 			int sync_interval = (int) floor(log2(timeline.accuracy()/(2.0*ASEC_PER_USEC)));
-			sync->Start(timeline.master() == timeline.name(), sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
+			if (sync != NULL)
+				sync->Start(timeline.master() == timeline.name(), sync_interval, timeline.domain(), tml_id_, &timelinefd, 1);
 		}
 	}
 

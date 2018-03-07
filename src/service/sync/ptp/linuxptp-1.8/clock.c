@@ -1706,11 +1706,11 @@ enum servo_state clock_synchronize(struct clock *c, tmv_t ingress, tmv_t origin)
 		clockadj_set_freq(c->tml_clkid, -adj);
 		clockadj_step(c->tml_clkid, -tmv_to_nanoseconds(c->master_offset));
 		c->ingress_ts = tmv_zero();
-		if (c->sanity_check) {
-			clockcheck_set_freq(c->sanity_check, -adj);
-			clockcheck_step(c->sanity_check,
-					-tmv_to_nanoseconds(c->master_offset));
-		}
+		// if (c->sanity_check) {
+		// 	clockcheck_set_freq(c->sanity_check, -adj);
+		// 	clockcheck_step(c->sanity_check,
+		// 			-tmv_to_nanoseconds(c->master_offset));
+		// }
 		tsproc_reset(c->tsproc, 0);
 		// Add Statistic for the QoT Uncertainty Service to process
 		ptp_clocksync_data_point[c->timelineid].offset = tmv_to_nanoseconds(c->master_offset);
@@ -1721,8 +1721,8 @@ enum servo_state clock_synchronize(struct clock *c, tmv_t ingress, tmv_t origin)
 		clockadj_set_freq(c->tml_clkid, -adj);
 		if (c->clkid == CLOCK_REALTIME)
 			sysclk_set_sync();
-		if (c->sanity_check)
-			clockcheck_set_freq(c->sanity_check, -adj);
+		// if (c->sanity_check)
+		// 	clockcheck_set_freq(c->sanity_check, -adj);
 		// Add Statistic for the QoT Uncertainty Service to process
 		ptp_clocksync_data_point[c->timelineid].offset = tmv_to_nanoseconds(c->master_offset);
 		ptp_clocksync_data_point[c->timelineid].drift = (int64_t)ceil(adj);

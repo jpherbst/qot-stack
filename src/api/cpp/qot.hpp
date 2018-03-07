@@ -80,6 +80,21 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid,
     const char *name, timelength_t res, timeinterval_t acc);
 
 /**
+ * @brief Bind to a timeline with a given resolution and accuracy
+ *        after all core cluster nodes are up
+ * @param timeline Pointer to a timeline struct
+ * @param uuid Name of the timeline
+ * @param name Name of this binding
+ * @param res Maximum tolerable unit of time
+ * @param acc Maximum tolerable deviation from true time
+ * @param Nodes Nodes to wait for before joining the timeline
+ * @return A status code indicating success (0) or other
+ **/
+qot_return_t timeline_cluster_bind(timeline_t *timeline, const char *uuid, 
+	const char *name, timelength_t res, timeinterval_t acc, const std::vector<std::string> Nodes);
+
+
+/**
  * @brief Unbind from a timeline
  * @param timeline Pointer to a timeline struct
  * @return A status code indicating success (0) or other

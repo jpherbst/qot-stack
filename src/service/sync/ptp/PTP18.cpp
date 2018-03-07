@@ -65,6 +65,9 @@ void PTP18::Start(bool master, int log_sync_interval, uint32_t sync_session,
 	// First stop any sync that is currently underway
 	this->Stop();
 
+	// Initialize Default Config
+	cfg = config_create();
+
 	// Restart sync
 	BOOST_LOG_TRIVIAL(info) << "Starting PTP synchronization as " << (master ? "master" : "slave") 
 		<< " on domain " << sync_session << " with synchronization interval " << log_sync_interval;
@@ -110,13 +113,6 @@ int PTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 	int c, err = -1, print_level;
 	struct clock *clock = NULL;
 	int required_modes = 0;
-
-	if (handle_term_signals())
-		return -1;
-
-	if (!cfg) {
-		return -1;
-	}
 
 	if (config_set_int(cfg, "delay_mechanism", DM_AUTO))
 	{
@@ -185,7 +181,7 @@ int PTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 
 	err = 0;
 
-	while (is_running()) {
+	while (is_running() && !kill) {
 		if (clock_poll(clock))
 			break;
 
