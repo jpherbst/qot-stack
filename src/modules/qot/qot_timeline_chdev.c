@@ -4,7 +4,7 @@
  * @author Sandeep D'souza, Andrew Symington and Fatima Anwar
  *
  * Copyright (c) Regents of the University of California, 2015.
- * Copyright (c) Carnegie Mellon University, 2016.
+ * Copyright (c) Carnegie Mellon University, 2016-2018.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -624,10 +624,10 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
-    utimelength_t sync_uncertainty; //Fatima
+    utimelength_t sync_uncertainty; 
     qot_timer_t timer;
 
-    tl_translation_t timeline_params; //Sandeep
+    tl_translation_t timeline_params; 
 
     if (!timeline_impl) {
         pr_err("qot_timeline_chdev: cannot find timeline\n");
@@ -754,7 +754,17 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         }
         else
         {
+            // convert from core time to timeline reference of time
+            coretime = TP_TO_nSEC(stp.estimate);
+            timelinetime = coretime;
+            qot_gl_loc2rem(0, &timelinetime);
 
+            /* Add Uncertainty */
+            u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
+            l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
+
+            TP_FROM_nSEC(stp.u_estimate, u_timelinetime);
+            TP_FROM_nSEC(stp.l_estimate, l_timelinetime);
         }
 
         if (copy_to_user((stimepoint_t*)arg, &stp, sizeof(stimepoint_t)))
@@ -765,18 +775,36 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         if (copy_from_user(&tp, (timepoint_t*)arg, sizeof(timepoint_t)))
             return -EACCES;
 
-        // convert from timeline reference to core of time
-        loctime = TP_TO_nSEC(tp);
-        qot_rem2loc(timeline_impl->index, 0, &loctime);
-        TP_FROM_nSEC(tp, loctime);
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            // convert from timeline reference to core of time
+            loctime = TP_TO_nSEC(tp);
+            qot_rem2loc(timeline_impl->index, 0, &loctime);
+            TP_FROM_nSEC(tp, loctime);
+        }
+        else
+        {
+            // convert from timeline reference to core of time
+            loctime = TP_TO_nSEC(tp);
+            qot_gl_rem2loc(0, &loctime);
+            TP_FROM_nSEC(tp, loctime);
+        }
 
         if (copy_to_user((timepoint_t*)arg, &tp, sizeof(timepoint_t)))
             return -EACCES;
         break;
     /* Get the current core time */
     case TIMELINE_GET_CORE_TIME_NOW:
-        if (qot_clock_get_core_time(&utp))
-    		return -EACCES;
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            if (qot_clock_get_core_time(&utp))
+        		return -EACCES;
+        }
+        else
+        {
+            if (qot_clock_gl_get_time_raw(&utp.estimate))
+                return -EACCES;
+        }
         // TODO: Latency estimates are not being added for now...
         /* Add the latency due to the OS query */
         //qot_admin_add_latency(&utp);
@@ -788,32 +816,40 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         break;
     /* Get the current timeline time */
     case TIMELINE_GET_TIME_NOW:
-        if (qot_clock_get_core_time(&utp))
-            return -EACCES;
-        // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(utp.estimate);
-        timelinetime = coretime; 
-        qot_loc2rem(timeline_impl->index, 0, &timelinetime); 
-        TP_FROM_nSEC(utp.estimate, timelinetime); 
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            if (qot_clock_get_core_time(&utp))
+                return -EACCES;
+            // convert from core time to timeline reference of time
+            coretime = TP_TO_nSEC(utp.estimate);
+            timelinetime = coretime; 
+            qot_loc2rem(timeline_impl->index, 0, &timelinetime); 
+            TP_FROM_nSEC(utp.estimate, timelinetime); 
 
-        /* Calculate sync uncertainty */
-        u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
-        l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
+            /* Calculate sync uncertainty */
+            u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
+            l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
 
-        sync_uncertainty.estimate.sec = 0;
-        sync_uncertainty.estimate.asec = 0;
+            sync_uncertainty.estimate.sec = 0;
+            sync_uncertainty.estimate.asec = 0;
 
-        if(u_timelinetime > timelinetime)
-            TL_FROM_nSEC(sync_uncertainty.interval.above, u_timelinetime - timelinetime);
+            if(u_timelinetime > timelinetime)
+                TL_FROM_nSEC(sync_uncertainty.interval.above, u_timelinetime - timelinetime);
+            else
+                TL_FROM_nSEC(sync_uncertainty.interval.above, 0);
+
+            if(timelinetime > l_timelinetime)
+                TL_FROM_nSEC(sync_uncertainty.interval.below, timelinetime - l_timelinetime);
+            else
+                TL_FROM_nSEC(sync_uncertainty.interval.below, 0);
+
+            utimepoint_add(&utp, &sync_uncertainty);
+        }
         else
-            TL_FROM_nSEC(sync_uncertainty.interval.above, 0);
-
-        if(timelinetime > l_timelinetime)
-            TL_FROM_nSEC(sync_uncertainty.interval.below, timelinetime - l_timelinetime);
-        else
-            TL_FROM_nSEC(sync_uncertainty.interval.below, 0);
-
-        utimepoint_add(&utp, &sync_uncertainty);
+        {
+            if (qot_clock_gl_get_time(&utp))
+                return -EACCES;
+        }
 
         /* Calculate sync uncertainty _END */
 
@@ -853,13 +889,20 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         break;  
     /* Get timeline parameters (mapping and uncertainty) */
     case TIMELINE_GET_PARAMETERS:
-        timeline_params.last   = timeline_impl->last;                            /* Discipline: last cycle count of     */
-        timeline_params.mult   = timeline_impl->mult;                            /* Discipline: ppb multiplier          */
-        timeline_params.nsec   = timeline_impl->nsec;                            /* Discipline: global time offset      */
-        timeline_params.u_nsec = timeline_impl->u_nsec;                          /* Discipline: global time for master  */
-        timeline_params.l_nsec = timeline_impl->l_nsec;                          /* Discipline: global time for master  */
-        timeline_params.u_mult = timeline_impl->u_mult;                          /* Discipline: upper bound on ppb      */
-        timeline_params.l_mult = timeline_impl->l_mult;                          /* Discipline: lower bound on ppb      */
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            timeline_params.last   = timeline_impl->last;                            /* Discipline: last cycle count of     */
+            timeline_params.mult   = timeline_impl->mult;                            /* Discipline: ppb multiplier          */
+            timeline_params.nsec   = timeline_impl->nsec;                            /* Discipline: global time offset      */
+            timeline_params.u_nsec = timeline_impl->u_nsec;                          /* Discipline: global time for master  */
+            timeline_params.l_nsec = timeline_impl->l_nsec;                          /* Discipline: global time for master  */
+            timeline_params.u_mult = timeline_impl->u_mult;                          /* Discipline: upper bound on ppb      */
+            timeline_params.l_mult = timeline_impl->l_mult;                          /* Discipline: lower bound on ppb      */
+        }
+        else
+        {
+            qot_clock_gl_get_params(&timeline_params);
+        }
         if (copy_to_user((tl_translation_t*)arg, &timeline_params, sizeof(tl_translation_t)))
             return -EACCES;
         break; 
