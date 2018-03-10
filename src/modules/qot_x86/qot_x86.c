@@ -168,7 +168,8 @@ static int qot_x86_gettime(struct ptp_clock_info *ptp, struct timespec64 *ts)
 	#else
 	// Grab a raw monotonic timestamp from the clocksource
 	//getrawmonotonic(&raw_monotonic_ts);
-	ktime_get_ts(&raw_monotonic_ts);
+	//ktime_get_ts(&raw_monotonic_ts);
+	ktime_get_real_ts(&raw_monotonic_ts);
 	#endif
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	*ts = timespec_to_timespec64(timespec_add(raw_monotonic_ts, ns_to_timespec(offset)));
@@ -260,7 +261,8 @@ static timepoint_t qot_x86_read_time(void)
 	#else
 	// Grab a raw monotonic timestamp from the clocksource
 	//getrawmonotonic(&raw_monotonic_ts);
-	ktime_get_ts(&raw_monotonic_ts);
+	//ktime_get_ts(&raw_monotonic_ts);
+	ktime_get_real_ts(&raw_monotonic_ts);
 	#endif
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = offset + timespec_to_ns(&raw_monotonic_ts);
@@ -290,7 +292,8 @@ static long qot_x86_program_sched_interrupt(timepoint_t expiry, int force, long 
 	expiry_ns = TP_TO_nSEC(expiry);
 	raw_spin_lock_irqsave(&pdata->lock, flags);
 	//getrawmonotonic(&ns_ts);
-	ktime_get_ts(&ns_ts);
+	//ktime_get_ts(&ns_ts);
+	ktime_get_real_ts(&ns_ts);
 	raw_spin_unlock_irqrestore(&pdata->lock, flags);
 	ns = (u64)timespec_to_ns(&ns_ts);
 
@@ -398,7 +401,7 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 	/* Initialize Scheduler Interface Data Structures*/
 	pdata->core_sched.callback = NULL;
 	pdata->core_sched.parent   = pdata;
-	hrtimer_init(&pdata->core_sched.timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	hrtimer_init(&pdata->core_sched.timer, CLOCK_REALTIME, HRTIMER_MODE_ABS);
 	pdata->core_sched.timer.function = qot_x86_sched_interface_interrupt;
 
 	/* Initialize Pointer to QoT Clock Data*/
@@ -420,8 +423,8 @@ static struct qot_x86_data *qot_x86_initialize(struct platform_device *pdev)
 		pr_info("qot_x86: Cannot interface with Linux PVclock\n");
 		goto err;
 	}
-	pv_offset = TP_TO_nSEC(qot_x86_read_time()) - ktime_to_ns(ktime_get());
-	pr_info("qot_x86: PV offset with local CLOCK_MONOTONIC is %lld\n", pv_offset);
+	pv_offset = TP_TO_nSEC(qot_x86_read_time()) - ktime_to_ns(ktime_get_real());
+	pr_info("qot_x86: PV offset with local CLOCK_REALTIME is %lld\n", pv_offset);
 	#endif
 
 	qot_x86_properties.phc_id = ptp_clock_index(pdata->clock);

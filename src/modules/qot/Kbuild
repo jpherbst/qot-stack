@@ -12,3 +12,4 @@ qot-objs := qot_core.o              \
             qot_admin_sysfs.o 		\
             qot_user.o    	 	    \
             qot_user_chdev.o        \
+            qot_clock_gl.o  \

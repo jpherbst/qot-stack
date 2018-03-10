@@ -48,6 +48,7 @@
 #include "qot_clock.h"
 #include "qot_timeline.h"
 #include "qot_scheduler.h"
+#include "qot_clock_gl.h"
 
 #define DEVICE_NAME "timeline"
 
@@ -376,11 +377,11 @@ void clocks_calc_mult_shift(u32 *mult, u32 *shift, u32 from, u32 to, u32 maxsec)
     }
     *mult = tmp;
     *shift = sft;
-    pr_info("qot_timeline_chdev: Timeline adjustment Mult = %lu, Shift = %lu\n", *mult, *shift);
+    pr_info("qot_timeline_chdev: Timeline adjustment Mult = %lu, Shift = %lu\n", (long unsigned int)*mult, (long unsigned int)*shift);
 }
 
 
-// /* Discipline operations */
+/* Local Timeline Posix Clock Discipline operations */
 
 static int qot_timeline_clock_adjfreq(struct posix_clock *pc, s32 ppb)
 {
@@ -436,8 +437,6 @@ static s32 qot_timeline_chdev_ppm_to_ppb(long ppm)
     ppb >>= 13;
     return (s32) ppb;
 }
-
-/* File operations */
 
 static int qot_timeline_chdev_getres(struct posix_clock *pc,
     struct timespec *tp)
@@ -527,6 +526,75 @@ static int qot_timeline_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
     wake_up_interruptible(&timeline_wait);
     return err;
 }
+
+/* Global Timeline Discipline Operations */
+
+static int qot_timeline_gl_chdev_settime(struct posix_clock *pc,
+    const struct timespec *ts)
+{
+    timepoint_t tp;    
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+
+    timepoint_from_timespec(&tp, (struct timespec*)ts);
+    if (qot_clock_gl_settime(tp));
+    {
+        return 1;
+    }
+    qot_scheduler_update(timeline_impl->info);
+    // Wakeup tasks waiting for timeline parameters updates
+    wake_up_interruptible(&timeline_wait);
+    return 0;
+}
+
+static int qot_timeline_gl_chdev_gettime(struct posix_clock *pc,
+    struct timespec *tp)
+{
+    utimepoint_t utp;
+    s64 ns;
+    
+    if (qot_clock_gl_get_time(&utp))
+    {
+        return 1;
+    }
+
+    ns = TP_TO_nSEC(utp.estimate);
+    *tp = ns_to_timespec(ns);
+    return 0;
+}
+
+static int qot_timeline_gl_chdev_adjtime(struct posix_clock *pc, struct timex *tx)
+{
+    timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    int err = -EOPNOTSUPP;
+    if (tx->modes & ADJ_SETOFFSET) {
+        struct timespec ts;
+        ktime_t kt;
+        s64 delta;
+        ts.tv_sec = tx->time.tv_sec;
+        ts.tv_nsec = tx->time.tv_usec;
+        if (!(tx->modes & ADJ_NANO))
+            ts.tv_nsec *= 1000;
+        if ((unsigned long) ts.tv_nsec >= NSEC_PER_SEC)
+            return -EINVAL;
+        kt = timespec_to_ktime(ts);
+        delta = ktime_to_ns(kt);
+        err = qot_clock_gl_adjtime(delta);
+    } else if (tx->modes & ADJ_FREQUENCY) {
+        s32 ppb = qot_timeline_chdev_ppm_to_ppb(tx->freq);
+        //if (ppb > timeline_impl->max_adj || ppb < -timeline_impl->max_adj)
+            //return -ERANGE;
+        err = qot_clock_gl_adjfreq(ppb);
+        timeline_impl->dialed_frequency = tx->freq;
+    } else if (tx->modes == 0) {
+        tx->freq = timeline_impl->dialed_frequency;
+        err = 0;
+    }
+    // Wakeup tasks waiting for timeline parameters updates
+    wake_up_interruptible(&timeline_wait);
+    return err;
+}
+
+/* Timeline Character Device Operations */
 
 static int qot_timeline_chdev_open(struct posix_clock *pc, fmode_t fmode)
 {
@@ -652,49 +720,42 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     case TIMELINE_SET_SYNC_UNCERTAINTY:
         if (copy_from_user(&bounds, (qot_bounds_t*)arg, sizeof(qot_bounds_t)))
             return -EACCES;
-        timeline_impl->u_mult = (s32) bounds.u_drift; 
-        timeline_impl->l_mult = (s32) bounds.l_drift; 
-        timeline_impl->u_nsec = (s64) bounds.u_nsec;
-        timeline_impl->l_nsec = (s64) bounds.l_nsec;
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            timeline_impl->u_mult = (s32) bounds.u_drift; 
+            timeline_impl->l_mult = (s32) bounds.l_drift; 
+            timeline_impl->u_nsec = (s64) bounds.u_nsec;
+            timeline_impl->l_nsec = (s64) bounds.l_nsec;
+        }
+        else
+        {
+            qot_clock_gl_set_uncertainty(bounds);
+        }
         break;
     /* Convert a core time to a timeline */
     case TIMELINE_CORE_TO_REMOTE:
         if (copy_from_user(&stp, (stimepoint_t*)arg, sizeof(stimepoint_t)))
             return -EACCES;
 
-        // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(stp.estimate);
-        timelinetime = coretime;
-        qot_loc2rem(timeline_impl->index, 0, &timelinetime);
-        TP_FROM_nSEC(stp.estimate, timelinetime);
+        if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
+        {
+            // convert from core time to timeline reference of time
+            coretime = TP_TO_nSEC(stp.estimate);
+            timelinetime = coretime;
+            qot_loc2rem(timeline_impl->index, 0, &timelinetime);
+            TP_FROM_nSEC(stp.estimate, timelinetime);
 
-        // find upper bound on core time -> Code Block commented out by Sandeep
-        // if(timeline_impl->u_nsec < 0){
-        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
-        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
-        // }else{
-        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
-        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
-        // }
-        // Code added by Sandeep -> uncertain_time = time + predictor_function*(core-last_sync) + margin
-        u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
-        l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
-/*      if(u_timelinetime > timelinetime)
-            TL_FROM_nSEC(utp.interval.above, u_timelinetime - timelinetime);
-        else
-            TL_FROM_nSEC(utp.interval.above, 0);
-            //TL_FROM_nSEC(utp.interval.above, timelinetime - u_timelinetime);
+            /* Add Uncertainty */
+            u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
+            l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
 
-        // find lower bound on core time
-        //l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->m_nsec;
-        if(timelinetime > l_timelinetime)
-            TL_FROM_nSEC(utp.interval.below, timelinetime - l_timelinetime);
+            TP_FROM_nSEC(stp.u_estimate, u_timelinetime);
+            TP_FROM_nSEC(stp.l_estimate, l_timelinetime);
+        }
         else
-            TL_FROM_nSEC(utp.interval.below, 0);
-            //TL_FROM_nSEC(utp.interval.below, l_timelinetime - timelinetime);
-*/
-        TP_FROM_nSEC(stp.u_estimate, u_timelinetime);
-        TP_FROM_nSEC(stp.l_estimate, l_timelinetime);
+        {
+
+        }
 
         if (copy_to_user((stimepoint_t*)arg, &stp, sizeof(stimepoint_t)))
             return -EACCES;
@@ -735,18 +796,9 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
         qot_loc2rem(timeline_impl->index, 0, &timelinetime); 
         TP_FROM_nSEC(utp.estimate, timelinetime); 
 
-        /* Calculate sync uncertainty _START */
-        // if(timeline_impl->u_nsec < 0){
-        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->u_nsec;
-        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->l_nsec;
-        // }else{
-        //     u_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->u_mult * (coretime - timeline_impl->last),1000000000ULL)+timeline_impl->u_nsec;
-        //     l_timelinetime = timeline_impl->nsec + (coretime - timeline_impl->last) + div_s64(timeline_impl->l_mult * (coretime - timeline_impl->last),1000000000ULL)-timeline_impl->l_nsec;
-        // }
-        // New code added by Sandeep -> Previous code block commented out by Sandeep
+        /* Calculate sync uncertainty */
         u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
         l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
-        // New code added ends
 
         sync_uncertainty.estimate.sec = 0;
         sync_uncertainty.estimate.asec = 0;
@@ -838,13 +890,27 @@ static ssize_t qot_timeline_chdev_read(struct posix_clock *pc, uint rdflags,
     return 0;
 }
 
-/* File operations for a given timeline */
+/* File operations for a given local timeline */
 static struct posix_clock_operations qot_timeline_chdev_ops = {
     .owner          = THIS_MODULE,
     .clock_adjtime  = qot_timeline_chdev_adjtime,
     .clock_gettime  = qot_timeline_chdev_gettime,
     .clock_getres   = qot_timeline_chdev_getres,
     .clock_settime  = qot_timeline_chdev_settime,
+    .ioctl          = qot_timeline_chdev_ioctl,
+    .open           = qot_timeline_chdev_open,
+    .release        = qot_timeline_chdev_release,
+    .poll           = qot_timeline_chdev_poll,
+    .read           = qot_timeline_chdev_read,
+};
+
+/* File operations for a given global_timeline */
+static struct posix_clock_operations qot_timeline_gl_chdev_ops = {
+    .owner          = THIS_MODULE,
+    .clock_adjtime  = qot_timeline_gl_chdev_adjtime,
+    .clock_gettime  = qot_timeline_gl_chdev_gettime,
+    .clock_getres   = qot_timeline_chdev_getres,
+    .clock_settime  = qot_timeline_gl_chdev_settime,
     .ioctl          = qot_timeline_chdev_ioctl,
     .open           = qot_timeline_chdev_open,
     .release        = qot_timeline_chdev_release,
@@ -904,8 +970,17 @@ int qot_timeline_chdev_register(qot_timeline_t *info)
     timeline_impl->devid = MKDEV(major, timeline_impl->index);
     timeline_impl->dev = device_create(timeline_class, NULL,
         timeline_impl->devid, timeline_impl, "timeline%d", timeline_impl->index);
-    /* Setup the PTP clock for this timeline */
-    timeline_impl->clock.ops = qot_timeline_chdev_ops;
+    /* Setup the posix clock for this timeline */
+    /* Check if the timeline is a global or local */
+    if (info->type == QOT_TIMELINE_LOCAL)
+    {
+        timeline_impl->clock.ops = qot_timeline_chdev_ops;
+    }
+    else
+    {
+        timeline_impl->clock.ops = qot_timeline_gl_chdev_ops;
+    }
+    
     timeline_impl->clock.release = qot_timeline_chdev_delete;
     if (posix_clock_register(&timeline_impl->clock, timeline_impl->devid)) {
         pr_err("qot_timeline: cannot register POSIX clock");
@@ -1024,6 +1099,8 @@ void qot_timeline_chdev_cleanup(struct class *qot_class)
     unregister_chrdev_region(timeline_devt, MINORMASK + 1);
     /* Shut down the IDR subsystem */
     idr_destroy(&qot_timelines_map);
+    /* Destroy the global timeline clock */
+    qot_clock_gl_cleanup();
 }
 
 /* Initialize the timeline system */
@@ -1040,6 +1117,8 @@ qot_return_t qot_timeline_chdev_init(struct class *qot_class)
         pr_err("ptp: failed to allocate device region\n");
     }
     spin_lock_init(&qot_timelines_lock);
+    /* Initialize the global timeline clock */
+    qot_clock_gl_init();
     return QOT_RETURN_TYPE_OK;
 }
 
