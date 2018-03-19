@@ -557,6 +557,8 @@ LCL_AccumulateDeltaFrequency(double dfreq)
 }
 
 /* ================================================== */
+/* Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation */
+qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
 
 void
 LCL_AccumulateOffset(double offset, double corr_rate)
@@ -571,6 +573,13 @@ LCL_AccumulateOffset(double offset, double corr_rate)
 
   if (!check_offset(&cooked, offset))
       return;
+
+  #ifdef NTP_QOT_STACK
+  // Add Statistic for the QoT Uncertainty Service to process
+  ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(offset);
+  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm); // Convert PPM to PPB
+  ntp_clocksync_data_point[global_timelineid].data_id++;
+  #endif
 
   (*drv_accrue_offset)(offset, corr_rate);
 
@@ -659,6 +668,13 @@ LCL_AccumulateFrequencyAndOffset(double dfreq, double doffset, double corr_rate)
    are handled in units of ppm, whereas the 'dfreq' argument is in
    terms of the gradient of the (offset) v (local time) function. */
   current_freq_ppm += dfreq * (1.0e6 - current_freq_ppm);
+
+  #ifdef NTP_QOT_STACK
+  // Add Statistic for the QoT Uncertainty Service to process
+  ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(doffset);
+  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm); // Convert PPM to PPB
+  ntp_clocksync_data_point[global_timelineid].data_id++;
+  #endif
 
   current_freq_ppm = clamp_freq(current_freq_ppm);
 

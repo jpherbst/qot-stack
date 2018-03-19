@@ -1392,9 +1392,6 @@ check_delay_dev_ratio(NCR_Instance inst, SST_Stats stats,
 
 /* ================================================== */
 
-// Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
-qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
-
 #ifdef NTP_QOT_STACK
 /* QoT Stack function to project core time to timeline time */
 int clock_project_timeline(clockid_t clkid, struct timespec *ts, struct timespec *tml_ts)
