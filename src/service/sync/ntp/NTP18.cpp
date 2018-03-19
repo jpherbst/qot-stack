@@ -411,6 +411,7 @@ void NTP18::Start(
 void NTP18::Stop()
 {
 	BOOST_LOG_TRIVIAL(info) << "Stopping NTP synchronization ";
+  SCH_QuitProgram();
 	kill = true;
 	thread.join();
 }
