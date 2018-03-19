@@ -188,17 +188,17 @@ ADD_LIBRARY(ntp18 SHARED
 	sync/ntp/chrony-3.2/local.c
 	sync/ntp/chrony-3.2/logging.c
 	sync/ntp/chrony-3.2/manual.c
-	sync/ntp/chrony-3.2/md5.c
+	#sync/ntp/chrony-3.2/md5.c
 	sync/ntp/chrony-3.2/memory.c
 	sync/ntp/chrony-3.2/nameserv.c
-	sync/ntp/chrony-3.2/nameserv_async.c
+	#sync/ntp/chrony-3.2/nameserv_async.c
 	sync/ntp/chrony-3.2/ntp_core.c
 	sync/ntp/chrony-3.2/ntp_io.c
-	#sync/ntp/chrony-3.2/ntp_io_linux.c
-	sync/ntp/chrony-3.2/ntp_signd.c
+	sync/ntp/chrony-3.2/ntp_io_linux.c
+	#sync/ntp/chrony-3.2/ntp_signd.c
 	sync/ntp/chrony-3.2/ntp_sources.c
 	sync/ntp/chrony-3.2/pktlength.c
-	sync/ntp/chrony-3.2/privops.c
+	#sync/ntp/chrony-3.2/privops.c
 	sync/ntp/chrony-3.2/refclock.c
 	sync/ntp/chrony-3.2/refclock_phc.c
 	sync/ntp/chrony-3.2/refclock_pps.c

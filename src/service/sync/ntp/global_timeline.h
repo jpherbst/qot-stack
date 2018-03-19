@@ -1,9 +1,9 @@
 /*
  * @file qot.h
- * @brief Global Variable to Share Uncertainty Data (Header)
+ * @brief Global Variable to Share Global Timeline Clock (Header)
  * @author Sandeep D'souza
  *
- * Copyright (c) Carnegie Mellon University, 2017.
+ * Copyright (c) Carnegie Mellon University, 2018.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,13 +27,23 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NTP_UNCERTAINTY_DATA_QOT_H
-#define NTP_UNCERTAINTY_DATA_QOT_H
+#ifndef NTP_GLOB_TLCLOCK_DATA_QOT_H
+#define NTP_GLOB_TLCLOCK_DATA_QOT_H
 
 #include "../../../qot_types.h"
 
-// Clock Statistics Data Point -> variable defined in chrony-3.2/ntp_core.c
-extern qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
+/* Flag to protect QoT Stack Code */
+#define NTP_QOT_STACK 1
+
+/* Helper Macros */
+#define CLOCKFD 3
+#define FD_TO_CLOCKID(fd)	((~(clockid_t) (fd) << 3) | CLOCKFD)
+#define CLOCKID_TO_FD(clk)	((unsigned int) ~((clk) >> 3))
+
+// Global Timeline Clock Descriptors -> variables defined in chrony-3.2/local.c
+int global_timelineid;      // Timeline ID
+int global_timelinefd;      // Timeline File Descriptor
+int global_tmlclkid;        // Timeline Clock ID
 
 #endif
 

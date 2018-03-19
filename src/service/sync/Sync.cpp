@@ -32,9 +32,9 @@
 #include "SyncUncertainty.hpp"
 
 // Subtypes
-#include "ptp/PTP.hpp"
+//#include "ptp/PTP.hpp"
 #include "ptp/PTP18.hpp"
-#include "ntp/NTP.hpp"
+//#include "ntp/NTP.hpp"
 #include "ntp/NTP18.hpp"
 
 /* So that we might expose a meaningful name through PTP interface */
@@ -67,7 +67,7 @@ boost::shared_ptr<Sync> Sync::Factory(
 		// Use PTP
 		return boost::shared_ptr<Sync>((Sync*) new PTP18(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
-	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm
+	return boost::shared_ptr<Sync>((Sync*) new NTP18(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm
 }
 
 // Convert string into 32 bit IP address

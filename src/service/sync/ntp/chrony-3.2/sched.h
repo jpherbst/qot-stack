@@ -75,9 +75,8 @@ extern SCH_TimeoutID SCH_AddTimeoutByDelay(double delay, SCH_TimeoutHandler, SCH
    expiry time is at least a given separation away from any other
    timeout in the same class, given randomness is added to the delay
    and separation */
-extern SCH_TimeoutID SCH_AddTimeoutInClass(double min_delay, double separation, double randomness,
-                                           SCH_TimeoutClass class,
-                                           SCH_TimeoutHandler handler, SCH_ArbitraryArgument);
+/* QoT Stack: class changed to timeout_class to avoid naming conflict with C++ compilation */
+extern SCH_TimeoutID SCH_AddTimeoutInClass(double min_delay, double separation, double randomness, SCH_TimeoutClass timeout_class, SCH_TimeoutHandler handler, SCH_ArbitraryArgument);
 
 /* The next one probably ought to return a status code */
 extern void SCH_RemoveTimeout(SCH_TimeoutID);

@@ -188,6 +188,11 @@ extern double LCL_GetMaxClockError(void);
 
 extern void LCL_Initialise(void);
 
+/* Routine to initialise the module for the QoT Stack (to be called once at program
+   start-up) */
+
+extern void LCL_Initialise_GlobalTimeline(int timelineid, int *timelinesfd);
+
 /* Routine to finalise the module (to be called once at end of
    run). */
 extern void LCL_Finalise(void);

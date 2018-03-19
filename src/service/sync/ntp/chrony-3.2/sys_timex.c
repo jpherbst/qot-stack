@@ -35,6 +35,9 @@
 #include "sys_timex.h"
 #include "logging.h"
 
+/* Added for the QoT Stack */
+#include "../global_timeline.h"
+
 #ifdef PRIVOPS_ADJUSTTIMEX
 #define NTP_ADJTIME PRV_AdjustTimex
 #define NTP_ADJTIME_NAME "ntp_adjtime"
@@ -253,7 +256,12 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
     txc->constant = 10;
 #endif
 
+#ifndef NTP_QOT_STACK
   state = NTP_ADJTIME(txc);
+#else
+  /* Added for the QoT Stack */
+  state = clock_adjtime(global_tmlclkid, txc);
+#endif 
 
   if (state < 0) {
     if (!ignore_error)

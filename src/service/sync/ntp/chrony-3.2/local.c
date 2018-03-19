@@ -40,6 +40,9 @@
 #include "util.h"
 #include "logging.h"
 
+/* Added for the QoT Stack */
+#include "../global_timeline.h"
+
 /* ================================================== */
 
 /* Variable to store the current frequency, in ppm */
@@ -180,7 +183,45 @@ LCL_Initialise(void)
   max_clock_error = CNF_GetMaxClockError() * 1e-6;
 }
 
+#ifdef NTP_QOT_STACK
 /* ================================================== */
+/* Added for the QoT Stack */
+
+void
+LCL_Initialise_GlobalTimeline(int timelineid, int *timelinesfd)
+{
+  global_timelineid  = timelineid;
+  global_timelinefd  = timelinesfd[0]; 
+  global_tmlclkid    = FD_TO_CLOCKID(global_timelinefd);
+
+  change_list.next = change_list.prev = &change_list;
+
+  dispersion_notify_list.next = dispersion_notify_list.prev = &dispersion_notify_list;
+
+  /* Null out the system drivers, so that we die
+     if they never get defined before use */
+  
+  drv_read_freq = NULL;
+  drv_set_freq = NULL;
+  drv_accrue_offset = NULL;
+  drv_offset_convert = NULL;
+
+  /* This ought to be set from the system driver layer */
+  current_freq_ppm = 0.0;
+  temp_comp_ppm = 0.0;
+
+  calculate_sys_precision();
+
+  /* This is the maximum allowed frequency offset in ppm, the time must
+     never stop or run backwards */
+  max_freq_ppm = CNF_GetMaxDrift();
+  max_freq_ppm = CLAMP(0.0, max_freq_ppm, 500000.0);
+
+  max_clock_error = CNF_GetMaxClockError() * 1e-6;
+}
+
+/* ================================================== */
+#endif
 
 void
 LCL_Finalise(void)
@@ -357,8 +398,16 @@ void
 LCL_ReadRawTime(struct timespec *ts)
 {
 #if HAVE_CLOCK_GETTIME
+  #ifndef NTP_QOT_STACK
   if (clock_gettime(CLOCK_REALTIME, ts) < 0)
     LOG_FATAL("clock_gettime() failed : %s", strerror(errno));
+  #else
+  /* Added for the QoT Stack 
+     -> Changed from CLOCK_REALTIME to the global timeline 
+     Note: The stack should always be compiled with HAVE_CLOCK_GETTIME */
+  if (clock_gettime(global_tmlclkid, ts) < 0)
+    LOG_FATAL("clock_gettime() failed : %s", strerror(errno));
+  #endif
 #else
   struct timeval tv;
 

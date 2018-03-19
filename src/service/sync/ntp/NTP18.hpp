@@ -96,20 +96,14 @@ namespace qot
 		public: void Start(bool master, int log_sync_interval, uint32_t sync_session, int timelineid, int *timelinesfd, uint16_t timelines_size);
 		public: void Stop();
 
-		// This thread performs rhe actual syncrhonization
-		private: int SyncThread(int *timelinesfd, uint16_t timelines_size);
+		// This thread performs the actual syncrhonization
+		private: int SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size);
 
 		// Boost ASIO
 		private: boost::asio::io_service *asio;
 		private: boost::thread thread;
 		private: std::string baseiface;
 		private: bool kill;
-
-		// NTP settings
-		private: NtpConfig NtpCfg; // configuration variable
-		private: Response resp_list[NSTAGE];
-		private: int total;
-		private: int cursor = 0;
 
 		// Sync Uncertainty Calculation Class
 		private: SyncUncertainty sync_uncertainty;

@@ -401,11 +401,11 @@ void NTP18::Start(
 	last_clocksync_data_point.data_id = 0;
 
 	// Initialize Global Variable for Clock-Skew Statistics 
-	ntp_clocksync_data_point.offset  = 0;
-	ntp_clocksync_data_point.drift   = 0;
-	ntp_clocksync_data_point.data_id = 0;
+	ntp_clocksync_data_point[timelineid].offset  = 0;
+	ntp_clocksync_data_point[timelineid].drift   = 0;
+	ntp_clocksync_data_point[timelineid].data_id = 0;
 
-	thread = boost::thread(boost::bind(&NTP18::SyncThread, this, timelinesfd, timelines_size));
+	thread = boost::thread(boost::bind(&NTP18::SyncThread, this, timelineid, timelinesfd, timelines_size));
 }
 
 void NTP18::Stop()
@@ -416,12 +416,12 @@ void NTP18::Stop()
 }
 
 
-int NTP18::SyncThread(int *timelinesfd, uint16_t timelines_size)
+int NTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 {
-	BOOST_LOG_TRIVIAL(info) << "Sync thread started";
+	  BOOST_LOG_TRIVIAL(info) << "Sync thread started";
 
-	const char *conf_file = DEFAULT_CONF_FILE;
-    const char *progname = argv[0];
+	  const char *conf_file = DEFAULT_CONF_FILE;
+    const char *progname = "ntp";
     char *user = NULL, *log_file = NULL;
     struct passwd *pw;
     int opt, debug = 0, nofork = 0, address_family = IPADDR_UNSPEC;
@@ -460,7 +460,9 @@ int NTP18::SyncThread(int *timelinesfd, uint16_t timelines_size)
     write_pidfile();
 
     PRV_Initialise();
-    LCL_Initialise();
+    /* Next line added to initialize the timeline global clock 
+       Replaces LCL_Initialise() */
+    LCL_Initialise_GlobalTimeline(timelineid, timelinesfd);
     SCH_Initialise();
     SYS_Initialise(clock_control);
     RTC_Initialise(do_init_rtc);

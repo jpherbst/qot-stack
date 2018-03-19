@@ -46,6 +46,12 @@
 #include "addrfilt.h"
 #include "clientlog.h"
 
+/* QoT Types Header */
+#include "../../../../qot_types.h"
+
+/* Added for the QoT Stack */
+#include "../global_timeline.h"
+
 /* ================================================== */
 
 static LOG_FileID logfileid;
@@ -1386,6 +1392,29 @@ check_delay_dev_ratio(NCR_Instance inst, SST_Stats stats,
 
 /* ================================================== */
 
+// Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation
+qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
+
+#ifdef NTP_QOT_STACK
+/* QoT Stack function to project core time to timeline time */
+int clock_project_timeline(clockid_t clkid, struct timespec *ts, struct timespec *tml_ts)
+{
+  stimepoint_t utp; 
+
+  timepoint_from_timespec(&utp.estimate, ts);
+
+  int fd = CLOCKID_TO_FD(clkid);
+
+  if(ioctl(fd, TIMELINE_CORE_TO_REMOTE, &utp)){
+    return -1;
+  }
+
+  tml_ts->tv_sec = utp.estimate.sec;
+  tml_ts->tv_nsec= utp.estimate.asec / 1000000000ULL;
+  return 0;
+}
+#endif
+
 static int
 receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
                NTP_Local_Timestamp *rx_ts, NTP_Packet *message, int length)
@@ -1559,14 +1588,27 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
     if (delay < precision)
       delay = precision;
     
+    #ifndef NTP_QOT_STACK
     /* Calculate offset.  Following the NTP definition, this is negative
        if we are fast of the remote source. */
-    //offset = UTI_DiffTimespecsToDouble(&remote_average, &local_average);
+    offset = UTI_DiffTimespecsToDouble(&remote_average, &local_average);
+
+    #else
+
+    struct timespec local_receive_tml;  // Local Receive Timestamp projected to the global timeline reference
+
+    /* QoT Stack Project received timestamp to timeline reference */
+    if(clock_project_timeline(global_tmlclkid, &local_receive.ts, &local_receive_tml)){
+      printf("[T%i]: timeline projection failed", global_timelineid);
+      return QOT_RETURN_TYPE_ERR;
+    }
     
     /* QoT Stack -> Offset = -[local_rx - (remote_tx - round_trip_delay)/2] 
        Following the NTP definition, this is negative if we are fast of the remote source.*/
     
-    offset = -(UTI_DiffTimespecsToDouble(&local_receive.ts, &remote_transmit) - (delay/2));
+    offset = -(UTI_DiffTimespecsToDouble(&local_receive_tml, &remote_transmit) - (delay/2));
+
+    #endif
 
     /* Apply configured correction */
     offset += inst->offset_correction;
