@@ -35,6 +35,7 @@
 #include "ptp/PTP.hpp"
 #include "ptp/PTP18.hpp"
 #include "ntp/NTP.hpp"
+#include "ntp/NTP18.hpp"
 
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_IOCTL_BASE          "/dev"
