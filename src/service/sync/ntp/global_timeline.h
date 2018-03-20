@@ -35,6 +35,11 @@
 /* Flag to protect QoT Stack Code */
 #define NTP_QOT_STACK 1
 
+/* Definition for clock_adjtime which does not exist in headers */
+#ifndef ADJ_SETOFFSET
+#define ADJ_SETOFFSET 0x0100
+#endif
+
 /* Helper Macros */
 #define CLOCKFD 3
 #define FD_TO_CLOCKID(fd)	((~(clockid_t) (fd) << 3) | CLOCKFD)

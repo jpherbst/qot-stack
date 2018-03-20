@@ -260,7 +260,7 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
   state = NTP_ADJTIME(txc);
 #else
   /* Added for the QoT Stack */
-  if (txc->modes & MOD_SETOFFSET || txc->modes & MOD_FREQUENCY)
+  if (txc->modes & ADJ_SETOFFSET || txc->modes & ADJ_FREQUENCY)
     state = clock_adjtime(global_tmlclkid, txc);
   else
     state = 0;
