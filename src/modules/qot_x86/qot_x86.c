@@ -4,7 +4,7 @@
  * @author Sandeep D'souza
  *
  * Copyright (c) Carnegie Mellon University, 2017.
- *   All rights reserved.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -46,10 +46,10 @@
 #endif
 
 
-/* We are going to export the whol x86 as a PTP clock */
+/* We are going to export the Linux clock as a PTP clock */
 #include <linux/ptp_clock_kernel.h>
 
-/*QoT Core Clock Registration*/
+/* QoT Core Clock Registration */
 #include "../qot/qot_core.h"
 
 
