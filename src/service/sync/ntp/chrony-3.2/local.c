@@ -577,7 +577,7 @@ LCL_AccumulateOffset(double offset, double corr_rate)
   #ifdef NTP_QOT_STACK
   // Add Statistic for the QoT Uncertainty Service to process
   ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(offset);
-  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm); // Convert PPM to PPB
+  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm*1.0e3); // Convert PPM to PPB
   ntp_clocksync_data_point[global_timelineid].data_id++;
   #endif
 
@@ -672,7 +672,7 @@ LCL_AccumulateFrequencyAndOffset(double dfreq, double doffset, double corr_rate)
   #ifdef NTP_QOT_STACK
   // Add Statistic for the QoT Uncertainty Service to process
   ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(doffset);
-  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm); // Convert PPM to PPB
+  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm*1.0e3); // Convert PPM to PPB
   ntp_clocksync_data_point[global_timelineid].data_id++;
   #endif
 

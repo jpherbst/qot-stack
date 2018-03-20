@@ -419,7 +419,7 @@ void NTP18::Stop()
 
 int NTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 {
-	  BOOST_LOG_TRIVIAL(info) << "Sync thread started";
+	  BOOST_LOG_TRIVIAL(info) << "Sync thread started for timeline " << timelineid;
 
 	  const char *conf_file = DEFAULT_CONF_FILE;
     const char *progname = "ntp";

@@ -260,7 +260,13 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
   state = NTP_ADJTIME(txc);
 #else
   /* Added for the QoT Stack */
+  struct timespec ts;
+  printf("trying to read global clock\n");
+
+  clock_gettime(global_tmlclkid, &ts);
+  printf("%lld\n", (long long)ts.tv_sec);
   state = clock_adjtime(global_tmlclkid, txc);
+  printf("blah1 %d\n", state);
 #endif 
 
   if (state < 0) {

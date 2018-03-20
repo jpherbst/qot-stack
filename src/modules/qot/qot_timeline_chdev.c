@@ -566,6 +566,7 @@ static int qot_timeline_gl_chdev_adjtime(struct posix_clock *pc, struct timex *t
 {
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
     int err = -EOPNOTSUPP;
+    pr_info("timeline_chdev: trying to adjust the global clock\n");
     if (tx->modes & ADJ_SETOFFSET) {
         struct timespec ts;
         ktime_t kt;
