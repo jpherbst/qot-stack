@@ -63,6 +63,8 @@ qot_return_t qot_clock_gl_get_time(utimepoint_t *utp)
     now = clkgl_params.nsec + (ns - clkgl_params.last)
           + div_s64(clkgl_params.mult * (ns - clkgl_params.last),1000000000L); 
     TP_FROM_nSEC(utp->estimate, now);
+    TL_FROM_uSEC(utp->interval.below, 0);
+    TL_FROM_uSEC(utp->interval.above, 0);
     spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
 
     /* Calculate sync uncertainty */
