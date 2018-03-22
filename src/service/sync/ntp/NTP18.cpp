@@ -423,12 +423,12 @@ int NTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 
 	  const char *conf_file = DEFAULT_CONF_FILE;
     const char *progname = "ntp";
-    char *user = NULL, *log_file = NULL;
+    char *user = NULL, *log_file = "log.txt";
     struct passwd *pw;
-    int opt, debug = 0, nofork = 0, address_family = IPADDR_UNSPEC;
+    int opt, debug = 1, nofork = 1, address_family = IPADDR_INET4;//IPADDR_UNSPEC;
     int do_init_rtc = 0, restarted = 0, client_only = 0, timeout = 0;
     int scfilter_level = 0, lock_memory = 0, sched_priority = 0;
-    int clock_control = 1, system_log = 1;
+    int clock_control = 1, system_log = 0;
     int config_args = 0;
 
   	do_platform_checks();
@@ -453,6 +453,8 @@ int NTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
     DNS_SetAddressFamily(address_family);
 
     CNF_Initialise(restarted, client_only);
+
+    CNF_ReadFile(conf_file);
 
     /* Check whether another chronyd may already be running */
     check_pidfile();

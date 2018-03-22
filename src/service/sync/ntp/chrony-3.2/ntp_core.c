@@ -1605,6 +1605,8 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
     
     offset = -(UTI_DiffTimespecsToDouble(&local_receive_tml, &remote_transmit) - (delay/2));
 
+    printf("Offset = %f\n", offset);
+
     #endif
 
     /* Apply configured correction */
@@ -1723,11 +1725,6 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
   if ((unsigned int)local_receive.source >= sizeof (tss_chars) ||
       (unsigned int)local_transmit.source >= sizeof (tss_chars))
     assert(0);
-
-  printf("NTP packet lvm=%o stratum=%d poll=%d prec=%d root_delay=%f root_disp=%f refid=%"PRIx32" [%s]\n",
-            message->lvm, message->stratum, message->poll, message->precision,
-            pkt_root_delay, pkt_root_dispersion, pkt_refid,
-            message->stratum == NTP_INVALID_STRATUM ? UTI_RefidToString(pkt_refid) : "");
 
   DEBUG_LOG("NTP packet lvm=%o stratum=%d poll=%d prec=%d root_delay=%f root_disp=%f refid=%"PRIx32" [%s]",
             message->lvm, message->stratum, message->poll, message->precision,

@@ -317,7 +317,9 @@ NIO_Linux_Initialise(void)
     if (!strcmp("*", conf_iface->name))
       continue;
     if (!add_interface(conf_iface))
+    {
       LOG_FATAL("Could not enable HW timestamping on %s", conf_iface->name);
+    }
     hwts = 1;
   }
 

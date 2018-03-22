@@ -253,7 +253,6 @@ REF_Initialise(void)
       leap_tzname = NULL;
     }
   }
-
   CNF_GetMakeStep(&make_step_limit, &make_step_threshold);
   CNF_GetMaxChange(&max_offset_delay, &max_offset_ignore, &max_offset);
   CNF_GetMailOnChange(&do_mail_change, &mail_change_threshold, &mail_change_user);
