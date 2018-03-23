@@ -194,6 +194,12 @@ LCL_Initialise_GlobalTimeline(int timelineid, int *timelinesfd)
   global_timelinefd  = timelinesfd[0]; 
   global_tmlclkid    = FD_TO_CLOCKID(global_timelinefd);
 
+  struct timespec clk_rt_time, local_tl;
+  clock_gettime(CLOCK_REALTIME, &clk_rt_time);
+  clock_gettime(global_tmlclkid, &local_tl);
+  printf("CLOCK_REALTIME time      = %lld.%9llu\n", clk_rt_time.tv_sec, clk_rt_time.tv_nsec);
+  printf("Timeline time            = %lld.%9llu\n", local_tl.tv_sec, local_tl.tv_nsec);
+
   change_list.next = change_list.prev = &change_list;
 
   dispersion_notify_list.next = dispersion_notify_list.prev = &dispersion_notify_list;

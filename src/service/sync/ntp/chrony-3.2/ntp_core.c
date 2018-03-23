@@ -1394,7 +1394,7 @@ check_delay_dev_ratio(NCR_Instance inst, SST_Stats stats,
 
 #ifdef NTP_QOT_STACK
 /* QoT Stack function to project core time to timeline time */
-int clock_project_timeline(clockid_t clkid, struct timespec *ts, struct timespec *tml_ts)
+int clock_project_timeline_gl(clockid_t clkid, struct timespec *ts, struct timespec *tml_ts)
 {
   stimepoint_t utp; 
 
@@ -1595,22 +1595,22 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
     struct timespec local_receive_tml;  // Local Receive Timestamp projected to the global timeline reference
 
     /* QoT Stack Project received timestamp to timeline reference */
-    if(clock_project_timeline(global_tmlclkid, &local_receive.ts, &local_receive_tml)){
+    if(clock_project_timeline_gl(global_tmlclkid, &local_receive.ts, &local_receive_tml)){
       printf("[T%i]: timeline projection failed", global_timelineid);
       return QOT_RETURN_TYPE_ERR;
     }
     
     /* QoT Stack -> Offset = -[local_rx - (remote_tx - round_trip_delay)/2] 
-       Following the NTP definition, this is negative if we are fast of the remote source.*/
-    
+       Following the NTP definition, this is negative if we are fast of the remote source.*/  
     offset = -(UTI_DiffTimespecsToDouble(&local_receive_tml, &remote_transmit) - (delay/2));
 
-    printf("Offset = %f\n", offset);
+    printf("OffsetTimeline = %f\n", offset);
 
     #endif
 
     /* Apply configured correction */
     offset += inst->offset_correction;
+    printf("OffsetCorrected = %f\n", offset);
 
     /* We treat the time of the sample as being midway through the local
        measurement period.  An analysis assuming constant relative

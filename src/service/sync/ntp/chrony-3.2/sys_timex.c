@@ -260,9 +260,17 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
   state = NTP_ADJTIME(txc);
 #else
   /* Added for the QoT Stack */
-  printf("adjusting clock %d %d %d\n", txc->modes, ADJ_SETOFFSET, MOD_FREQUENCY);
   if (txc->modes & ADJ_SETOFFSET || txc->modes & MOD_FREQUENCY)
+  {
+    printf("adjusting clock %d %d %d\n", txc->modes, ADJ_SETOFFSET, MOD_FREQUENCY);
+    if (txc->modes & ADJ_SETOFFSET && txc->modes & ADJ_NANO)
+      printf("ADJ_NANO being used %lld.%9llu\n", txc->time.tv_sec, txc->time.tv_usec);
+    if (txc->modes & ADJ_SETOFFSET && txc->modes & ADJ_MICRO)
+      printf("ADJ_MICRO being used\n");
+    if (txc->modes & MOD_FREQUENCY)
+      printf("MOD_FREQUENCY being used %lld\n", txc->freq);
     state = clock_adjtime(global_tmlclkid, txc);
+  }
   else
     state = 0;
 #endif 

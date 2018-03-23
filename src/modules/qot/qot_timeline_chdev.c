@@ -573,7 +573,9 @@ static int qot_timeline_gl_chdev_adjtime(struct posix_clock *pc, struct timex *t
         ts.tv_sec = tx->time.tv_sec;
         ts.tv_nsec = tx->time.tv_usec;
         if (!(tx->modes & ADJ_NANO))
+        {
             ts.tv_nsec *= 1000;
+        }
         if ((unsigned long) ts.tv_nsec >= NSEC_PER_SEC)
             return -EINVAL;
         kt = timespec_to_ktime(ts);
@@ -589,6 +591,7 @@ static int qot_timeline_gl_chdev_adjtime(struct posix_clock *pc, struct timex *t
         tx->freq = timeline_impl->dialed_frequency;
         err = 0;
     }
+    qot_scheduler_update(timeline_impl->info);
     // Wakeup tasks waiting for timeline parameters updates
     wake_up_interruptible(&timeline_wait);
     return err;
@@ -758,6 +761,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             coretime = TP_TO_nSEC(stp.estimate);
             timelinetime = coretime;
             qot_gl_loc2rem(0, &timelinetime);
+            TP_FROM_nSEC(stp.estimate, timelinetime);
 
             /* Add Uncertainty */
             u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;

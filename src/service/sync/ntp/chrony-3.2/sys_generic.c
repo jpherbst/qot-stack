@@ -38,6 +38,9 @@
 #include "sched.h"
 #include "util.h"
 
+/* Added for the QoT Stack */
+#include "../global_timeline.h"
+
 /* ================================================== */
 
 /* System clock drivers */
@@ -332,10 +335,23 @@ apply_step_offset(double offset)
   UTI_AddDoubleToTimespec(&old_time, -offset, &new_time);
   UTI_TimespecToTimeval(&new_time, &new_time_tv);
 
+  #ifndef NTP_QOT_STACK
   if (PRV_SetTime(&new_time_tv, NULL) < 0) {
     DEBUG_LOG("settimeofday() failed");
     return 0;
   }
+  #else
+  /* Added for the QoT Stack */
+  struct timespec new_time_ts;
+  new_time_ts.tv_sec = new_time_tv.tv_sec;
+  new_time_ts.tv_nsec = new_time_tv.tv_usec*1000;
+  printf("Setting Global Timeline Clock to %lld.%9llu\n", new_time_ts.tv_sec, new_time_ts.tv_nsec);
+  if (clock_settime(global_tmlclkid, &new_time_ts) < 0) {
+    DEBUG_LOG("settimeofday() failed");
+    return 0;
+  }
+
+  #endif
 
   LCL_ReadRawTime(&old_time);
   err = UTI_DiffTimespecsToDouble(&old_time, &new_time);

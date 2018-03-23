@@ -46,10 +46,12 @@
 #include <linux/spinlock.h>
 #include <linux/signal.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 
 #include "qot_core.h"
 #include "qot_timeline.h"
 #include "qot_clock.h"
+#include "qot_clock_gl.h"
 
 // Core Time at which the interrupt will trigger a callback
 timepoint_t next_interrupt_callback = {MAX_TIMEPOINT_SEC, 0};
@@ -97,7 +99,10 @@ static timepoint_t qot_core_to_remote(timepoint_t core_time, struct qot_timeline
 {
     timepoint_t remote_time;
     s64 nsec_time = TP_TO_nSEC(core_time);
-    qot_loc2rem(timeline->index, 0, &nsec_time);
+    if(timeline->type == QOT_TIMELINE_LOCAL)
+        qot_loc2rem(timeline->index, 0, &nsec_time);
+    else
+        qot_gl_loc2rem(0, &nsec_time);
     TP_FROM_nSEC(remote_time, nsec_time);
     return remote_time;
 }
@@ -107,7 +112,10 @@ static timepoint_t qot_remote_to_core(timepoint_t remote_time, struct qot_timeli
 {
     timepoint_t core_time;
     s64 nsec_time = TP_TO_nSEC(remote_time);
-    qot_rem2loc(timeline->index, 0, &nsec_time);
+    if(timeline->type == QOT_TIMELINE_LOCAL)
+        qot_rem2loc(timeline->index, 0, &nsec_time);
+    else
+        qot_gl_rem2loc(0, &nsec_time);
     TP_FROM_nSEC(core_time, nsec_time);
     return core_time;
 }
