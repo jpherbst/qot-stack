@@ -1604,13 +1604,12 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
        Following the NTP definition, this is negative if we are fast of the remote source.*/  
     offset = -(UTI_DiffTimespecsToDouble(&local_receive_tml, &remote_transmit) - (delay/2));
 
-    printf("OffsetTimeline = %f\n", offset);
+    printf("[T%i]: fractional seconds offset = %f\n", global_timelineid, offset);
 
     #endif
 
     /* Apply configured correction */
     offset += inst->offset_correction;
-    printf("OffsetCorrected = %f\n", offset);
 
     /* We treat the time of the sample as being midway through the local
        measurement period.  An analysis assuming constant relative
