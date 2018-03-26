@@ -65,7 +65,6 @@ qot_return_t qot_clock_gl_get_time(utimepoint_t *utp)
     TP_FROM_nSEC(utp->estimate, now);
     TL_FROM_uSEC(utp->interval.below, 0);
     TL_FROM_uSEC(utp->interval.above, 0);
-    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
 
     /* Calculate sync uncertainty */
     u_timelinetime = div_s64(clkgl_params.u_mult*(ns - clkgl_params.last),1000000000L) + clkgl_params.u_nsec;
@@ -84,6 +83,7 @@ qot_return_t qot_clock_gl_get_time(utimepoint_t *utp)
     else
         TL_FROM_nSEC(sync_uncertainty.interval.below, 0);
 
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
     utimepoint_add(utp, &sync_uncertainty);
     /* Success */
     return QOT_RETURN_TYPE_OK;
@@ -165,19 +165,26 @@ qot_return_t qot_clock_gl_settime(timepoint_t tp)
 /* Set the global clock uncertainty */
 qot_return_t qot_clock_gl_set_uncertainty(qot_bounds_t bounds)
 {
+    unsigned long flags;
+    spin_lock_irqsave(&qot_clock_gl_lock, flags);
     clkgl_params.u_mult = (s32) bounds.u_drift; 
     clkgl_params.l_mult = (s32) bounds.l_drift; 
     clkgl_params.u_nsec = (s64) bounds.u_nsec;
     clkgl_params.l_nsec = (s64) bounds.l_nsec;
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);  
     return QOT_RETURN_TYPE_OK;
 }
 
 /* Get the global timeline mapping parameters */
 qot_return_t qot_clock_gl_get_params(tl_translation_t *params)
 {
+    unsigned long flags;
     if (!params)
         return QOT_RETURN_TYPE_ERR;
+
+    spin_lock_irqsave(&qot_clock_gl_lock, flags);
     *params = clkgl_params;
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);  
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -185,6 +192,8 @@ qot_return_t qot_clock_gl_get_params(tl_translation_t *params)
 /* Project from global clock to global timeline */
 qot_return_t qot_gl_loc2rem(int period, s64 *val)
 {
+    unsigned long flags;
+    spin_lock_irqsave(&qot_clock_gl_lock, flags);
     if (period)
         *val += div_s64(clkgl_params.mult * (*val), 1000000000L);
     else
@@ -192,6 +201,7 @@ qot_return_t qot_gl_loc2rem(int period, s64 *val)
         *val -= (s64) clkgl_params.last;
         *val  = clkgl_params.nsec + (*val) + div_s64(clkgl_params.mult * (*val), 1000000000L);
     }
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);  
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -199,6 +209,9 @@ qot_return_t qot_gl_loc2rem(int period, s64 *val)
 qot_return_t qot_gl_rem2loc(int period, s64 *val)
 {
     u32 rem;
+    unsigned long flags;
+    spin_lock_irqsave(&qot_clock_gl_lock, flags);
+
     if (period)
     {
         *val = (s64) div_u64_rem((u64)(*val), (u32) (clkgl_params.mult + 1000000000LL), &rem)*1000000000LL ; 
@@ -210,7 +223,7 @@ qot_return_t qot_gl_rem2loc(int period, s64 *val)
         u64 quot = div_u64_rem(diff, (u32)(clkgl_params.mult + 1000000000LL), &rem); 
         *val = clkgl_params.last + (s64)(quot * 1000000000ULL) + (s64) rem; 
     }
-
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);  
     return QOT_RETURN_TYPE_OK;
 }
 

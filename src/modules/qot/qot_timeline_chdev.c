@@ -311,9 +311,13 @@ qot_return_t qot_remove_binding_timer(int pid, qot_timeline_t *timeline)
 qot_return_t qot_loc2rem(int index, int period, s64 *val)
 {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
-    
+    unsigned long flags;
+    spin_lock_irqsave(&timeline_impl->lock, flags);
     if(timeline_impl == NULL)
+    {
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return QOT_RETURN_TYPE_ERR;
+    }
 
     if (period)
         *val += div_s64(timeline_impl->mult * (*val), 1000000000L);
@@ -322,6 +326,7 @@ qot_return_t qot_loc2rem(int index, int period, s64 *val)
         *val -= (s64) timeline_impl->last;
         *val  = timeline_impl->nsec + (*val) + div_s64(timeline_impl->mult * (*val), 1000000000L);
     }
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -329,8 +334,13 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
 {
     timeline_impl_t *timeline_impl = idr_find(&qot_timelines_map, index);
     u32 rem;
+    unsigned long flags;
+    spin_lock_irqsave(&timeline_impl->lock, flags);
     if(timeline_impl == NULL)
+    {
+        spin_unlock_irqrestore(&timeline_impl->lock, flags);
         return QOT_RETURN_TYPE_ERR;
+    }
 
     if (period)
     {
@@ -344,7 +354,7 @@ qot_return_t qot_rem2loc(int index, int period, s64 *val)
         u64 quot = div_u64_rem(diff, (u32)(timeline_impl->mult + 1000000000LL), &rem); // add u32 typecast, replace ULL with LL
         *val = timeline_impl->last + (s64)(quot * 1000000000ULL) + (s64) rem; // add s64 typecast think about removing
     }
-
+    spin_unlock_irqrestore(&timeline_impl->lock, flags);
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -626,6 +636,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     s64 loctime;
     binding_impl_t *binding_impl = NULL;
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
+    unsigned long flags;
 
     utimelength_t sync_uncertainty; 
     qot_timer_t timer;
@@ -725,10 +736,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             return -EACCES;
         if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
         {
+            spin_lock_irqsave(&timeline_impl->lock, flags);
             timeline_impl->u_mult = (s32) bounds.u_drift; 
             timeline_impl->l_mult = (s32) bounds.l_drift; 
             timeline_impl->u_nsec = (s64) bounds.u_nsec;
             timeline_impl->l_nsec = (s64) bounds.l_nsec;
+            spin_unlock_irqrestore(&timeline_impl->lock, flags);
         }
         else
         {
@@ -748,10 +761,12 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             qot_loc2rem(timeline_impl->index, 0, &timelinetime);
             TP_FROM_nSEC(stp.estimate, timelinetime);
 
+            spin_lock_irqsave(&timeline_impl->lock, flags);
             /* Add Uncertainty */
             u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
             l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
 
+            spin_unlock_irqrestore(&timeline_impl->lock, flags);
             TP_FROM_nSEC(stp.u_estimate, u_timelinetime);
             TP_FROM_nSEC(stp.l_estimate, l_timelinetime);
         }
@@ -830,10 +845,13 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             qot_loc2rem(timeline_impl->index, 0, &timelinetime); 
             TP_FROM_nSEC(utp.estimate, timelinetime); 
 
+            spin_lock_irqsave(&timeline_impl->lock, flags);
+
             /* Calculate sync uncertainty */
             u_timelinetime = timelinetime + div_s64(timeline_impl->u_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->u_nsec;
             l_timelinetime = timelinetime + div_s64(timeline_impl->l_mult*(coretime - timeline_impl->last),1000000000L) + timeline_impl->l_nsec;
 
+            spin_unlock_irqrestore(&timeline_impl->lock, flags);
             sync_uncertainty.estimate.sec = 0;
             sync_uncertainty.estimate.asec = 0;
 
@@ -895,6 +913,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
     case TIMELINE_GET_PARAMETERS:
         if (timeline_impl->info->type == QOT_TIMELINE_LOCAL)
         {
+            spin_lock_irqsave(&timeline_impl->lock, flags);
             timeline_params.last   = timeline_impl->last;                            /* Discipline: last cycle count of     */
             timeline_params.mult   = timeline_impl->mult;                            /* Discipline: ppb multiplier          */
             timeline_params.nsec   = timeline_impl->nsec;                            /* Discipline: global time offset      */
@@ -902,6 +921,7 @@ static long qot_timeline_chdev_ioctl(struct posix_clock *pc, unsigned int cmd, u
             timeline_params.l_nsec = timeline_impl->l_nsec;                          /* Discipline: global time for master  */
             timeline_params.u_mult = timeline_impl->u_mult;                          /* Discipline: upper bound on ppb      */
             timeline_params.l_mult = timeline_impl->l_mult;                          /* Discipline: lower bound on ppb      */
+            spin_unlock_irqrestore(&timeline_impl->lock, flags);
         }
         else
         {
