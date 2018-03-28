@@ -2224,8 +2224,10 @@ NCR_ProcessTxUnknown(NTP_Remote_Address *remote_addr, NTP_Local_Address *local_a
 void
 NCR_SlewTimes(NCR_Instance inst, struct timespec *when, double dfreq, double doffset)
 {
+  #ifndef NTP_QOT_STACK
   double delta;
-  /* QoT Stack -> This code may have to be removed */
+  /* QoT Stack -> Not sure if this needs to be removed, but as timestamps are in CLOCK_REALTIME 
+                  and we are not modifying it, we don't need to slew the timestamps*/
   if (!UTI_IsZeroTimespec(&inst->local_rx.ts))
     UTI_AdjustTimespec(&inst->local_rx.ts, when, &inst->local_rx.ts, &delta, dfreq, doffset);
   if (!UTI_IsZeroTimespec(&inst->local_tx.ts))
@@ -2233,6 +2235,7 @@ NCR_SlewTimes(NCR_Instance inst, struct timespec *when, double dfreq, double dof
   if (!UTI_IsZeroTimespec(&inst->prev_local_tx.ts))
     UTI_AdjustTimespec(&inst->prev_local_tx.ts, when, &inst->prev_local_tx.ts, &delta, dfreq,
                        doffset);
+  #endif
 }
 
 /* ================================================== */
