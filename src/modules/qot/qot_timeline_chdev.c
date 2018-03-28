@@ -545,7 +545,8 @@ static int qot_timeline_gl_chdev_settime(struct posix_clock *pc,
     timepoint_t tp;    
     timeline_impl_t *timeline_impl = container_of(pc,timeline_impl_t,clock);
 
-    timepoint_from_timespec(&tp, (struct timespec*)ts);
+    tp.sec  = ts->tv_sec;
+    tp.asec = ts->tv_nsec*nSEC_PER_SEC;
     if (qot_clock_gl_settime(tp));
     {
         return 1;

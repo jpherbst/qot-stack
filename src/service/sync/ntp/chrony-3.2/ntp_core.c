@@ -1600,7 +1600,7 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
       return QOT_RETURN_TYPE_ERR;
     }
     
-    /* QoT Stack -> Offset = -[local_rx - (remote_tx - round_trip_delay)/2] 
+    /* QoT Stack -> Offset = -[local_rx - remote_tx - (round_trip_delay)/2] 
        Following the NTP definition, this is negative if we are fast of the remote source.*/  
     offset = -(UTI_DiffTimespecsToDouble(&local_receive_tml, &remote_transmit) - (delay/2));
 
@@ -1676,7 +1676,7 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
   /* The packet is considered good for synchronisation if
      the additional tests passed */
   good_packet = testA && testB && testC && testD;
-
+  
   root_delay = pkt_root_delay + delay;
   root_dispersion = pkt_root_dispersion + dispersion;
   distance = dispersion + 0.5 * delay;
@@ -1754,7 +1754,6 @@ receive_packet(NCR_Instance inst, NTP_Local_Address *local_addr,
     inst->tx_count = 0;
 
     SRC_UpdateReachability(inst->source, synced_packet);
-
     if (good_packet) {
       /* Do this before we accumulate a new sample into the stats registers, obviously */
       estimated_offset = SST_PredictOffset(stats, &sample_time);
@@ -2226,14 +2225,15 @@ void
 NCR_SlewTimes(NCR_Instance inst, struct timespec *when, double dfreq, double doffset)
 {
   double delta;
+  //printf("slewing time dfreq = %f doffset = %f\n", dfreq, doffset);
 
-  if (!UTI_IsZeroTimespec(&inst->local_rx.ts))
-    UTI_AdjustTimespec(&inst->local_rx.ts, when, &inst->local_rx.ts, &delta, dfreq, doffset);
-  if (!UTI_IsZeroTimespec(&inst->local_tx.ts))
-    UTI_AdjustTimespec(&inst->local_tx.ts, when, &inst->local_tx.ts, &delta, dfreq, doffset);
-  if (!UTI_IsZeroTimespec(&inst->prev_local_tx.ts))
-    UTI_AdjustTimespec(&inst->prev_local_tx.ts, when, &inst->prev_local_tx.ts, &delta, dfreq,
-                       doffset);
+  // if (!UTI_IsZeroTimespec(&inst->local_rx.ts))
+  //   UTI_AdjustTimespec(&inst->local_rx.ts, when, &inst->local_rx.ts, &delta, dfreq, doffset);
+  // if (!UTI_IsZeroTimespec(&inst->local_tx.ts))
+  //   UTI_AdjustTimespec(&inst->local_tx.ts, when, &inst->local_tx.ts, &delta, dfreq, doffset);
+  // if (!UTI_IsZeroTimespec(&inst->prev_local_tx.ts))
+  //   UTI_AdjustTimespec(&inst->prev_local_tx.ts, when, &inst->prev_local_tx.ts, &delta, dfreq,
+  //                      doffset);
 }
 
 /* ================================================== */

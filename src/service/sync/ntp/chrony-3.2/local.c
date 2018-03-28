@@ -194,12 +194,6 @@ LCL_Initialise_GlobalTimeline(int timelineid, int *timelinesfd)
   global_timelinefd  = timelinesfd[0]; 
   global_tmlclkid    = FD_TO_CLOCKID(global_timelinefd);
 
-  struct timespec clk_rt_time, local_tl;
-  clock_gettime(CLOCK_REALTIME, &clk_rt_time);
-  clock_gettime(global_tmlclkid, &local_tl);
-  printf("CLOCK_REALTIME time      = %lld.%9llu\n", clk_rt_time.tv_sec, clk_rt_time.tv_nsec);
-  printf("Timeline time            = %lld.%9llu\n", local_tl.tv_sec, local_tl.tv_nsec);
-
   change_list.next = change_list.prev = &change_list;
 
   dispersion_notify_list.next = dispersion_notify_list.prev = &dispersion_notify_list;
@@ -404,16 +398,8 @@ void
 LCL_ReadRawTime(struct timespec *ts)
 {
 #if HAVE_CLOCK_GETTIME
-  #ifndef NTP_QOT_STACK
   if (clock_gettime(CLOCK_REALTIME, ts) < 0)
     LOG_FATAL("clock_gettime() failed : %s", strerror(errno));
-  #else
-  /* Added for the QoT Stack 
-     -> Changed from CLOCK_REALTIME to the global timeline 
-     Note: The stack should always be compiled with HAVE_CLOCK_GETTIME */
-  if (clock_gettime(global_tmlclkid, ts) < 0)
-    LOG_FATAL("clock_gettime() failed : %s", strerror(errno));
-  #endif
 #else
   struct timeval tv;
 

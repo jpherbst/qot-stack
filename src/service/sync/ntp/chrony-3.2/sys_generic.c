@@ -340,17 +340,15 @@ apply_step_offset(double offset)
     DEBUG_LOG("settimeofday() failed");
     return 0;
   }
+  printf("setting CLOCK_REALTIME\n");
   #else
-  /* Added for the QoT Stack */
-  struct timespec new_time_ts;
-  new_time_ts.tv_sec = new_time_tv.tv_sec;
-  new_time_ts.tv_nsec = new_time_tv.tv_usec*1000;
-  printf("Setting Global Timeline Clock to %lld.%9llu\n", new_time_ts.tv_sec, new_time_ts.tv_nsec);
-  if (clock_settime(global_tmlclkid, &new_time_ts) < 0) {
+  if (clock_settime(global_tmlclkid, &new_time) < 0) {
     DEBUG_LOG("settimeofday() failed");
     return 0;
   }
-
+  else {
+    printf("[T%i] set clock to %lld.%9llu\n", global_timelineid, new_time.tv_sec, new_time.tv_nsec);
+  }
   #endif
 
   LCL_ReadRawTime(&old_time);

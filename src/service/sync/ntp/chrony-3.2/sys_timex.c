@@ -267,7 +267,6 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
     if (txc->modes & MOD_FREQUENCY)
     {
       printf("[T%i]: frequency being adjusted %lld\n", global_timelineid, txc->freq);
-      //txc->freq = -1*txc->freq;
     }
     state = clock_adjtime(global_tmlclkid, txc);
   }

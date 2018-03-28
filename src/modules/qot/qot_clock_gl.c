@@ -70,6 +70,8 @@ qot_return_t qot_clock_gl_get_time(utimepoint_t *utp)
     u_timelinetime = div_s64(clkgl_params.u_mult*(ns - clkgl_params.last),1000000000L) + clkgl_params.u_nsec;
     l_timelinetime = div_s64(clkgl_params.l_mult*(ns - clkgl_params.last),1000000000L) + clkgl_params.l_nsec;
 
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
+    
     sync_uncertainty.estimate.sec = 0;
     sync_uncertainty.estimate.asec = 0;
 
@@ -83,7 +85,6 @@ qot_return_t qot_clock_gl_get_time(utimepoint_t *utp)
     else
         TL_FROM_nSEC(sync_uncertainty.interval.below, 0);
 
-    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
     utimepoint_add(utp, &sync_uncertainty);
     /* Success */
     return QOT_RETURN_TYPE_OK;
@@ -158,7 +159,7 @@ qot_return_t qot_clock_gl_settime(timepoint_t tp)
     ns = TP_TO_nSEC(now_tp);
     clkgl_params.last = ns;
     clkgl_params.nsec = TP_TO_nSEC(tp);
-    spin_unlock_irqrestore(&qot_clock_gl_lock, flags);    
+    spin_unlock_irqrestore(&qot_clock_gl_lock, flags); 
     return 0;
 }
 
