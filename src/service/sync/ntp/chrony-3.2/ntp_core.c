@@ -2225,15 +2225,14 @@ void
 NCR_SlewTimes(NCR_Instance inst, struct timespec *when, double dfreq, double doffset)
 {
   double delta;
-  //printf("slewing time dfreq = %f doffset = %f\n", dfreq, doffset);
-
-  // if (!UTI_IsZeroTimespec(&inst->local_rx.ts))
-  //   UTI_AdjustTimespec(&inst->local_rx.ts, when, &inst->local_rx.ts, &delta, dfreq, doffset);
-  // if (!UTI_IsZeroTimespec(&inst->local_tx.ts))
-  //   UTI_AdjustTimespec(&inst->local_tx.ts, when, &inst->local_tx.ts, &delta, dfreq, doffset);
-  // if (!UTI_IsZeroTimespec(&inst->prev_local_tx.ts))
-  //   UTI_AdjustTimespec(&inst->prev_local_tx.ts, when, &inst->prev_local_tx.ts, &delta, dfreq,
-  //                      doffset);
+  /* QoT Stack -> This code may have to be removed */
+  if (!UTI_IsZeroTimespec(&inst->local_rx.ts))
+    UTI_AdjustTimespec(&inst->local_rx.ts, when, &inst->local_rx.ts, &delta, dfreq, doffset);
+  if (!UTI_IsZeroTimespec(&inst->local_tx.ts))
+    UTI_AdjustTimespec(&inst->local_tx.ts, when, &inst->local_tx.ts, &delta, dfreq, doffset);
+  if (!UTI_IsZeroTimespec(&inst->prev_local_tx.ts))
+    UTI_AdjustTimespec(&inst->prev_local_tx.ts, when, &inst->prev_local_tx.ts, &delta, dfreq,
+                       doffset);
 }
 
 /* ================================================== */
