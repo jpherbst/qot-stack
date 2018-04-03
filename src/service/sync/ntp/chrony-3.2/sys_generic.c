@@ -331,17 +331,19 @@ apply_step_offset(double offset)
   struct timeval new_time_tv;
   double err;
 
+  #ifndef NTP_QOT_STACK
   LCL_ReadRawTime(&old_time);
   UTI_AddDoubleToTimespec(&old_time, -offset, &new_time);
   UTI_TimespecToTimeval(&new_time, &new_time_tv);
-
-  #ifndef NTP_QOT_STACK
   if (PRV_SetTime(&new_time_tv, NULL) < 0) {
     DEBUG_LOG("settimeofday() failed");
     return 0;
   }
   printf("setting CLOCK_REALTIME\n");
   #else
+  clock_gettime(global_tmlclkid, &old_time);
+  UTI_AddDoubleToTimespec(&old_time, -offset, &new_time);
+  UTI_TimespecToTimeval(&new_time, &new_time_tv);
   if (clock_settime(global_tmlclkid, &new_time) < 0) {
     DEBUG_LOG("settimeofday() failed");
     return 0;

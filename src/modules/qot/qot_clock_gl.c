@@ -121,6 +121,7 @@ qot_return_t qot_clock_gl_adjfreq(s32 ppb)
     clkgl_params.last = ns;
     clkgl_params.mult = (s64) ppb; 
     spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
+    pr_info("qot_clock_gl: Frequency adjusted to %ld\n", ppb);
     return QOT_RETURN_TYPE_OK;
 }
 
@@ -139,6 +140,7 @@ qot_return_t qot_clock_gl_adjtime(s64 delta)
     ns = TP_TO_nSEC(tp);
     clkgl_params.nsec += delta; 
     spin_unlock_irqrestore(&qot_clock_gl_lock, flags);
+    pr_info("qot_clock_gl: Offset added %lld\n", delta);
     return QOT_RETURN_TYPE_OK;
 }
 

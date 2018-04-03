@@ -1059,7 +1059,7 @@ REF_SetReference(int stratum,
     our_skew = skew1 + skew2;
 
     our_residual_freq = new_freq - our_frequency;
-
+    
     LCL_AccumulateFrequencyAndOffset(our_frequency, accumulate_offset, correction_rate);
     
   } else {
@@ -1069,6 +1069,11 @@ REF_SetReference(int stratum,
 
     our_residual_freq = frequency;
   }
+
+  #ifdef NTP_QOT_STACK
+  // Add Statistic for the QoT Uncertainty Service to process
+  LCL_SetUncertainty(our_frequency, accumulate_offset);
+  #endif
 
   update_leap_status(leap, raw_now.tv_sec, 0);
   maybe_log_offset(our_offset, raw_now.tv_sec);

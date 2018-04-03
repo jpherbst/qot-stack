@@ -194,6 +194,15 @@ LCL_Initialise_GlobalTimeline(int timelineid, int *timelinesfd)
   global_timelinefd  = timelinesfd[0]; 
   global_tmlclkid    = FD_TO_CLOCKID(global_timelinefd);
 
+  struct timespec now, tl_now;
+
+  clock_gettime(CLOCK_REALTIME, &now);
+  clock_gettime(global_tmlclkid, &tl_now);
+
+  printf("Initial Clock Status .....\n");
+  printf("CLOCK_REALTIME %lld.%9llu\n", now.tv_sec, now.tv_nsec);
+  printf("TIMELINE_TIME  %lld.%9llu\n", tl_now.tv_sec, tl_now.tv_nsec);
+
   change_list.next = change_list.prev = &change_list;
 
   dispersion_notify_list.next = dispersion_notify_list.prev = &dispersion_notify_list;
@@ -566,13 +575,6 @@ LCL_AccumulateOffset(double offset, double corr_rate)
   if (!check_offset(&cooked, offset))
       return;
 
-  #ifdef NTP_QOT_STACK
-  // Add Statistic for the QoT Uncertainty Service to process
-  ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(offset);
-  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm*1.0e3); // Convert PPM to PPB
-  ntp_clocksync_data_point[global_timelineid].data_id++;
-  #endif
-
   (*drv_accrue_offset)(offset, corr_rate);
 
   /* Dispatch to all handlers */
@@ -660,13 +662,6 @@ LCL_AccumulateFrequencyAndOffset(double dfreq, double doffset, double corr_rate)
    are handled in units of ppm, whereas the 'dfreq' argument is in
    terms of the gradient of the (offset) v (local time) function. */
   current_freq_ppm += dfreq * (1.0e6 - current_freq_ppm);
-
-  #ifdef NTP_QOT_STACK
-  // Add Statistic for the QoT Uncertainty Service to process
-  ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(doffset);
-  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(current_freq_ppm*1.0e3); // Convert PPM to PPB
-  ntp_clocksync_data_point[global_timelineid].data_id++;
-  #endif
 
   current_freq_ppm = clamp_freq(current_freq_ppm);
 
@@ -803,3 +798,15 @@ LCL_SetSyncStatus(int synchronised, double est_error, double max_error)
 }
 
 /* ================================================== */
+
+#ifdef NTP_QOT_STACK
+void LCL_SetUncertainty(double dfreq, double offset)
+{
+  double freq_ppm;
+  freq_ppm = current_freq_ppm + dfreq * (1.0e6 - current_freq_ppm);
+  // Add Statistic for the QoT Uncertainty Service to process
+  ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(offset*1.0e9);
+  ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(freq_ppm*1.0e3); // Convert PPM to PPB
+  ntp_clocksync_data_point[global_timelineid].data_id++;
+}
+#endif

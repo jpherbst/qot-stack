@@ -263,10 +263,10 @@ SYS_Timex_Adjust(struct timex *txc, int ignore_error)
   if (txc->modes & ADJ_SETOFFSET || txc->modes & MOD_FREQUENCY)
   {
     if (txc->modes & ADJ_SETOFFSET)
-      printf("[T%i]: offset being adjusted %lld.%9llu\n", global_timelineid, txc->time.tv_sec, txc->time.tv_usec);
+      printf("[T%i]: offset being adjusted %ld.%9ld\n", global_timelineid, txc->time.tv_sec, txc->time.tv_usec);
     if (txc->modes & MOD_FREQUENCY)
     {
-      printf("[T%i]: frequency being adjusted %lld\n", global_timelineid, txc->freq);
+      printf("[T%i]: frequency being adjusted %ld\n", global_timelineid, txc->freq);
     }
     state = clock_adjtime(global_tmlclkid, txc);
   }
