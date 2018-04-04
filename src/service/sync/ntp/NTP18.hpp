@@ -99,9 +99,13 @@ namespace qot
 		// This thread performs the actual syncrhonization
 		private: int SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size);
 
+		// This thread computes the synchronization uncertainty
+		private: int UncertaintyThread(int timelineid, int *timelinesfd, uint16_t timelines_size);
+
 		// Boost ASIO
 		private: boost::asio::io_service *asio;
-		private: boost::thread thread;
+		private: boost::thread sync_thread;
+		private: boost::thread uncertainty_thread;
 		private: std::string baseiface;
 		private: bool kill;
 
@@ -109,8 +113,7 @@ namespace qot
 		private: SyncUncertainty sync_uncertainty;
 
 		// Last Received Clock-Sync Skew Statistic Data Point
-		private: qot_stat_t last_clocksync_data_point;
-
+        private: qot_stat_t last_clocksync_data_point;
 	};
 }
 

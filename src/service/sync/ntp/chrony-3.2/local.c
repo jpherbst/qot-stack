@@ -41,6 +41,7 @@
 #include "logging.h"
 
 /* Added for the QoT Stack */
+#include <pthread.h>
 #include "../global_timeline.h"
 
 /* ================================================== */
@@ -560,6 +561,7 @@ LCL_AccumulateDeltaFrequency(double dfreq)
 /* ================================================== */
 /* Global Variable for Sharing Computed Clock Statistic from Sync to Uncertainty Calculation */
 qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
+qot_stat_t last_clocksync_data_point[MAX_TIMELINES];
 
 void
 LCL_AccumulateOffset(double offset, double corr_rate)
@@ -800,13 +802,24 @@ LCL_SetSyncStatus(int synchronised, double est_error, double max_error)
 /* ================================================== */
 
 #ifdef NTP_QOT_STACK
+/* Uncertainty lock and condition variable */
+pthread_mutex_t uncertainty_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t uncertainty_condvar = PTHREAD_COND_INITIALIZER;
+
 void LCL_SetUncertainty(double dfreq, double offset)
 {
   double freq_ppm;
   freq_ppm = current_freq_ppm + dfreq * (1.0e6 - current_freq_ppm);
+
+  pthread_mutex_lock(&uncertainty_lock);
   // Add Statistic for the QoT Uncertainty Service to process
   ntp_clocksync_data_point[global_timelineid].offset = (int64_t)ceil(offset*1.0e9);
   ntp_clocksync_data_point[global_timelineid].drift = (int64_t)ceil(freq_ppm*1.0e3); // Convert PPM to PPB
   ntp_clocksync_data_point[global_timelineid].data_id++;
+
+  // SIgnal the NTP18 uncertainty thread that a new data poin has been added
+  pthread_cond_signal(&uncertainty_condvar);
+
+  pthread_mutex_unlock(&uncertainty_lock);
 }
 #endif

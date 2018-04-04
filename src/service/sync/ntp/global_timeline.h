@@ -1,6 +1,6 @@
 /*
  * @file qot.h
- * @brief Global Variable to Share Global Timeline Clock (Header)
+ * @brief Global Variables to Share Global Timeline Clock (Header)
  * @author Sandeep D'souza
  *
  * Copyright (c) Carnegie Mellon University, 2018.

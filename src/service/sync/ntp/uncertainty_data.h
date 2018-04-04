@@ -32,8 +32,17 @@
 
 #include "../../../qot_types.h"
 
-// Clock Statistics Data Point -> variable defined in chrony-3.2/ntp_core.c
+extern "C"
+{
+	#include <pthread.h>
+}
+
+// Clock Statistics Data Point -> variable defined in chrony-3.2/local.c
 extern qot_stat_t ntp_clocksync_data_point[MAX_TIMELINES];
+
+extern pthread_mutex_t uncertainty_lock;
+
+extern pthread_cond_t uncertainty_condvar;
 
 #endif
 

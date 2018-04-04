@@ -114,11 +114,14 @@ MAI_CleanupAndExit(void)
 
 /* ================================================== */
 
+static int need_to_exit_prog = 0;
+
 static void
 signal_cleanup(int x)
 {
   if (!initialised) exit(0);
   SCH_QuitProgram();
+  need_to_exit_prog = 1;
 }
 
 /* ================================================== */
@@ -405,7 +408,10 @@ void NTP18::Start(
 	ntp_clocksync_data_point[timelineid].drift   = 0;
 	ntp_clocksync_data_point[timelineid].data_id = 0;
 
-	thread = boost::thread(boost::bind(&NTP18::SyncThread, this, timelineid, timelinesfd, timelines_size));
+	// Spawn the sync and uncertainty threads
+  sync_thread = boost::thread(boost::bind(&NTP18::SyncThread, this, timelineid, timelinesfd, timelines_size));
+  uncertainty_thread = boost::thread(boost::bind(&NTP18::UncertaintyThread, this, timelineid, timelinesfd, timelines_size));
+
 }
 
 void NTP18::Stop()
@@ -413,7 +419,8 @@ void NTP18::Stop()
 	BOOST_LOG_TRIVIAL(info) << "Stopping NTP synchronization ";
   SCH_QuitProgram();
 	kill = true;
-	thread.join();
+  uncertainty_thread.join();
+	sync_thread.join();
 }
 
 
@@ -550,4 +557,30 @@ int NTP18::SyncThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
 
     return 0;
 	
+}
+
+int NTP18::UncertaintyThread(int timelineid, int *timelinesfd, uint16_t timelines_size)
+{
+    BOOST_LOG_TRIVIAL(info) << "Sync Uncertainty thread started for timeline " << timelineid;
+
+    while (!need_to_exit_prog && !kill)
+    {
+      pthread_mutex_lock(&uncertainty_lock);
+
+      // Check if a new data point has been added
+      while(last_clocksync_data_point.data_id == ntp_clocksync_data_point[timelineid].data_id)
+        pthread_cond_wait(&uncertainty_condvar, &uncertainty_lock);
+
+      // Check if a new skew statistic data point has been added
+      if(last_clocksync_data_point.data_id < ntp_clocksync_data_point[timelineid].data_id)
+      {
+        // New statistic received -> Replace old value
+        last_clocksync_data_point = ntp_clocksync_data_point[timelineid];
+
+        // Add Synchronization Uncertainty Sample
+        sync_uncertainty.CalculateBounds(last_clocksync_data_point.offset, ((double)last_clocksync_data_point.drift)/1000000000LL, timelinesfd[0]);
+      }
+      pthread_mutex_unlock(&uncertainty_lock);
+    }
+    return 0;
 }
