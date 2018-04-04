@@ -37,6 +37,9 @@
 #include "local.h"
 #include "sched.h"
 
+/* Added for the QoT Stack */
+#include "../global_timeline.h"
+
 /* ================================================== */
 
 /* The minimum allowed skew */
@@ -1059,7 +1062,7 @@ REF_SetReference(int stratum,
     our_skew = skew1 + skew2;
 
     our_residual_freq = new_freq - our_frequency;
-    
+  
     LCL_AccumulateFrequencyAndOffset(our_frequency, accumulate_offset, correction_rate);
     
   } else {
