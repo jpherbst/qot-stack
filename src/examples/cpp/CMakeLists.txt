@@ -10,6 +10,12 @@ ADD_EXECUTABLE(helloworld_pubsub
 )
 TARGET_LINK_LIBRARIES(helloworld_pubsub qot_cpp)
 
+# Simple application to demonstrate how to use the cluster bind functionality
+ADD_EXECUTABLE(helloworld_cluster
+ 	helloworld_cluster.cpp
+)
+TARGET_LINK_LIBRARIES(helloworld_cluster qot_cpp)
+
 # Robot Coordination edge node 
 ADD_EXECUTABLE(edge_coordination
  	edge_coordination.cpp
@@ -62,6 +68,7 @@ INSTALL(
 		quad_robot_master
 		quad_robot1
 		quad_robot2
+		helloworld_cluster
 		#helloworld_capture 
 		#helloworld_compare 
 	DESTINATION 

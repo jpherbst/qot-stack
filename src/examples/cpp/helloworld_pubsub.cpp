@@ -136,6 +136,32 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Set topic type
+    int global_flag = 0; // Default local topic
+    if (argc > 4)
+    {
+    	if (strcmp (argv[4], "global") == 0)
+        {
+        	global_flag = 1;
+        	std::cout << "Global Topic selected\n";
+        }
+        else if (strcmp (argv[4], "local") == 0)
+        {
+        	pub_flag = 0;
+        	std::cout << "Local Topic Selected\n";
+        }
+        else if (strcmp (argv[4], "gopt") == 0)
+        {
+        	pub_flag = 2;
+        	std::cout << "Global Optimized Topic Selected\n";
+        }
+        else
+        {
+        	std::cout << "Invalid Role, enter either global, local or gopt\n";
+        	return -1;
+        }
+    }
+
     signal(SIGINT, exit_handler);
 
 	// Initialize stepsize
@@ -179,41 +205,57 @@ int main(int argc, char *argv[])
 	{
 		/* Run a Periodic Publisher */
 		// Setup a publisher -> passing the topic name, topic type, node name and timeline uuid
-		Publisher publisher("test", TOPIC_LOCAL, std::string(m), std::string(u));
-
-		// Populate the messaging structure
-		strcpy(message.name, m);
-		message.type = QOT_MSG_DATA;
-		message.timestamp = wake_now;
-		strcpy(message.data, "Test Message !");
-
-		// Run Periodic Publisher
-		while(running)
+		try
 		{
-			if(timeline_gettime(my_timeline, &est_now))
+			Publisher publisher("test", (qot::TopicType) global_flag, std::string(m), std::string(u));
+
+			// Populate the messaging structure
+			strcpy(message.name, m);
+			message.type = QOT_MSG_DATA;
+			message.timestamp = wake_now;
+			strcpy(message.data, "Test Message !");
+
+			// Run Periodic Publisher
+			while(running)
 			{
-				printf("Could not read timeline reference time\n");
-				goto exit_point;
+				if(timeline_gettime(my_timeline, &est_now))
+				{
+					printf("Could not read timeline reference time\n");
+					goto exit_point;
+				}
+				else
+				{
+					std::cout << "Publishing Message\n";
+					publisher.Publish(message);
+				}
+				timepoint_add(&wake, &step_size);
+				wake_now.estimate = wake;
+				timeline_waituntil(my_timeline, &wake_now);
 			}
-			else
-			{
-				std::cout << "Publishing Message\n";
-				publisher.Publish(message);
-			}
-			timepoint_add(&wake, &step_size);
-			wake_now.estimate = wake;
-			timeline_waituntil(my_timeline, &wake_now);
+		}
+		catch (int e)
+		{
+			std::cout << "Caught exception no. " << e << " while creating publisher\n";
+			return -1;
 		}
 	}
 	else
 	{
 		/* Run an asynchronous Subscriber */
 		// Setup a publisher -> passing the topic name, topic type, timeline uuid and messaging handler
-		Subscriber subscriber("test", TOPIC_LOCAL, std::string(u), messaging_handler);
+		try
+		{
+			Subscriber subscriber("test", (qot::TopicType) global_flag, std::string(u), messaging_handler);
 		
-		// Busy Loop till termination
-		while (running)
-			sleep(1);
+			// Busy Loop till termination
+			while (running)
+				sleep(1);
+		}
+		catch (int e)
+		{
+			std::cout << "Caught exception no. " << e << " while creating subscriber\n";
+			return -1;
+		}
 	}
 
 /** DESTROY TIMELINE **/

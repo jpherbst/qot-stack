@@ -87,11 +87,11 @@ namespace qot
 		private: boost::asio::deadline_timer timer;
 
 		// Coordinator state
-		private: int counter_;   // count # heartbeats since start
-		private: int lastcount_; // counter_ value at last time I saw msg from current master
-		private: int tml_id_;    // timeline id, as in /dev/timeline[tml_id_]
-		private: int timelinefd; // fd for timeline character device
-		//private: PTP sync;
+		private: int counter_;   					// count # heartbeats since start
+		private: int lastcount_; 					// counter_ value at last time I saw msg from current master
+		private: int tml_id_;    					// timeline id, as in /dev/timeline[tml_id_]
+		private: int timelinefd; 					// fd for timeline character device
+		private: qot_timeline_type_t tl_type;		// timeline type
 
 		// Join the DDS domain to exchange information about timelines
 		private: dds::domain::DomainParticipant dp;
@@ -102,6 +102,12 @@ namespace qot
 		private: dds::sub::DataReader<qot_msgs::TimelineType> dr;
 		private: qot_msgs::TimelineType timeline;
 
+		// Networking Variables
+		private: boost::asio::io_service *io;		// IO service
+		private: std::string address;				// IP address of the node
+	    private: std::string iface;					// Interface type
+
+	    // Clock Sync Class
 		private: boost::shared_ptr<Sync> sync;
 	};
 }

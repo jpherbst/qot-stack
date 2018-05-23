@@ -24,10 +24,14 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * The code in this file is an adaptation of the ISO C++ DCPS API BuiltinTopics example from Opensplice DDS  
+ * The code in this file is an adaptation of the ISO C++ DCPS API BuiltinTopics example from Opensplice DDS 
+ * Note: When a topic, publisher or subscriber is created we "read" the data,
+ *       and when they are destroyed we "take" the available data  
  *
  */
 #include "Broker.hpp"
+#include "Handlers.hpp"
+#include "ZookeeperInterface.hpp"
 
 #include <iostream>
 #include <string>
@@ -42,6 +46,9 @@ std::vector<NodeInfo> nodes;
 
 /* Vector of Discovered Topics */
 std::vector<TopicInfo> topics;
+
+/* Map of Discovered Timelines */
+std::map<std::string, TimelineInfo> timelines;
 
 /* NodeInfo Class Constructor */
 NodeInfo::NodeInfo(const DDS::ParticipantBuiltinTopicData& participantData)
@@ -80,8 +87,52 @@ NodeInfo& getNodeInfo(const DDS::ParticipantBuiltinTopicData& participantData)
     return nodes.back();
 }
 
+/* TimelineInfo Class Constructor */
+TimelineInfo::TimelineInfo(const std::string& timelineUUID)
+    : timeline_uuid(timelineUUID)
+{
+    // Empty Constructor
+    return;
+}
+
+/* Get the Timeline UUID */
+std::string TimelineInfo::getTimelineUUID()
+{
+    return timeline_uuid;
+}
+
+/* Add a timeline */
+int addTimeline(std::string timeline_uuid)
+{
+    if(timelines.find(timeline_uuid) != timelines.end())
+    {
+        std::cout << "Timeline "<< timeline_uuid << " already exists" << std::endl;
+        return -1;
+    }
+    TimelineInfo Info(timeline_uuid);
+    timelines.emplace(timeline_uuid, Info);
+    zk_timeline_create(timeline_uuid.c_str());
+    return 0;
+}
+
+/* Remove a timeline */
+int removeTimeline(std::string timeline_uuid)
+{
+    std::map<std::string, TimelineInfo>::iterator it;
+    it = timelines.find(timeline_uuid);
+    if(it == timelines.end())
+    {
+        std::cout << "Timeline "<< timeline_uuid << " does not exists" << std::endl;
+        return -1;
+    }
+    timelines.erase(it);
+    zk_timeline_delete(timeline_uuid.c_str());
+    return 0;
+}
+
 /* TopicInfo Class Constructor */
 TopicInfo::TopicInfo(const DDS::TopicBuiltinTopicData& topicData)
+    : timeline_uuid("default_tlname") // Set this default name until the first publisher arrives
 {
     topicID_ = topicData.key[0];
     topicName_ = topicData.name;
@@ -99,27 +150,69 @@ int32_t TopicInfo::getTopicID()
     return topicID_;
 }
 
-/* Add a subscriber */
-int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID)
+/* Get the Timeline UUID */
+std::string TopicInfo::getTimelineUUID()
 {
+    return timeline_uuid;
+}
+
+/* Set the Timeline UUID */
+void TopicInfo::setTimelineUUID(std::string& uuid)
+{
+    timeline_uuid = uuid;
+}
+
+/* Add a subscriber */
+int TopicInfo::addSubscriber(int32_t participant_ID, int32_t dr_ID, std::string timelineUUID)
+{
+    topic_mtx.lock();
     if(subscribers.find(dr_ID) != subscribers.end())
     {
         std::cout << "Subscriber "<< dr_ID << " already exists for this topic" << std::endl;
+        topic_mtx.unlock();
         return -1;
     }
     subscribers[dr_ID] = participant_ID;
+    
+    /* Add the Timeline Name to the Class if needed */
+    if (timeline_uuid.compare("default_tlname") == 0)
+    {
+        timeline_uuid = timelineUUID;
+        /* Create the relevant timeline and topic nodes as this is the first publisher/subscriber on the timeline */
+        zk_timeline_create(timelineUUID.c_str());
+        zk_topic_create(timelineUUID.c_str(), topicName_.c_str());
+    }
+    topic_mtx.unlock();
+
+    /* Create the relevant zookeeper nodes */
+    zk_subscriber_create(timelineUUID.c_str(), topicName_.c_str(), std::to_string(dr_ID).c_str());
     return 0;
 }
 
 /* Add a publisher */
-int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID)
+int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID, std::string timelineUUID)
 {
+    topic_mtx.lock();
     if(publishers.find(dw_ID) != publishers.end())
     {
         std::cout << "Publisher "<< dw_ID << " already exists for this topic" << std::endl;
+        topic_mtx.unlock();
         return -1;
     }
     publishers[dw_ID] = participant_ID;
+
+    /* Add the Timeline Name to the Class if needed */
+    if (timeline_uuid.compare("default_tlname") == 0)
+    {
+        timeline_uuid = timelineUUID;
+        /* Create the relevant timeline and topic nodes as this is the first publisher/subscriber on the timeline */
+        zk_timeline_create(timelineUUID.c_str());
+        zk_topic_create(timelineUUID.c_str(), topicName_.c_str());
+    }
+
+    topic_mtx.unlock();
+    /* Create the relevant zookeeper nodes */
+    zk_publisher_create(timelineUUID.c_str(), topicName_.c_str(), std::to_string(dw_ID).c_str());
     return 0;
 }
 
@@ -127,13 +220,19 @@ int TopicInfo::addPublisher(int32_t participant_ID, int32_t dw_ID)
 int TopicInfo::removeSubscriber(int32_t participant_ID, int32_t dr_ID)
 {
     std::map<int32_t, int32_t>::iterator it;
+    topic_mtx.lock();
     it = subscribers.find(dr_ID);
-    if(it != subscribers.end())
+    if(it == subscribers.end())
     {
         std::cout << "Subscriber "<< dr_ID <<  " does not exist for this topic" << std::endl;
+        topic_mtx.unlock();
         return -1;
     }
     subscribers.erase(it);
+
+    /* Delete the relevant zookeeper nodes */
+    zk_subscriber_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(dr_ID).c_str());
+    topic_mtx.unlock();
     return 0;
 }
 
@@ -141,15 +240,57 @@ int TopicInfo::removeSubscriber(int32_t participant_ID, int32_t dr_ID)
 int TopicInfo::removePublisher(int32_t participant_ID, int32_t dw_ID)
 {
     std::map<int32_t, int32_t>::iterator it;
+    topic_mtx.lock();
     it = publishers.find(dw_ID);
-    if(it != publishers.end())
+    if(it == publishers.end())
     {
         std::cout << "Publisher "<< dw_ID << " does not exist for this topic" << std::endl;
+        topic_mtx.unlock();
         return -1;
     }
     publishers.erase(it);
+    /* Delete the relevant zookeeper nodes */
+    zk_publisher_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(dw_ID).c_str());
+    topic_mtx.unlock();
     return 0;
 }
+
+/* Remove all the publishers and subscribers under the topic */
+void TopicInfo::deleteTopicPubSubNodes()
+{
+    topic_mtx.lock();
+    for(auto it = publishers.cbegin(); it != publishers.cend();)
+    {
+        /* Delete the relevant zookeeper nodes */
+        zk_publisher_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(it->first).c_str());
+        publishers.erase(it++);
+    }
+
+    for(auto it = subscribers.cbegin(); it != subscribers.cend();)
+    {
+        /* Delete the relevant zookeeper nodes */
+        zk_subscriber_delete(timeline_uuid.c_str(), topicName_.c_str(), std::to_string(it->first).c_str());
+        subscribers.erase(it++);
+    }
+    topic_mtx.unlock();
+}
+
+/**
+ * Check if a topic is a "global" topic
+ *
+ * @param topicData The TopicBuiltinTopicData of the node
+ * @return bool indicating success/failure
+ */
+ bool checkTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
+ {
+    std::string topicName_(topicData.name);
+    std::size_t pos_gl = topicName_.find("gl_");
+    std::size_t pos_go = topicName_.find("go_");
+
+    if (pos_gl == 0 || pos_go == 0)
+        return true;
+    return false;
+ }
 
 /**
  * Finds a topic with an ID obtained from the TopicBuiltinTopicData, updates the
@@ -177,6 +318,34 @@ TopicInfo& getTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
 }
 
 /**
+ * Finds a topic with an ID obtained from the TopicBuiltinTopicData
+ * If a node is found then it is removed from the vector, and destroyed.
+ *
+ * @param topicData The TopicBuiltinTopicData of the node
+ * @return The found/created node
+ */
+bool deleteTopicInfo(const DDS::TopicBuiltinTopicData& topicData)
+{
+    /** Find and return the node if it already exists */
+    for(std::vector<TopicInfo>::iterator it = topics.begin(); it < topics.end(); it++)
+    {
+        if(it->getTopicID() == topicData.key[0])
+        {
+            /* Delete all the publishers and subscribers before attempting to delete the topic */
+            it->deleteTopicPubSubNodes();
+            /* Delete the corresponding zookeeper node */
+            zk_topic_delete(it->getTimelineUUID().c_str(), it->getTopicName().c_str());
+            /* If the topic is found erase the topic and return true */
+            topics.erase(it);
+            return true;
+        }
+    }
+
+    /** Return false if the node does not exist */
+    return false;
+}
+
+/**
  * Finds a topic with a name obtained from the PublicationBuiltinTopicData, updates the
  * hostname and returns the node. If no node is found then a new one is created and returned.
  *
@@ -188,7 +357,7 @@ TopicInfo* getPublicationTopicInfo(const DDS::PublicationBuiltinTopicData& publi
     /** Find and return the node if it already exists */
     for(std::vector<TopicInfo>::iterator it = topics.begin(); it < topics.end(); it++)
     {
-        if(it->getTopicName().compare(publisherData.topic_name) != 0)
+        if(it->getTopicName().compare(publisherData.topic_name) == 0)
         {
             /* If the topic is found return the topic */
             return &(*it);
@@ -209,7 +378,7 @@ TopicInfo* getSubscriptionTopicInfo(const DDS::SubscriptionBuiltinTopicData& sub
     /** Find and return the node if it already exists */
     for(std::vector<TopicInfo>::iterator it = topics.begin(); it < topics.end(); it++)
     {
-        if(it->getTopicName().compare(subscriberData.topic_name) != 0)
+        if(it->getTopicName().compare(subscriberData.topic_name) == 0)
         {
             /* If the topic is found return the topic */
             return &(*it);
@@ -224,8 +393,12 @@ Broker::Broker()
 {
     std::cout << "Pub Sub Broker starting up\n";
 
+    EscapeHandler escapeHandler(terminated);
+    escape.handler(escapeHandler);
+
     // We can now start polling, because the broker is setup
-    participant_thread = boost::thread(boost::bind(&Broker::ParticipantThread, this));
+    //participant_thread = boost::thread(boost::bind(&Broker::ParticipantThread, this));
+    timeline_thread = boost::thread(boost::bind(&Broker::TimelineThread, this));
     topic_thread = boost::thread(boost::bind(&Broker::TopicThread, this));
     publisher_thread = boost::thread(boost::bind(&Broker::PublisherThread, this));
     subscriber_thread = boost::thread(boost::bind(&Broker::SubscriberThread, this));
@@ -236,16 +409,127 @@ Broker::~Broker()
     // Kill all broker threads and wait for them to join before destroying the class
     std::cout << "Pub Sub Broker being destroyed\n";
     this->kill = true;
-    this->participant_thread.join();
+    escape.trigger_value(true);
+    //this->participant_thread.join();
+    this->timeline_thread.join();
     this->topic_thread.join();
     this->publisher_thread.join();
     this->subscriber_thread.join();
 }
 
+/* Callback Function for handling new timeline */
+void newTimelineCallback(dds::sub::DataReader<qot_msgs::TimelineType>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<qot_msgs::TimelineType> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<qot_msgs::TimelineType>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            // Create and add the new timeline
+            int status = addTimeline((std::string) sample->data().uuid()); 
+            if (!status)
+            {
+                std::cout << "=== [Timeline Thread] New Timeline " << (std::string) sample->data().uuid() << " detected\n";
+            }
+        }
+    }
+}
+
+/* Callback Function for handling timeline deletion */
+void deletedTimelineCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<qot_msgs::TimelineType>& topicReader
+        = (dds::sub::DataReader<qot_msgs::TimelineType>&)e;
+
+    dds::sub::LoanedSamples<qot_msgs::TimelineType> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<qot_msgs::TimelineType>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            int status = removeTimeline((std::string) sample->data().uuid()); 
+            if (!status)
+            {
+                std::cout << "=== [Timeline Thread] Timeline " << (std::string) sample->data().uuid() << " deleted\n";
+            } 
+        }
+    }
+}
+
+/* Timeline Thread */
+void Broker::TimelineThread()
+{
+    std::cout << "Polling for timelines" << std::endl;
+
+    /* Get the ParticipantBuiltinTopicDataReader */
+    std::string topicName = "timeline";
+    
+    /* Create a Data Writer for the timeline topic */
+    dds::sub::Subscriber sub(dp);
+    dds::topic::Topic<qot_msgs::TimelineType> topic(dp, topicName);
+    dds::sub::DataReader<qot_msgs::TimelineType> timelineReader(sub, topic);
+
+    /* Make sure all historical data is delivered in the DataReader */
+    timelineReader.wait_for_historical_data(dds::core::Duration::infinite());
+
+    std::cout << "=== [Timeline Thread] Done" << std::endl;
+
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
+
+    /* Create the Handler for new data */
+    ReadTimelineHandler newDataHandler(newTimelineCallback, newDataState);
+
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(timelineReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedTimelineCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(timelineReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
+    dds::core::cond::WaitSet waitSet;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
+    waitSet += escape;
+
+    std::cout << "=== [Timeline Thread] Ready ..." << std::endl;
+
+    bool done = false;
+    // Start polling
+    while (!this->kill && !done)
+    {
+        /* Block the current thread until the attached condition becomes
+        *  true or the user interrupts.
+        */
+        try
+        {
+            /* Dispatch Waitset */
+            waitSet.dispatch();
+        }
+        catch(...)
+        {
+            done = true;
+        }
+    }
+}
+
 /* Participant Thread */
 void Broker::ParticipantThread()
 {
-    // Wait until the main thread sets up the binding and posix clock
     std::cout << "Polling for participants" << std::endl;
 
     /** Get the ParticipantBuiltinTopicDataReader */
@@ -278,6 +562,7 @@ void Broker::ParticipantThread()
     /* Create a WaitSet and attach the ReadCondition created above */
     dds::core::cond::WaitSet waitSet;
     waitSet += readCond;
+    waitSet += escape;
 
     std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
 
@@ -379,10 +664,64 @@ void Broker::ParticipantThread()
     }
 }
 
+/* Callback Function for handling new topics */
+void newTopicCallback(dds::sub::DataReader<DDS::TopicBuiltinTopicData>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            /* Check if a topic is designated as global or global optimized */
+            bool status = checkTopicInfo(sample->data());
+
+            if (status)
+            {
+                TopicInfo& topicInfo = getTopicInfo(sample->data());
+
+            
+                std::cout << "=== [Topic BuiltInTopics Thread] Created Topic '"
+                                    << topicInfo.getTopicID() << "' name: "
+                                    << topicInfo.getTopicName() << std::endl;
+            }  
+        }
+    }
+}
+
+/* Callback Function for handling topic deletion */
+void deletedTopicCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<DDS::TopicBuiltinTopicData>& topicReader
+        = (dds::sub::DataReader<DDS::TopicBuiltinTopicData>&)e;
+
+    dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            /* Check if a topic is designated as global or global optimized */
+            bool found = checkTopicInfo(sample->data());
+
+            if (found)
+            {
+                bool status = deleteTopicInfo(sample->data());
+
+                int32_t topicID_ = sample->data().key[0];                         
+                std::string topicName_(sample->data().name);     
+                
+                std::cout << "=== [Topic BuiltInTopics Thread] Destroyed Topic '"
+                                    << topicID_ << "' name: "
+                                    << topicName_ << std::endl;
+            }
+        }
+    }
+}
+
 /* Topic Thread */
 void Broker::TopicThread()
 {
-    // Wait until the main thread sets up the binding and posix clock
     std::cout << "Polling for topics" << std::endl;
 
     std::string topicName = "DCPSTopic";
@@ -401,55 +740,57 @@ void Broker::TopicThread()
         throw "Could not get TopicBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Topic BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     topicReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    std::cout << "=== [Topic BuiltInTopics Thread] Done" << std::endl;
 
-    /* Create a new ReadCondition for the reader that matches all samples.*/
-    dds::sub::cond::ReadCondition readCond(topicReader, dds::sub::status::DataState::any());
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
 
-    /* Create a WaitSet and attach the ReadCondition created above */
+    /* Create the Handler for new data */
+    ReadTopicHandler newDataHandler(newTopicCallback, newDataState);
+
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(topicReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedTopicCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(topicReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
     dds::core::cond::WaitSet waitSet;
-    waitSet += readCond;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
+    waitSet += escape;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
-
-    /*
-    * Block the current thread until the attached condition becomes true
-    * or the user interrupts.
-    */
-    waitSet.wait();
+    std::cout << "=== [Topic BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
     while (!this->kill && !done)
     {
-        dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData> samples = topicReader.take();
-        for (dds::sub::LoanedSamples<DDS::TopicBuiltinTopicData>::const_iterator sample = samples.begin();
-            sample < samples.end(); ++sample)
-        {
-            if(sample->info().valid())
-            {
-                TopicInfo& topicInfo = getTopicInfo(sample->data());
-
-                
-                std::cout << "=== [BuiltInTopicsDataSubscriber] Topic '"
-                                    << topicInfo.getTopicID() << "' name: "
-                                    << topicInfo.getTopicName() << std::endl;
-                   
-            }
-        }
-   
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
         try
         {
-            waitSet.wait();
+            /* Dispatch Waitset */
+            waitSet.dispatch();
         }
         catch(...)
         {
@@ -458,10 +799,62 @@ void Broker::TopicThread()
     }
 }
 
+/* Callback Function for handling new publishers */
+void newPubCallback(dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
+
+            // Check if the topic is relevant (global or global optimized) to be shared
+            if(topicInfo)
+            {
+                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher "
+                                << topicInfo->getTopicID() << " added on Topic "
+                                << topicInfo->getTopicName() << " on Timeline " 
+                                << sample->data().partition.name[0]<< std::endl;
+
+                topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0], sample->data().partition.name[0]); 
+            }    
+               
+        }
+    }
+}
+
+/* Callback Function for handling publisher deletion */
+void deletedPubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<DDS::PublicationBuiltinTopicData>& topicReader
+        = (dds::sub::DataReader<DDS::PublicationBuiltinTopicData>&)e;
+
+    dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
+
+            // Check if the topic is relevant (global or global optimized) to be shared
+            if(topicInfo)
+            {
+                std::cout << "=== [Publisher BuiltInTopics Thread] Publisher removed on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->removePublisher(sample->data().participant_key[0], sample->data().key[0]); 
+            }  
+        }
+    }
+}
+
+
 /* Publisher Thread */
 void Broker::PublisherThread()
 {
-    // Wait until the main thread sets up the binding and posix clock
     std::cout << "Polling for publishers" << std::endl;
 
     std::string topicName = "DCPSPublication";
@@ -480,57 +873,57 @@ void Broker::PublisherThread()
         throw "Could not get PublicationBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Publisher BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     publisherReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    std::cout << "=== [Publisher BuiltInTopics Thread] Done" << std::endl;
 
-    /* Create a new ReadCondition for the reader that matches all samples.*/
-    dds::sub::cond::ReadCondition readCond(publisherReader, dds::sub::status::DataState::any());
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
 
-    /* Create a WaitSet and attach the ReadCondition created above */
+    /* Create the Handler for new data */
+    ReadPublisherHandler newDataHandler(newPubCallback, newDataState);
+
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(publisherReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedPubCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(publisherReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
     dds::core::cond::WaitSet waitSet;
-    waitSet += readCond;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
+    waitSet += escape;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
-
-    /*
-    * Block the current thread until the attached condition becomes true
-    * or the user interrupts.
-    */
-    waitSet.wait();
+    std::cout << "=== [Publisher BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
     while (!this->kill && !done)
     {
-        dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData> samples = publisherReader.take();
-        for (dds::sub::LoanedSamples<DDS::PublicationBuiltinTopicData>::const_iterator sample = samples.begin();
-            sample < samples.end(); ++sample)
-        {
-            if(sample->info().valid())
-            {
-                TopicInfo* topicInfo = getPublicationTopicInfo(sample->data());
-
-                if(topicInfo)
-                {
-                    std::cout << "=== [BuiltInTopicsDataSubscriber] Topic '"
-                                    << topicInfo->getTopicID() << "' name: "
-                                    << topicInfo->getTopicName() << std::endl;
-                    topicInfo->addPublisher(sample->data().participant_key[0], sample->data().key[0]); 
-                }     
-            }
-        }
-   
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
         try
         {
-            waitSet.wait();
+            /* Dispatch Waitset */
+            waitSet.dispatch();
         }
         catch(...)
         {
@@ -539,10 +932,61 @@ void Broker::PublisherThread()
     }
 }
 
+/* Callback Function for handling new publishers */
+void newSubCallback(dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& topicReader, dds::sub::status::DataState& dataState)
+{
+    dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = topicReader.select().state(dataState).read();
+    for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
+
+            // Check if the topic is relevant (global or global optimized) to be shared
+            if(topicInfo)
+            {
+                std::cout << "=== [Subscriber BuiltInTopics Thread] Subscriber "
+                                << topicInfo->getTopicID() << " added on Topic "
+                                << topicInfo->getTopicName() << " on Timeline " 
+                                << sample->data().partition.name[0]<< std::endl;
+
+                topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0], sample->data().partition.name[0]);
+            }    
+               
+        }
+    }
+}
+
+/* Callback Function for handling publisher deletion */
+void deletedSubCallback(dds::core::Entity& e, dds::sub::status::DataState& dataState)
+{
+    dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>& topicReader
+        = (dds::sub::DataReader<DDS::SubscriptionBuiltinTopicData>&)e;
+
+    dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = topicReader.select().state(dataState).take();
+    for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
+        sample < samples.end(); ++sample)
+    {
+        if(sample->info().valid())
+        {
+            TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
+
+            // Check if the topic is relevant (global or global optimized) to be shared
+            if(topicInfo)
+            {
+                std::cout << "=== [Subscriber BuiltInTopics Thread] Subsciber removed on Topic '"
+                                << topicInfo->getTopicID() << "' name: "
+                                << topicInfo->getTopicName() << std::endl;
+                topicInfo->removeSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
+            }  
+        }
+    }
+}
+
 /* Participant Thread */
 void Broker::SubscriberThread()
 {
-    // Wait until the main thread sets up the binding and posix clock
     std::cout << "Polling for subscribers" << std::endl;
     
     std::string topicName = "DCPSSubscription";
@@ -561,57 +1005,55 @@ void Broker::SubscriberThread()
         throw "Could not get SubscriptionBuiltinTopicDataReader";
     }
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting for historical data ... " << std::endl;
+    std::cout << "=== [Subsciber BuiltInTopics Thread] Waiting for historical data ... " << std::endl;
 
     /* Make sure all historical data is delivered in the DataReader */
     subscriberReader.wait_for_historical_data(dds::core::Duration::infinite());
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Done" << std::endl;
+    /* Specify the state to look for new data */
+    dds::sub::status::DataState newDataState;
+    newDataState << dds::sub::status::SampleState::not_read()
+            << dds::sub::status::ViewState::new_view()
+            << dds::sub::status::InstanceState::alive();
 
-    /* Create a new ReadCondition for the reader that matches all samples.*/
-    dds::sub::cond::ReadCondition readCond(subscriberReader, dds::sub::status::DataState::any());
+    /* Create the Handler for new data */
+    ReadSubscriberHandler newDataHandler(newSubCallback, newDataState);
 
-    /* Create a WaitSet and attach the ReadCondition created above */
+    /* Create a new ReadCondition for the new data reader */
+    dds::sub::cond::ReadCondition dataNewCond(subscriberReader, newDataState, newDataHandler);
+    
+    /* Specify the state to look for deleted data */
+    dds::sub::status::DataState notAliveDataState;
+    notAliveDataState << dds::sub::status::SampleState::any()
+            << dds::sub::status::ViewState::any()
+            << dds::sub::status::InstanceState::not_alive_mask();
+
+    /* Create the Handler for deleted data */
+    DeletionHandler deletedDataHandler(deletedSubCallback, notAliveDataState);
+
+    /* Create a new StatusCondition for the deleted data reader */
+    dds::core::cond::StatusCondition dataDeletedCond(subscriberReader, deletedDataHandler);
+    dataDeletedCond.enabled_statuses(dds::core::status::StatusMask::data_available());
+
+    /* Create a WaitSet and attach the ReadCondition (s) created above */
     dds::core::cond::WaitSet waitSet;
-    waitSet += readCond;
+    waitSet += dataDeletedCond;
+    waitSet += dataNewCond;
+    waitSet += escape;
 
-    std::cout << "=== [BuiltInTopicsDataSubscriber] Ready ..." << std::endl;
-
-    /*
-    * Block the current thread until the attached condition becomes true
-    * or the user interrupts.
-    */
-    waitSet.wait();
+    std::cout << "=== [Subsciber BuiltInTopics Thread] Ready ..." << std::endl;
 
     bool done = false;
     // Start polling
     while (!this->kill && !done)
     {
-        dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData> samples = subscriberReader.take();
-        for (dds::sub::LoanedSamples<DDS::SubscriptionBuiltinTopicData>::const_iterator sample = samples.begin();
-            sample < samples.end(); ++sample)
-        {
-            if(sample->info().valid())
-            {
-                TopicInfo* topicInfo = getSubscriptionTopicInfo(sample->data());
-
-                if(topicInfo)
-                {
-                    std::cout << "=== [BuiltInTopicsDataSubscriber] Topic '"
-                                    << topicInfo->getTopicID() << "' name: "
-                                    << topicInfo->getTopicName() << std::endl;
-                    topicInfo->addSubscriber(sample->data().participant_key[0], sample->data().key[0]); 
-                }     
-            }
-        }
-   
         /* Block the current thread until the attached condition becomes
         *  true or the user interrupts.
         */
-        std::cout << "=== [BuiltInTopicsDataSubscriber] Waiting ... " << std::endl;
         try
         {
-            waitSet.wait();
+            /* Dispatch Waitset */
+            waitSet.dispatch();
         }
         catch(...)
         {
@@ -634,13 +1076,20 @@ static void exit_handler(int s)
 int main(int argc, char *argv[])
 {
     int result = 0;
-    bool automatic = true;
-    if (argc > 1)
-    {
-        automatic = !(strcmp(argv[1], "false") == 0);
+    if (argc != 3) {
+        /* host:port -> comma separate list of host:port pairs of zookeeper ensemble
+           lan_name  -> unique name of the lan which the edge broker is representing*/
+        fprintf(stderr, "USAGE: %s host:port lan_name\n", argv[0]);
+        exit(1);
     }
 
-    // Install SIGINT Signal Handler for exit
+    /* Set Terminated FLag to False */
+    terminated = false;
+
+    /* Initialize the zookeeper client -> copy over the argc and argv values */
+    init_zk_logic (argc, argv);
+
+    /* Install SIGINT Signal Handler for exit */
     signal(SIGINT, exit_handler);
 
     try

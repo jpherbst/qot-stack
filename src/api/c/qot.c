@@ -94,11 +94,21 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
 {
     char qot_timeline_filename[15];
     int usr_file;
-    
+    char *gl_start;
 
-    // Check to make sure the UUID is valid
+    // Check to make sure the UUID and Name is valid
+    if (uuid == NULL || name == NULL)
+        return QOT_RETURN_TYPE_ERR;
+
     if (strlen(uuid) > QOT_MAX_NAMELEN)
         return QOT_RETURN_TYPE_ERR;
+
+    // Check to find whether the timeline type is global (first three characters should be "gl_")
+    gl_start = strstr(uuid, GLOBAL_TL_STRING);
+    if(gl_start == uuid)
+        timeline->info.type = QOT_TIMELINE_GLOBAL;
+    else
+        timeline->info.type = QOT_TIMELINE_LOCAL; // Default to Local
 
     // Open the QoT Core
     if (DEBUG) 

@@ -40,6 +40,7 @@
 #include "qot_timeline.h"
 #include "qot_scheduler.h"
 #include "qot_clock.h"
+#include "qot_clock_gl.h"
 
 #define DEVICE_NAME "qotusr"
 
@@ -227,30 +228,6 @@ static qot_return_t qot_perout_notify(qot_perout_t *perout, timepoint_t *event_c
     con->event_flag = 1;
     raw_spin_unlock_irqrestore(&con->list_lock, flags);
     wake_up_interruptible(&con->wq);
-
-    // period = TL_TO_nSEC(perout->period);
-    // start = TP_TO_nSEC(perout->start);
-
-    // qot_clock_get_core_time_raw(&current_core_time);
-    // current_time = TP_TO_nSEC(current_core_time);
-    // qot_loc2rem(perout->timeline.index, 0, &current_time);
-
-    // if(current_time > start)
-    // {
-    //     num_periods = div64_s64(current_time - start, period);
-    //     start = (num_periods+1)*period - current_time;
-
-    //     qot_rem2loc(perout->timeline.index, 1, &start);
-    //     *core_start = start;
-    //     //*core_period = period;
-    //     return QOT_RETURN_TYPE_OK;
-    // }
-    // else
-    // {
-    //     qot_rem2loc(perout->timeline.index, 1, &start);
-    //     *core_start = start;
-    //     return QOT_RETURN_TYPE_ERR;
-    // }
     
     return QOT_RETURN_TYPE_OK;
 }
@@ -404,20 +381,25 @@ static long qot_user_chdev_ioctl_access(struct file *f, unsigned int cmd,
         if (copy_from_user(&sleeper, (qot_sleeper_t*)arg, sizeof(qot_sleeper_t)))
             return -EACCES;
         timeline = &sleeper.timeline;
-        //pr_info("blah::%llu\n", TP_TO_nSEC(sleeper.wait_until_time.estimate));
-        //pr_info("chek::%lld %llu\n", sleeper.wait_until_time.estimate.sec, sleeper.wait_until_time.estimate.asec);
 
         // Check if the timeline exists
         if (qot_timeline_get_info(&timeline))
             return -EACCES;
         // Wait until the required time
         wait_until_retval = qot_attosleep(&sleeper.wait_until_time, timeline);
-        qot_clock_get_core_time(&sleeper.wait_until_time);
-        // convert from core time to timeline reference of time
-        coretime = TP_TO_nSEC(sleeper.wait_until_time.estimate);
-        qot_loc2rem(timeline->index, 0, &coretime);
-        TP_FROM_nSEC(sleeper.wait_until_time.estimate, coretime);
 
+        if(timeline->type == QOT_TIMELINE_LOCAL)
+        {
+            qot_clock_get_core_time(&sleeper.wait_until_time);
+            // convert from core time to timeline reference of time
+            coretime = TP_TO_nSEC(sleeper.wait_until_time.estimate);
+            qot_loc2rem(timeline->index, 0, &coretime);
+            TP_FROM_nSEC(sleeper.wait_until_time.estimate, coretime);
+        }
+        else
+        {
+            qot_clock_gl_get_time(&sleeper.wait_until_time);
+        }
         /* Send the time at which the node woke up back to user */
         if (copy_to_user((qot_sleeper_t*)arg, &sleeper, sizeof(qot_sleeper_t)))
             return -EACCES;

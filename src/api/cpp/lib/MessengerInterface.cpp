@@ -30,11 +30,13 @@
 
 #include "messenger.hpp"
 
+/* Create the Messenger Object */
 messenger_t create_messenger(const char *name, const char *uuid) 
 {
     return static_cast<messenger_t>(new qot::Messenger(std::string(name), std::string(uuid)));
 }
 
+/* Destroy the Messenger Object */
 void delete_messenger(messenger_t messenger) 
 {
     // Add try catch exception logic
@@ -42,6 +44,7 @@ void delete_messenger(messenger_t messenger)
     delete typed_obj;
 }
 
+/* Publish a Message */
 qot_return_t publish_message(messenger_t messenger, qot_message_t msg) 
 {
     qot_return_t retval;
@@ -50,7 +53,7 @@ qot_return_t publish_message(messenger_t messenger, qot_message_t msg)
     return retval;
 }
 
-/* Subscribe Message*/
+/* Subscribe to Messages */
 qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_type_t> &MsgTypes, qot_msg_callback_t callback)
 {
     qot_return_t retval;
@@ -59,6 +62,7 @@ qot_return_t subscribe_message(messenger_t messenger, const std::set<qot_msg_typ
     return retval;
 }
 
+/* Define the core cluster of peers to wait for */
 qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string> Nodes, qot_node_callback_t callback) 
 {
 	qot_return_t retval;
@@ -67,6 +71,7 @@ qot_return_t define_cluster(messenger_t messenger, const std::vector<std::string
 	return retval;
 }
 
+/* Wait for the core peers to join */
 qot_return_t wait_for_peers_to_join(messenger_t messenger)
 {
 	qot_return_t retval;

@@ -42,21 +42,16 @@ Timeline::Timeline(boost::asio::io_service *io, const std::string &name,
 	const std::string &iface, const std::string &addr, int id)
 	: id_(id), kill(false), coordinator(io, name, iface, addr)
 {
-	// First, save the id to the message data structure. Having this present
-	// in the data structure will cause us to bind without affecting metrics
-	//this->msg.id = id;
-
-	// Second, bind to the timeline to get the base requirements
-	//std::ostringstream oss("");
-	//oss << QOT_IOCTL_BASE << "/" << QOT_IOCTL_TIMELINE << id;
-	//this->fd = open(oss.str().c_str(), O_RDWR);
+	/* First, save the id to the message data structure. Having this present
+	   in the data structure will cause us to bind without affecting metrics
+	   Second, bind to the timeline to get the base requirements */
+	
 	std::string tml_filename = "";
 	tml_filename = tml_filename + QOT_IOCTL_BASE + "/" + QOT_IOCTL_TIMELINE + std::to_string(id_);
 	BOOST_LOG_TRIVIAL(info) << "opening timeline chdev: " << tml_filename;
 	this->fd = open(tml_filename.c_str(), O_RDWR);
 	if (fd < 0)
 	{
-		//BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << oss.str();
 		BOOST_LOG_TRIVIAL(error) << "Could not open ioctl to " << tml_filename;
 		return;
 	}

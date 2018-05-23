@@ -1,22 +1,36 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * @file zk_logic.c
+ * @brief Edge Broker Management Zookeeper Logic
+ * @author Sandeep D'souza
+ * 
+ * Copyright (c) Carnegie Mellon University, 2018. All rights reserved.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Redistribution and use in source and binary forms, with or without modification, 
+ * are permitted provided that the following conditions are met:
+ *  1. Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer.
+ *  2. Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation
+ *     and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+ * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "master_test.h"
+#include "zk_logic.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 /*********************************************************************************/
 /*
@@ -43,7 +57,7 @@ char * make_path(int num, ...)
 
     va_end ( arguments );
 
-    char * path = malloc(total_length * sizeof(char) + 1);
+    char * path = (char*) malloc(total_length * sizeof(char) + 1);
     path[0] = '\0';
     va_start ( arguments, num );
     
@@ -62,9 +76,9 @@ char * make_path(int num, ...)
 /* Make a copy of a string vector */
 struct String_vector* make_copy( const struct String_vector* vector ) 
 {
-    struct String_vector* tmp_vector = malloc(sizeof(struct String_vector));
+    struct String_vector* tmp_vector = (struct String_vector*) malloc(sizeof(struct String_vector));
     
-    tmp_vector->data = malloc(vector->count * sizeof(const char *));
+    tmp_vector->data = (char**) malloc(vector->count * sizeof(const char *));
     tmp_vector->count = vector->count;
     
     int i;
@@ -86,7 +100,7 @@ int allocate_vector(struct String_vector *v, int32_t len)
         v->data = 0;
     } else {
         v->count = len;
-        v->data = calloc(sizeof(*v->data), len);
+        v->data = (char**) calloc(sizeof(*v->data), len);
     }
     return 0;
 }
@@ -134,7 +148,7 @@ int contains(const char * child, const struct String_vector* children)
 struct String_vector* added_and_set(const struct String_vector* current,
                                     struct String_vector** previous) 
 {
-    struct String_vector* diff = malloc(sizeof(struct String_vector));
+    struct String_vector* diff = (struct String_vector*) malloc(sizeof(struct String_vector));
     
     int count = 0;
     int i;
@@ -150,7 +164,7 @@ struct String_vector* added_and_set(const struct String_vector* current,
     count = 0;
     for(i = 0; i < current->count; i++) {
         if (!contains(current->data[i], (* previous))) {
-            diff->data[count] = malloc(sizeof(char) * strlen(current->data[i]) + 1);
+            diff->data[count] = (char*) malloc(sizeof(char) * strlen(current->data[i]) + 1);
             memcpy(diff->data[count++],
                    current->data[i],
                    strlen(current->data[i]));
@@ -172,7 +186,7 @@ struct String_vector* added_and_set(const struct String_vector* current,
 struct String_vector* removed_and_set(const struct String_vector* current,
                                       struct String_vector** previous) 
 {    
-    struct String_vector* diff = malloc(sizeof(struct String_vector));
+    struct String_vector* diff = (struct String_vector*) malloc(sizeof(struct String_vector));
     
     int count = 0;
     int i;
@@ -188,7 +202,7 @@ struct String_vector* removed_and_set(const struct String_vector* current,
     count = 0;
     for(i = 0; i < (* previous)->count; i++) {
         if (!contains((* previous)->data[i], current)) {
-            diff->data[count] = malloc(sizeof(char) * strlen((* previous)->data[i]));
+            diff->data[count] = (char*) malloc(sizeof(char) * strlen((* previous)->data[i]));
             strcpy(diff->data[count++], (* previous)->data[i]);
         }
     }
@@ -433,6 +447,9 @@ void run_for_master()
  * Routines to bootstrap initial parent znodes 
  */
 
+/* Create a parent node */
+void create_parent(const char * path, const char * value);
+
 /*
  * Completion function for creating parent znodes.
  */
@@ -452,7 +469,7 @@ void create_parent_completion (int rc, const char * value, const void * data)
             
             break;
         default:
-	  		LOG_ERROR(("Something went wrong when running for master: %s, %s", value, rc2string(rc)));
+	  		LOG_ERROR(("Something went wrong when creating a parent node: %s, %s", value, rc2string(rc)));
             
             break;
     }
@@ -471,18 +488,88 @@ void create_parent(const char * path, const char * value)
                 NULL);
 }
 
+/* Create a parent node synchronous call*/
+int create_parent_sync(const char * path, const char * value) 
+{
+    int rc = ZNONODE;
+    while (rc == ZNONODE)
+    {
+        rc = zoo_create(zh,
+                        path,
+                        value,
+                        0,
+                        &ZOO_OPEN_ACL_UNSAFE,
+                        0,
+                        NULL,
+                        0);
+    }
+    return rc;
+}
+
 /*********************************************************************************/
 /*
- * Topic Handling Logic
+ * Routines to delete a znode
+ */
+
+/* znode deletion function declaration */
+void delete_znode(const char *path) ;
+
+/* Completion function called when the request to delete znode returns. */
+void delete_znode_completion(int rc, const void *data) 
+{
+    switch (rc) {
+        case ZCONNECTIONLOSS:
+        case ZOPERATIONTIMEOUT:
+            delete_znode((const char *) data);
+        break;
+        case ZOK:
+            LOG_DEBUG(("Deleted node: %s", (char *) data));
+            free((char *) data);
+        break;
+        default:
+            LOG_ERROR(("Something went wrong when deleting node: %s",
+            rc2string(rc)));
+        break;
+    }
+}
+
+/* znode deletion function*/
+void delete_znode(const char *path) 
+{
+    if(path == NULL) 
+        return;
+    char * tmp_path = strdup(path);
+    zoo_adelete(zh,
+                tmp_path,
+                -1,
+                delete_znode_completion,
+                (const void*) tmp_path);
+}
+
+/* znode deletion function*/
+int sync_delete_znode(const char *path) 
+{
+    int rc;
+    if(path == NULL) 
+        return ZBADARGUMENTS;
+    rc = zoo_delete(zh, path, -1);
+
+    return rc;
+}
+
+
+/*********************************************************************************/
+/*
+ * Timeline Handling Logic
  */
 
 /* Add a new Timeline to zookeeper*/
-void timeline_create(char* timelineName) 
+int zk_timeline_create(const char* timelineName) 
 {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
-        return;
+        return ZCONNECTIONLOSS;
     }
     
    	char* path = make_path(2, "/timelines/" , timelineName);
@@ -490,16 +577,48 @@ void timeline_create(char* timelineName)
     printf("Registering Timeline %s\n", timelineName);
     
     char* tmp_string;
-    zoo_acreate(zh,
-                path,
-                tmp_string,
-                0,
-                &ZOO_OPEN_ACL_UNSAFE,
-                0,
-                create_parent_completion,
-                NULL);
+    int rc = ZNONODE;
+
+    /* Wait untill the node creation occurs */
+    while (rc == ZNONODE)
+    {
+       rc = zoo_create(zh, 
+                       path,
+                       tmp_string,
+                       0, 
+                       &ZOO_OPEN_ACL_UNSAFE, 
+                       0,
+                       NULL, 
+                       0); 
+    }
+    /* Possible Return Codes
+     * ZOK operation completed successfully
+     * ZNONODE the parent node does not exist.
+     * ZNODEEXISTS the node already exists
+     * ZNOAUTH the client does not have permission.
+     */
     free(path);
+    return rc;
 }
+
+void zk_timeline_delete(const char* timelineName) 
+{
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(2, "/timelines/" , timelineName);
+    printf("Deleting Timeline %s\n", timelineName);
+    delete_znode(path);
+}
+
+/*********************************************************************************/
+/*
+ * Topic Handling Logic
+ */
+
 
 /* Re-try to create a topic node */
 void create_topic(const char * path, const char * value);
@@ -515,14 +634,15 @@ void topic_create_completion (int rc, const char * value, const void * data)
             
             break;
         case ZOK:
-            LOG_INFO(("Created topic node", value));
-            char* pub_path = make_path(2, value, "/publishers");
-   			char* sub_path = make_path(2, value, "/subscribers");
-            create_parent(pub_path, "");
-            create_parent(sub_path, "");
-            free(pub_path);
-            free(sub_path);
-
+            {
+                LOG_INFO(("Created topic node", value));
+                char* pub_path = make_path(2, value, "/publishers");
+       			char* sub_path = make_path(2, value, "/subscribers");
+                create_parent(pub_path, "");
+                create_parent(sub_path, "");
+                free(pub_path);
+                free(sub_path);
+            }
             break;
         case ZNODEEXISTS:
             LOG_WARN(("Node already exists"));
@@ -548,28 +668,75 @@ void create_topic(const char * path, const char * value)
                 NULL);   
 }
 
-/* Add a new topic to a timeline*/
-void topic_create(char* timelineName, char* topicName) 
+/* Remove a new topic to a timeline (synchronous call)
+   Note: Will fail if child node exist (this is desirable)*/
+int zk_topic_create(const char* timelineName, const char* topicName) 
 {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
-        return;
+        return ZCONNECTIONLOSS;
     }
     
    	char* path = make_path(4, "/timelines/" , timelineName, "/", topicName);
     printf("Registering Topic %s on Timeline %s\n", timelineName, topicName);
-
+    
     char* tmp_string;
-    zoo_acreate(zh,
-                path,
-                tmp_string,
-                0,
-                &ZOO_OPEN_ACL_UNSAFE,
-                0,
-                topic_create_completion,
-                NULL);
+    int rc = ZNONODE;
+
+    /* Wait until the node creation occurs */
+    while (rc == ZNONODE)
+    {
+       rc = zoo_create(zh, 
+                       path,
+                       tmp_string,
+                       0, 
+                       &ZOO_OPEN_ACL_UNSAFE, 
+                       0,
+                       NULL, 
+                       0); 
+    }
+    /* Possible Return Codes
+     * ZOK operation completed successfully
+     * ZNONODE the parent node does not exist.
+     * ZNODEEXISTS the node already exists
+     * ZNOAUTH the client does not have permission.
+     */
+
+    char* pub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/publishers");
+    char* sub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/subscribers");
+    rc = create_parent_sync(pub_path, "");
+    rc = create_parent_sync(sub_path, "");
+    free(pub_path);
+    free(sub_path);
+
     free(path);
+    return rc;
+}
+
+/* Add a new topic to a timeline (synchronous call)*/
+void zk_topic_delete(const char* timelineName, const char* topicName) 
+{
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+        return;
+    }
+
+    char* pub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/publishers");
+    char* sub_path = make_path(5, "/timelines/" , timelineName, "/", topicName, "/subscribers");
+    delete_znode(pub_path);
+    delete_znode(sub_path);
+    free(pub_path);
+    free(sub_path);
+
+    sleep(2);
+    
+    char* path = make_path(4, "/timelines/" , timelineName, "/", topicName);
+    printf("Deleting zk node Topic %s on Timeline %s\n", timelineName, topicName);
+    
+    delete_znode(path);
+    free(path);
+    return;
 }
 
 /*********************************************************************************/
@@ -600,7 +767,7 @@ void get_subscribers_completion (int rc,
 
             // struct String_vector *tmp_workers = removed_and_set(strings, &workers);
             // free_vector(tmp_workers);
-            //get_tasks();
+            get_subscribers((char*) data);
 
             break;
         default:
@@ -622,11 +789,11 @@ void subscribers_watcher (zhandle_t *zh, int type, int state, const char *path,v
 /* Pre-process the path for the get_subscribers() function */
 char* process_sub_topic_string(const char* path)
 {
-	char* new_path = malloc((strlen(path)+1)*sizeof(char));
+	char* new_path = (char*) malloc((strlen(path)+1)*sizeof(char));
 	char* replace_ptr;
 
 	// Find "/publishers/" string
-	replace_ptr = strstr(path, "/publishers/");
+	replace_ptr = (char*) strstr(path, "/publishers/");
 	if (replace_ptr != NULL)
 	{
 		size_t len = replace_ptr - path;
@@ -698,7 +865,7 @@ void create_publisher(const char* path, const char* value) {
 }
 
 /* Add a new publisher to a topic*/
-void publisher_create(char* timelineName, char* topicName, char* publisherName) {
+void zk_publisher_create(const char* timelineName, const char* topicName, const char* publisherName) {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
@@ -718,6 +885,22 @@ void publisher_create(char* timelineName, char* topicName, char* publisherName) 
                 NULL);
     free(path);
 }
+
+/* Delete a new publisher from a topic*/
+void zk_publisher_delete(const char* timelineName, const char* topicName, const char* publisherName) {
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(6, "/timelines/" , timelineName, "/", topicName, "/publishers/", publisherName);
+    printf("Deleting znode of a Publisher on Topic %s on Timeline %s\n", timelineName, topicName);
+
+    sync_delete_znode(path);
+    free(path);
+}
+
 /*********************************************************************************/
 /*
  * Logic to listen to relevant publishers to a topic
@@ -745,7 +928,7 @@ void get_publishers_completion (int rc,
 
             // struct String_vector *tmp_workers = removed_and_set(strings, &workers);
             // free_vector(tmp_workers);
-            //get_tasks();
+            get_publishers((char*) data);
 
             break;
         default:
@@ -767,11 +950,11 @@ void publishers_watcher (zhandle_t *zh, int type, int state, const char *path,vo
 /* Pre-process the path for the get_publishers() function */
 char* process_pub_topic_string(const char* path)
 {
-	char* new_path = malloc((strlen(path)+1)*sizeof(char));
+	char* new_path = (char*) malloc((strlen(path)+1)*sizeof(char));
 	char* replace_ptr;
 
 	// Find "/subscribers/" string
-	replace_ptr = strstr(path, "/subscribers/");
+	replace_ptr = (char*) strstr(path, "/subscribers/");
 	if (replace_ptr != NULL)
 	{
 		size_t len = replace_ptr - path;
@@ -842,8 +1025,8 @@ void create_subscriber(const char * path, const char * value) {
                 NULL);    
 }
 
-/* Add a new publisher to a topic*/
-void subscriber_create(char* timelineName, char* topicName, char* subscriberName) {
+/* Add a new subscriber to a topic*/
+void zk_subscriber_create(const char* timelineName, const char* topicName, const char* subscriberName) {
     if(!connected) {
         LOG_WARN(("Client not connected to ZooKeeper"));
 
@@ -863,9 +1046,25 @@ void subscriber_create(char* timelineName, char* topicName, char* subscriberName
                 NULL);
     free(path);
 }
+
+/* Delete a subscriber from a topic*/
+void zk_subscriber_delete(const char* timelineName, const char* topicName, const char* subscriberName) {
+    if(!connected) {
+        LOG_WARN(("Client not connected to ZooKeeper"));
+
+        return;
+    }
+    
+    char* path = make_path(6, "/timelines/" , timelineName, "/", topicName, "/subscribers/", subscriberName);
+    printf("Deleting the znode of a Subscriber on Topic %s on Timeline %s\n", timelineName, topicName);
+
+    sync_delete_znode(path);
+    free(path);
+}
+
 /*********************************************************************************/
 
-/* Bootstrapping function, create prent nodes, if not already creater */
+/* Bootstrapping function, create parent nodes, if not already created */
 void bootstrap() {
     if(!connected) {
       LOG_WARN(("Client not connected to ZooKeeper"));
@@ -876,13 +1075,14 @@ void bootstrap() {
     create_parent("/brokers", "");
 
     // Initialize timeline vector
-    timelines = malloc(sizeof(struct String_vector));
+    timelines = (struct String_vector*) malloc(sizeof(struct String_vector));
     allocate_vector(timelines, 0);
 }
 
 /*********************************************************************************/
 /* Initialize the Zookeeper connection -> takes in host:port pair to initiate connection*/
-int init (char * hostPort) {
+int init (char * hostPort) 
+{
     srand(time(NULL));
     server_id  = rand();
     
@@ -900,12 +1100,13 @@ int init (char * hostPort) {
 
 /*********************************************************************************/
 
-int main (int argc, char * argv[]) {
+/* Logic to initialize the Zookeeper Client Logic */
+/* Requires argc as 3 and a char array of 3 arguments
+   argv[1] = host:port -> comma separate list of host:port pairs of zookeeper ensemble
+   argv[2] = lan_name  -> unique name of the lan which the edge broker is representing */
+int init_zk_logic (int argc, char * argv[]) 
+{
     LOG_DEBUG(("THREADED defined"));
-    if (argc != 3) {
-        fprintf(stderr, "USAGE: %s host:port lan_name\n", argv[0]);
-        exit(1);
-    }
 
     /* Get Broker Group Name from command line*/
     brokerGroup = argv[2];
@@ -940,21 +1141,25 @@ int main (int argc, char * argv[]) {
     /* Sleep until the leadership role is obtained */
     while (leader != 1)
     {
-    	sleep(2);
+        sleep(2);
     }
 
-    timeline_create("test");
-    topic_create("test", "blah");
-    publisher_create("test", "blah","test-pub");
-    subscriber_create("test", "blah","test-sub");
+    // zk_timeline_create("test");
+    // zk_topic_create("test", "blah");
+    // zk_publisher_create("test", "blah","test-pub");
+    // zk_subscriber_create("test", "blah","test-sub");
     
-    /*
-     * Run until session expires
-     */
+    // /*
+    //  * Run until session expires
+    //  */
     
-    while(!is_expired()) {
-        sleep(1);
-    }    
+    // while(!is_expired()) {
+    //     sleep(1);
+    // }    
     return 0; 
 }
+
+#ifdef __cplusplus
+}
+#endif
 

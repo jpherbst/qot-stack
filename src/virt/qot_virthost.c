@@ -49,7 +49,6 @@
     
 #define TRUE   1 
 #define FALSE  0 
-#define MAX_TIMELINES 10
 #define SOCKET_PATH "/tmp/qot_virthost"
 
 // Binding Count per timeline

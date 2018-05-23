@@ -4,8 +4,8 @@
  * @author Andrew Symington and Sandeep D'souza
  *
  * Copyright (c) Regents of the University of California, 2015.
- * Copyright (c) Carnegie Mellon University, 2016.
- *   All rights reserved.
+ * Copyright (c) Carnegie Mellon University, 2016-2018.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

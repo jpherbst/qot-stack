@@ -13,6 +13,7 @@ SET(MODULE_SOURCE_FILES
     qot_admin_sysfs.c
     qot_user.c
     qot_user_chdev.c
+    qot_clock_gl.c
 )
 
 # Set the source files
@@ -24,6 +25,7 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_core.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_clock.o.cmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/.qot_clock_gl.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_clock_sysfs.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline.o.cmd
     ${CMAKE_CURRENT_SOURCE_DIR}/.qot_timeline_chdev.o.cmd
@@ -51,6 +53,7 @@ SET(MODULE_BUILD_PRODUCTS
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_admin_sysfs.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_user.o
     ${CMAKE_CURRENT_SOURCE_DIR}/qot_user_chdev.o
+    ${CMAKE_CURRENT_SOURCE_DIR}/qot_clock_gl.o
 )
 
 # Perform the compilation

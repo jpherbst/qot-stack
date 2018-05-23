@@ -86,11 +86,21 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
 {
     char qot_timeline_filename[15];
     int usr_file;
-    
+    char *gl_start;
 
-    // Check to make sure the UUID is valid
+    // Check to make sure the UUID and Name is valid
+    if (uuid == NULL || name == NULL)
+        return QOT_RETURN_TYPE_ERR;
+
     if (strlen(uuid) > QOT_MAX_NAMELEN)
         return QOT_RETURN_TYPE_ERR;
+
+    // Check to find whether the timeline type is global (first three characters should be "gl_")
+    gl_start = strstr(const_cast<char*>(uuid), const_cast<char*>(GLOBAL_TL_STRING));
+    if(gl_start == uuid)
+        timeline->info.type = QOT_TIMELINE_GLOBAL;
+    else
+        timeline->info.type = QOT_TIMELINE_LOCAL; // Default to Local
 
     // Open the QoT Core
     if (DEBUG) 
@@ -134,9 +144,7 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
         printf("Cant open /dev/timeline%d\n", timeline->info.index);
         return QOT_RETURN_TYPE_ERR;
     }
-
-    
-    
+  
     if (DEBUG) 
         printf("Opened clock %s\n", qot_timeline_filename);
     // Populate Binding fields
@@ -159,11 +167,112 @@ qot_return_t timeline_bind(timeline_t *timeline, const char *uuid, const char *n
     // Initialize Messenger
     timeline->messenger = create_messenger(timeline->binding.name, timeline->info.name);
 
-    // This was there in the old api code
-    // if (DEBUG) std::cout << "Start polling " << std::endl;
+    return QOT_RETURN_TYPE_OK;
+}
 
-    // // We can now start polling, because the timeline is setup
-    // this->cv.notify_one();
+/* Bind to a timeline after all core cluster nodes are up */
+qot_return_t timeline_cluster_bind(timeline_t *timeline, const char *uuid, const char *name, timelength_t res, timeinterval_t acc, const std::vector<std::string> Nodes) 
+{
+    char qot_timeline_filename[15];
+    int usr_file;
+    char *gl_start;
+
+    // Check to make sure the UUID and Name is valid
+    if (uuid == NULL || name == NULL)
+        return QOT_RETURN_TYPE_ERR;
+
+    if (strlen(uuid) > QOT_MAX_NAMELEN)
+        return QOT_RETURN_TYPE_ERR;
+
+    // Check to find whether the timeline type is global (first three characters should be "gl_")
+    gl_start = strstr(const_cast<char*>(uuid), const_cast<char*>(GLOBAL_TL_STRING));
+    if(gl_start == uuid)
+        timeline->info.type = QOT_TIMELINE_GLOBAL;
+    else
+        timeline->info.type = QOT_TIMELINE_LOCAL; // Default to Local
+
+    // Open the QoT Core
+    if (DEBUG) 
+        printf("Opening IOCTL to qot_core\n");
+    usr_file = open("/dev/qotusr", O_RDWR);
+    if (DEBUG)
+        printf("IOCTL to qot_core opened %d\n", usr_file);
+
+    if (usr_file < 0)
+    {
+        printf("Error: Invalid file\n");
+        return QOT_RETURN_TYPE_ERR;
+    }
+
+    timeline->qotusr_fd = usr_file;
+
+    strcpy(timeline->info.name, uuid);  
+
+    // Initialize Messenger
+    timeline->messenger = create_messenger(name, uuid);
+
+    // Define the Core Cluster  
+    if (define_cluster(timeline->messenger, Nodes, NULL))
+    {
+        delete_messenger(timeline->messenger);
+        return QOT_RETURN_TYPE_ERR;
+    }
+    
+    // Wait for peer nodes to come online
+    if (DEBUG) 
+        printf("Waiting for other nodes to join the timeline %s\n", uuid);
+    
+    if (wait_for_peers_to_join(timeline->messenger))
+    {
+        delete_messenger(timeline->messenger);
+        return QOT_RETURN_TYPE_ERR;   
+    }
+
+    // Bind to the timeline
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
+
+    // Try to create a new timeline if none exists
+    if(ioctl(timeline->qotusr_fd, QOTUSR_CREATE_TIMELINE, &timeline->info) < 0)
+    {
+        // If it exists try to get information
+        if(ioctl(timeline->qotusr_fd, QOTUSR_GET_TIMELINE_INFO, &timeline->info) < 0)
+        {
+            return QOT_RETURN_TYPE_ERR;
+        } 
+    }
+    
+    // Construct the file handle to the posix clock /dev/timelineX
+    sprintf(qot_timeline_filename, "/dev/timeline%d", timeline->info.index);
+
+    // Open the clock
+    if (DEBUG) 
+        printf("Opening clock %s\n", qot_timeline_filename);
+    timeline->fd = open(qot_timeline_filename, O_RDWR);
+    if (!timeline->fd)
+    {
+        printf("Cant open /dev/timeline%d\n", timeline->info.index);
+        return QOT_RETURN_TYPE_ERR;
+    }
+  
+    if (DEBUG) 
+        printf("Opened clock %s\n", qot_timeline_filename);
+    // Populate Binding fields
+    strcpy(timeline->binding.name, name);
+    timeline->binding.demand.resolution = res;
+    timeline->binding.demand.accuracy = acc;
+    TL_FROM_SEC(timeline->binding.period, 0);
+    TP_FROM_SEC(timeline->binding.start_offset, 0);
+    
+    if (DEBUG) 
+        printf("Binding to timeline %s\n", uuid);
+    // Bind to the timeline
+    if(ioctl(timeline->fd, TIMELINE_BIND_JOIN, &timeline->binding) < 0)
+    {
+        return QOT_RETURN_TYPE_ERR;
+    }
+    if (DEBUG) 
+        printf("Bound to timeline %s\n", uuid);
 
     return QOT_RETURN_TYPE_OK;
 }

@@ -135,6 +135,97 @@ ADD_LIBRARY(ptp SHARED
 )
 TARGET_LINK_LIBRARIES(ptp m)
 
+# PTP (based on linuxptp-1.8) library
+ADD_LIBRARY(ptp18 SHARED
+	sync/ptp/linuxptp-1.8/bmc.c
+	sync/ptp/linuxptp-1.8/clock.c
+	sync/ptp/linuxptp-1.8/clockadj.c
+	sync/ptp/linuxptp-1.8/clockcheck.c
+	sync/ptp/linuxptp-1.8/config.c
+	sync/ptp/linuxptp-1.8/fault.c
+	sync/ptp/linuxptp-1.8/filter.c
+	sync/ptp/linuxptp-1.8/fsm.c
+	sync/ptp/linuxptp-1.8/hash.c
+	sync/ptp/linuxptp-1.8/linreg.c
+	sync/ptp/linuxptp-1.8/mave.c
+	sync/ptp/linuxptp-1.8/mmedian.c
+	sync/ptp/linuxptp-1.8/msg.c
+	sync/ptp/linuxptp-1.8/ntpshm.c
+	sync/ptp/linuxptp-1.8/nullf.c
+	sync/ptp/linuxptp-1.8/phc.c
+	sync/ptp/linuxptp-1.8/pi.c
+	sync/ptp/linuxptp-1.8/port.c
+	sync/ptp/linuxptp-1.8/print.c
+	sync/ptp/linuxptp-1.8/raw.c
+	sync/ptp/linuxptp-1.8/rtnl.c
+	sync/ptp/linuxptp-1.8/servo.c
+	sync/ptp/linuxptp-1.8/sk.c
+	sync/ptp/linuxptp-1.8/stats.c
+	sync/ptp/linuxptp-1.8/sysoff.c
+	sync/ptp/linuxptp-1.8/tlv.c
+	sync/ptp/linuxptp-1.8/transport.c
+	sync/ptp/linuxptp-1.8/tsproc.c
+	sync/ptp/linuxptp-1.8/udp.c
+	sync/ptp/linuxptp-1.8/udp6.c
+	sync/ptp/linuxptp-1.8/uds.c
+	sync/ptp/linuxptp-1.8/util.c
+	sync/ptp/linuxptp-1.8/version.c
+)
+TARGET_LINK_LIBRARIES(ptp18 m)
+
+# NTP (based on chrony-3.2) library
+ADD_LIBRARY(ntp18 SHARED
+	sync/ntp/chrony-3.2/addrfilt.c
+	sync/ntp/chrony-3.2/array.c
+	sync/ntp/chrony-3.2/clientlog.c
+	sync/ntp/chrony-3.2/cmdmon.c
+	sync/ntp/chrony-3.2/cmdparse.c
+	sync/ntp/chrony-3.2/conf.c
+	sync/ntp/chrony-3.2/getdate.c
+	sync/ntp/chrony-3.2/hash_intmd5.c
+	sync/ntp/chrony-3.2/hwclock.c
+	sync/ntp/chrony-3.2/keys.c
+	sync/ntp/chrony-3.2/local.c
+	sync/ntp/chrony-3.2/logging.c
+	sync/ntp/chrony-3.2/manual.c
+	#sync/ntp/chrony-3.2/md5.c
+	sync/ntp/chrony-3.2/memory.c
+	sync/ntp/chrony-3.2/nameserv.c
+	#sync/ntp/chrony-3.2/nameserv_async.c
+	sync/ntp/chrony-3.2/ntp_core.c
+	sync/ntp/chrony-3.2/ntp_io.c
+	sync/ntp/chrony-3.2/ntp_io_linux.c
+	#sync/ntp/chrony-3.2/ntp_signd.c
+	sync/ntp/chrony-3.2/ntp_sources.c
+	sync/ntp/chrony-3.2/pktlength.c
+	#sync/ntp/chrony-3.2/privops.c
+	sync/ntp/chrony-3.2/refclock.c
+	sync/ntp/chrony-3.2/refclock_phc.c
+	sync/ntp/chrony-3.2/refclock_pps.c
+	sync/ntp/chrony-3.2/refclock_shm.c
+	sync/ntp/chrony-3.2/refclock_sock.c
+	sync/ntp/chrony-3.2/reference.c
+	sync/ntp/chrony-3.2/regress.c
+	sync/ntp/chrony-3.2/rtc.c
+	sync/ntp/chrony-3.2/rtc_linux.c
+	sync/ntp/chrony-3.2/sched.c
+	sync/ntp/chrony-3.2/smooth.c
+	sync/ntp/chrony-3.2/sources.c
+	sync/ntp/chrony-3.2/sourcestats.c
+	sync/ntp/chrony-3.2/stubs.c
+	sync/ntp/chrony-3.2/sys.c
+	sync/ntp/chrony-3.2/sys_generic.c
+	sync/ntp/chrony-3.2/sys_linux.c
+	sync/ntp/chrony-3.2/sys_macosx.c
+	sync/ntp/chrony-3.2/sys_netbsd.c
+	sync/ntp/chrony-3.2/sys_null.c
+	sync/ntp/chrony-3.2/sys_solaris.c
+	sync/ntp/chrony-3.2/sys_timex.c
+	sync/ntp/chrony-3.2/tempcomp.c
+	sync/ntp/chrony-3.2/util.c
+)
+TARGET_LINK_LIBRARIES(ntp18 m)
+
 # NTP library
 ADD_LIBRARY(ntp SHARED
 	sync/ntp/ntpv4/algorithm.c
@@ -147,15 +238,19 @@ TARGET_LINK_LIBRARIES(ntp m)
 #########################################################################################################
 # QoT Clock Synchronization Daemon
 ADD_EXECUTABLE(qotdaemon
-	sync/ptp/PTP.hpp
-	sync/ptp/PTP.cpp
+	sync/ptp/PTP18.hpp
+	sync/ptp/PTP18.cpp
+	#sync/ptp/PTP.hpp
+	#sync/ptp/PTP.cpp
 	sync/ptp/uncertainty_data.h
-	sync/ntp/NTP.hpp
-	sync/ntp/NTP.cpp
+	sync/ntp/NTP18.hpp
+	sync/ntp/NTP18.cpp
+	#sync/ntp/NTP.hpp
+	#sync/ntp/NTP.cpp
 	sync/ntp/uncertainty_data.h
 	sync/Sync.hpp
 	sync/Sync.cpp
-        sync/SyncUncertainty.hpp
+    sync/SyncUncertainty.hpp
 	sync/SyncUncertainty.cpp
 	sync/ProbabilityLib.hpp
 	sync/ProbabilityLib.cpp
@@ -168,7 +263,7 @@ ADD_EXECUTABLE(qotdaemon
 	main.cpp
 	${OpenSplice_DATAMODEL}
 )
-TARGET_LINK_LIBRARIES(qotdaemon ptp ntp ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+TARGET_LINK_LIBRARIES(qotdaemon ptp18 ntp18 ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 ADD_EXECUTABLE(phc2sys
 	sync/ptp/linuxptp/phc2sys.c
@@ -190,10 +285,18 @@ IF (NOT BUILD_VIRT_GUEST)
 ENDIF (NOT BUILD_VIRT_GUEST)
 
 # QoT Global Pub-Sub Broker
-ADD_EXECUTABLE(pubsub_broker
-			   broker/Broker.cpp
-	           ${OpenSplice_DATAMODEL})
-TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+IF (BUILD_EDGEBROKER)
+	INCLUDE_DIRECTORIES(
+		../../thirdparty/zookeeper-3.4.10/src/c/include
+		../../thirdparty/zookeeper-3.4.10/src/c/generated
+	)
+	ADD_EXECUTABLE(pubsub_broker
+				   broker/Broker.cpp
+				   broker/Handlers.cpp
+				   broker/zk_logic.c
+			   ${OpenSplice_DATAMODEL})
+	TARGET_LINK_LIBRARIES(pubsub_broker ${OpenSplice_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} zookeeper_mt)
+ENDIF (BUILD_EDGEBROKER)
 
 #########################################################################################################
 
@@ -207,10 +310,30 @@ INSTALL(
 		libraries
 )
 
+# Install the PTP (linuxptp-1.8) library
+INSTALL(
+	TARGETS
+		ptp18
+	DESTINATION
+		lib
+	COMPONENT
+		libraries
+)
+
 # Install the NTP library
 INSTALL(
 	TARGETS
 		ntp
+	DESTINATION
+		lib
+	COMPONENT
+		libraries
+)
+
+# Install the NTP (chrony-3.2) library
+INSTALL(
+	TARGETS
+		ntp18
 	DESTINATION
 		lib
 	COMPONENT
@@ -261,12 +384,14 @@ IF (NOT BUILD_VIRT_GUEST)
 ENDIF (NOT BUILD_VIRT_GUEST)
 
 # Install the Global Pub-Sub Broker
-INSTALL(
-	TARGETS
-		pubsub_broker
-	DESTINATION
-		bin
-	COMPONENT
-		applications
-)
+IF (BUILD_EDGEBROKER)
+	INSTALL(
+		TARGETS
+			pubsub_broker
+		DESTINATION
+			bin
+		COMPONENT
+			applications
+	)
+ENDIF (BUILD_EDGEBROKER)
 

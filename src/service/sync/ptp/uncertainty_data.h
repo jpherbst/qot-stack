@@ -33,7 +33,7 @@
 #include "../../../qot_types.h"
 
 // Clock Statistics Data Point -> variable defined in ptp/clock.c
-extern qot_stat_t ptp_clocksync_data_point;
+extern qot_stat_t ptp_clocksync_data_point[MAX_TIMELINES];
 
 #endif
 

@@ -1,9 +1,10 @@
 /**
  * @file Sync.cpp
  * @brief Factory class prepares a synchronization session
- * @author Fatima Anwar
+ * @author Fatima Anwar and Sandeep D'souza
  * 
  * Copyright (c) Regents of the University of California, 2015. All rights reserved.
+ * Copyright (c) Carnegie Mellon University, 2018. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
@@ -31,8 +32,10 @@
 #include "SyncUncertainty.hpp"
 
 // Subtypes
-#include "ptp/PTP.hpp"
-#include "ntp/NTP.hpp"
+//#include "ptp/PTP.hpp"
+#include "ptp/PTP18.hpp"
+//#include "ntp/NTP.hpp"
+#include "ntp/NTP18.hpp"
 
 /* So that we might expose a meaningful name through PTP interface */
 #define QOT_IOCTL_BASE          "/dev"
@@ -56,37 +59,15 @@ boost::shared_ptr<Sync> Sync::Factory(
 	uncertainty_config.pds = 0.999999;  // Probability that drift variance less than upper bound -> Set to 0.999999 (as per paper)
 	uncertainty_config.pdv = 0.999999;  // Probability of computing a safe bound on drift variation -> Set to 0.999999 (as per paper)
 	uncertainty_config.pos = 0.999999;  // Probability that offset variance less than upper bound -> Set to 0.999999 (as per paper)
-	uncertainty_config.pov = 0.999999;// Probability of computing a safe bound on offset variance -> Set to 0.999999 (as per paper)
+	uncertainty_config.pov = 0.999999;  // Probability of computing a safe bound on offset variance -> Set to 0.999999 (as per paper)
 	
 	// If IP address is private (LAN) and interface specified is ethernet
-	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0){
-
-		// Open dev directory
-		/*DIR *dir = opendir(QOT_IOCTL_BASE);
-		if(dir){
-			BOOST_LOG_TRIVIAL(info) << "directory open" << QOT_IOCTL_BASE;
-			// Read the entries from dev directory
-			struct dirent *entry;
-			while ((entry = readdir(dir)) != NULL) {
-				BOOST_LOG_TRIVIAL(info) << "entry in directory found" << QOT_IOCTL_BASE;
-				// Check if we have a ptp device
-				char str[QOT_MAX_PTP_NAMELEN]; 
-				int ret, val;	
-				ret = sscanf(entry->d_name, QOT_IOCTL_PTP_FORMAT, str, &val);
-				if ((ret==2) && (strncmp(str,QOT_IOCTL_PTP,QOT_MAX_PTP_NAMELEN)==0)){
-					BOOST_LOG_TRIVIAL(info) << "found in directory ptp" << val;
-					closedir(dir);
-				return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,val));  // Instantiate a ptp sync algorithm with h/w timestamping
-			}
-		}
-	}else{
-		BOOST_LOG_TRIVIAL(error) << "Could not open the direcotry " << QOT_IOCTL_BASE;
+	if(IsIPprivate(address) && strncmp(iface.c_str(),"eth",3)==0)
+	{
+		// Use PTP
+		return boost::shared_ptr<Sync>((Sync*) new PTP18(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
 	}
-	return boost::shared_ptr<Sync>((Sync*) new PTP(io,iface,-1));  // Instantiate a ptp sync algorithm with s/w timestamping
-	*/
-		return boost::shared_ptr<Sync>((Sync*) new PTP(io, iface, uncertainty_config));  // Instantiate a ptp sync algorithm
-	}
-	return boost::shared_ptr<Sync>((Sync*) new NTP(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm
+	return boost::shared_ptr<Sync>((Sync*) new NTP18(io, iface, uncertainty_config));      // Instantiate ntp sync algorithm
 }
 
 // Convert string into 32 bit IP address
@@ -104,7 +85,7 @@ uint32_t Sync::IPtoUint(const std::string ip) {
 	return addr;
 }
 
-// CHeck if the IP address is in private / public subnet
+// Check if the IP address is in private / public subnet
 bool Sync::IsIPprivate(const std::string ip) {
 	uint32_t ip_addr = IPtoUint(ip);
 
