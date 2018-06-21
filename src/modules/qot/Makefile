@@ -14,7 +14,7 @@ qot-objs := qot_core.o qot_clock.o qot_clock_sysfs.o       \
 SRC := $(shell pwd)
 
 all:
-        $(MAKE) -C $(KERNEL_SRC) M=$(SRC) V=1 modules
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) V=1 modules
 
 modules_install:
-        $(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install
+	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) modules_install
