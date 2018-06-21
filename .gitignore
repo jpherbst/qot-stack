@@ -11,6 +11,7 @@
 /pmc
 /ptp4l
 build/
+bin/
 .tmp_versions/
 qot-stack.sublime-project
 qot-stack.sublime-workspace

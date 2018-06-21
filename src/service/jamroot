@@ -34,21 +34,10 @@ lib ptp
     sync/ptp/linuxptp/version.c
     sync/ptp/linuxptp/ptp.c
 :   <link>static
+    <define>HAVE_ONESTEP_SYNC
 ;
 
-exe pch2pch
+exe phc2phc
 :   phc2phc.c
     ptp
-;
-
-exe phc2sys
-:   sync/ptp/linuxptp/phc2sys.c
-    sync/ptp/linuxptp/pmc_common.c
-    ptp
-    pthread
-;
-
-exe testptp
-:   testptp.c
-    rt
 ;
