@@ -44,7 +44,7 @@
 #include <linux/gpio.h>
 #include <linux/clockchips.h>
 
-#include "/export/bb-kernel/KERNEL/kernel/time/tick-internal.h"
+#include <kernel/time/tick-internal.h>
 
 /* We are going to export the whol am335x as a PTP clock */
 #include <linux/ptp_clock_kernel.h>
@@ -53,7 +53,7 @@
 #include "../qot/qot_core.h"
 
 /* DMTimer Code specific to the AM335x */
-#include "/export/bb-kernel/KERNEL/arch/arm/plat-omap/include/plat/dmtimer.h"
+#include <arch/arm/plat-omap/include/plat/dmtimer.h>
 
 /* Available Pins and Timers -> Based on Device Tree Configuration*/
 #define PHC2PHC_PIN 0
