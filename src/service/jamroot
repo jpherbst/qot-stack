@@ -1,0 +1,54 @@
+lib pthread ;
+lib rt ;
+
+lib ptp
+:   sync/ptp/linuxptp/bmc.c
+    sync/ptp/linuxptp/clock.c
+    sync/ptp/linuxptp/clockadj.c
+    sync/ptp/linuxptp/clockcheck.c
+    sync/ptp/linuxptp/config.c
+    sync/ptp/linuxptp/fault.c
+    sync/ptp/linuxptp/filter.c
+    sync/ptp/linuxptp/fsm.c
+    sync/ptp/linuxptp/linreg.c
+    sync/ptp/linuxptp/mave.c
+    sync/ptp/linuxptp/mmedian.c
+    sync/ptp/linuxptp/msg.c
+    sync/ptp/linuxptp/ntpshm.c
+    sync/ptp/linuxptp/phc.c
+    sync/ptp/linuxptp/pi.c
+    sync/ptp/linuxptp/linregnew.c
+    sync/ptp/linuxptp/port.c
+    sync/ptp/linuxptp/print.c
+    sync/ptp/linuxptp/raw.c
+    sync/ptp/linuxptp/servo.c
+    sync/ptp/linuxptp/sk.c
+    sync/ptp/linuxptp/stats.c
+    sync/ptp/linuxptp/sysoff.c
+    sync/ptp/linuxptp/tlv.c
+    sync/ptp/linuxptp/transport.c
+    sync/ptp/linuxptp/udp.c
+    sync/ptp/linuxptp/udp6.c
+    sync/ptp/linuxptp/uds.c
+    sync/ptp/linuxptp/util.c
+    sync/ptp/linuxptp/version.c
+    sync/ptp/linuxptp/ptp.c
+:   <link>static
+;
+
+exe pch2pch
+:   phc2phc.c
+    ptp
+;
+
+exe phc2sys
+:   sync/ptp/linuxptp/phc2sys.c
+    sync/ptp/linuxptp/pmc_common.c
+    ptp
+    pthread
+;
+
+exe testptp
+:   testptp.c
+    rt
+;
